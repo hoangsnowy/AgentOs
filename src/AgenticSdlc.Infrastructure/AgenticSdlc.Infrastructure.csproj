@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AgenticSdlc.Infrastructure</RootNamespace>
+    <AssemblyName>AgenticSdlc.Infrastructure</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgenticSdlc.Application\AgenticSdlc.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- LLM SDKs -->
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageReference Include="Azure.Identity" Version="1.14.0" />
+
+    <!-- HTTP, resiliency, options, DI -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+
+    <!-- System.Text.Json: đã có sẵn trong .NET 10 framework (tránh NU1510) -->
+  </ItemGroup>
+
+</Project>

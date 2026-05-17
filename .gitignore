@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# .gitignore — agentic-sdlc-net (.NET 10)
+# ---------------------------------------------------------------------------
+
+# Build outputs
+**/bin/
+**/obj/
+**/out/
+**/publish/
+**/*.binlog
+**/*.tlog
+
+# User / IDE artifacts
+**/.vs/
+**/*.user
+**/*.suo
+**/*.userosscache
+**/*.sln.docstates
+**/.idea/
+**/.vscode/*
+!**/.vscode/launch.json
+!**/.vscode/tasks.json
+!**/.vscode/extensions.json
+
+# Rider
+**/.idea/
+
+# Cache and temp
+**/TestResults/
+**/coverage/
+**/*.coverage
+**/*.coveragexml
+**/*.lcov
+**/.cache/
+**/Temp/
+
+# NuGet
+**/.nuget/
+**/packages/
+**/project.lock.json
+**/project.fragment.lock.json
+**/artifacts/
+
+# Secrets — NEVER commit
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/.env
+**/.env.*
+**/secrets.json
+**/*.pfx
+**/*.key
+**/*.pem
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+**/*.log
+**/logs/

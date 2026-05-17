@@ -1,0 +1,57 @@
+# EditorConfig — agentic-sdlc-net
+# Theo convention .NET 10 / C# 14, áp dụng cho IDE Visual Studio / Rider / VS Code.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml,md}]
+indent_size = 2
+
+[*.csproj]
+indent_size = 2
+
+[*.{xml,xaml,config}]
+indent_size = 2
+
+# C# specific
+[*.cs]
+indent_size = 4
+
+# Naming styles
+dotnet_naming_rule.interfaces_should_start_with_i.severity = warning
+dotnet_naming_rule.interfaces_should_start_with_i.symbols = interface_symbol
+dotnet_naming_rule.interfaces_should_start_with_i.style = i_pascal_case
+
+dotnet_naming_symbols.interface_symbol.applicable_kinds = interface
+dotnet_naming_symbols.interface_symbol.applicable_accessibilities = *
+dotnet_naming_style.i_pascal_case.required_prefix = I
+dotnet_naming_style.i_pascal_case.capitalization = pascal_case
+
+# Modern C# preferences
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+csharp_prefer_braces = true:warning
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# Nullable reference types
+dotnet_diagnostic.CS8600.severity = warning
+dotnet_diagnostic.CS8601.severity = warning
+dotnet_diagnostic.CS8602.severity = warning
+dotnet_diagnostic.CS8603.severity = warning
+
+# Async
+dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait không bắt buộc cho ASP.NET Core

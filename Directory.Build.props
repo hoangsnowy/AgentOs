@@ -1,0 +1,27 @@
+<!--
+  Directory.Build.props — common settings cho mọi project trong solution.
+  .NET 10 LTS, C# 14, nullable + warnings as errors, modern analyzers.
+-->
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Authors>Nguyen Minh Hoang</Authors>
+    <Company>HUBT — Hanoi University of Business and Technology</Company>
+    <Product>Agentic SDLC (.NET)</Product>
+    <Copyright>© 2026 Nguyen Minh Hoang. MIT License.</Copyright>
+    <RepositoryUrl>https://github.com/&lt;your-org-or-user&gt;/agentic-sdlc-net</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+</Project>

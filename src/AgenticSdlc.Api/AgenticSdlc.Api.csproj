@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>AgenticSdlc.Api</RootNamespace>
+    <AssemblyName>AgenticSdlc.Api</AssemblyName>
+    <UserSecretsId>agentic-sdlc-net-prototype</UserSecretsId>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgenticSdlc.Infrastructure\AgenticSdlc.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- OpenAPI: Microsoft.AspNetCore.OpenApi sinh openapi.json (native .NET 10);
+         Scalar.AspNetCore phục vụ UI hiện đại (thay thế Swagger UI / Swashbuckle). -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.6.0" />
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
+  </ItemGroup>
+
+</Project>
