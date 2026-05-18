@@ -39,6 +39,7 @@ public class RequirementAgentTests
         var agent = new RequirementAgent(
             AgentTestHelpers.FactoryReturning(llm),
             AgentTestHelpers.OptionsWith(new AgentsOptions()),
+            AgentTestHelpers.Validator,
             NullLogger<RequirementAgent>.Instance);
 
         var spec = await agent.RunAsync(new UserStory("Hệ thống quản lý sản phẩm"));
@@ -75,6 +76,7 @@ public class RequirementAgentTests
         var agent = new RequirementAgent(
             AgentTestHelpers.FactoryReturning(llm),
             AgentTestHelpers.OptionsWith(new AgentsOptions()),
+            AgentTestHelpers.Validator,
             NullLogger<RequirementAgent>.Instance);
 
         var ex = await Should.ThrowAsync<LlmException>(() => agent.RunAsync(new UserStory("story")));
@@ -91,6 +93,7 @@ public class RequirementAgentTests
         var agent = new RequirementAgent(
             AgentTestHelpers.FactoryReturning(llm),
             AgentTestHelpers.OptionsWith(new AgentsOptions()),
+            AgentTestHelpers.Validator,
             NullLogger<RequirementAgent>.Instance);
 
         await Should.ThrowAsync<LlmException>(() => agent.RunAsync(new UserStory("story")));
@@ -99,7 +102,7 @@ public class RequirementAgentTests
     [Fact]
     public async Task RunAsync_RespectsConfiguredModel()
     {
-        var json = """{"title":"T","summary":"S","stakeholders":[],"functionalRequirements":[],"nonFunctionalRequirements":[],"entities":[{"name":"E","fields":[]}],"endpoints":[{"method":"GET","path":"/","purpose":"p","authRequired":false}],"acceptanceCriteria":["a"]}""";
+        var json = """{"title":"T","summary":"S","stakeholders":[],"functionalRequirements":[],"nonFunctionalRequirements":[],"entities":[{"name":"E","fields":[]}],"endpoints":[{"method":"GET","path":"/","purpose":"p","authRequired":false}],"acceptanceCriteria":["a","b","c"]}""";
         LlmRequest? captured = null;
 
         var llm = Substitute.For<ILlmClient>();
@@ -110,7 +113,7 @@ public class RequirementAgentTests
         {
             Requirement = new AgentOptions { Provider = "Mock", Model = "claude-test-1", Temperature = 0.42, MaxTokens = 999 },
         };
-        var agent = new RequirementAgent(AgentTestHelpers.FactoryReturning(llm), AgentTestHelpers.OptionsWith(opts), NullLogger<RequirementAgent>.Instance);
+        var agent = new RequirementAgent(AgentTestHelpers.FactoryReturning(llm), AgentTestHelpers.OptionsWith(opts), AgentTestHelpers.Validator, NullLogger<RequirementAgent>.Instance);
 
         await agent.RunAsync(new UserStory("story"));
 

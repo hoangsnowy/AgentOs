@@ -3,8 +3,11 @@
 
 using System;
 using AgenticSdlc.Application.Agents;
+using AgenticSdlc.Application.Validation;
 using AgenticSdlc.Domain.Llm;
 using AgenticSdlc.Infrastructure.Llm;
+using AgenticSdlc.Infrastructure.Validation;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 
@@ -12,6 +15,16 @@ namespace AgenticSdlc.Tests.Agents;
 
 internal static class AgentTestHelpers
 {
+    private static readonly Lazy<ILlmOutputValidator> _validator = new(() =>
+    {
+        var sc = new ServiceCollection();
+        sc.AddValidation();
+        return sc.BuildServiceProvider().GetRequiredService<ILlmOutputValidator>();
+    });
+
+    /// <summary>Shared validator (3 schema embed sẵn).</summary>
+    public static ILlmOutputValidator Validator => _validator.Value;
+
     public static LlmResponse StubResponse(string content)
         => new(
             Content: content,

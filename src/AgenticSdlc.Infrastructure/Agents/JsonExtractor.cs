@@ -64,6 +64,51 @@ public static class JsonExtractor
             agentName);
     }
 
+    /// <summary>
+    /// Trả về chuỗi JSON đã được "clean" (strip fence + braced) từ <paramref name="rawText"/>
+    /// — dùng cho schema validation trước khi deserialize. Ném <see cref="LlmException"/>
+    /// nếu không tìm được JSON object hợp lệ.
+    /// </summary>
+    public static string ExtractJson(string rawText, string agentName)
+    {
+        ArgumentNullException.ThrowIfNull(rawText);
+        ArgumentException.ThrowIfNullOrWhiteSpace(agentName);
+
+        if (TryParseJsonNode(rawText))
+        {
+            return rawText;
+        }
+
+        var stripped = StripFence(rawText);
+        if (stripped is not null && TryParseJsonNode(stripped))
+        {
+            return stripped;
+        }
+
+        var sub = ExtractBraced(rawText);
+        if (sub is not null && TryParseJsonNode(sub))
+        {
+            return sub;
+        }
+
+        throw new LlmException(
+            $"{agentName}: response không phải JSON parse được. Raw (truncated 500 chars): {Truncate(rawText, 500)}",
+            agentName);
+    }
+
+    private static bool TryParseJsonNode(string json)
+    {
+        try
+        {
+            using var _ = JsonDocument.Parse(json);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     private static bool TryParse<T>(string json, out T? value)
     {
         try

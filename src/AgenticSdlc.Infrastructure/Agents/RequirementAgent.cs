@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgenticSdlc.Application.Agents;
 using AgenticSdlc.Application.Prompts;
+using AgenticSdlc.Application.Validation;
 using AgenticSdlc.Domain;
 using AgenticSdlc.Domain.Llm;
 using AgenticSdlc.Domain.Pipeline;
@@ -23,16 +24,22 @@ public sealed class RequirementAgent : IRequirementAgent
     private const string AgentName = nameof(RequirementAgent);
 
     private readonly ILlmClient _llm;
+    private readonly ILlmOutputValidator _validator;
     private readonly AgentOptions _options;
     private readonly ILogger<RequirementAgent> _logger;
 
-    /// <summary>Khởi tạo với factory + options.</summary>
-    public RequirementAgent(ILlmClientFactory factory, IOptions<AgentsOptions> options, ILogger<RequirementAgent> logger)
+    /// <summary>Khởi tạo với factory + options + validator.</summary>
+    public RequirementAgent(
+        ILlmClientFactory factory,
+        IOptions<AgentsOptions> options,
+        ILlmOutputValidator validator,
+        ILogger<RequirementAgent> logger)
     {
         System.ArgumentNullException.ThrowIfNull(factory);
         System.ArgumentNullException.ThrowIfNull(options);
         _options = options.Value.Requirement;
         _llm = factory.Create(_options.Provider);
+        _validator = validator ?? throw new System.ArgumentNullException(nameof(validator));
         _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
     }
 
@@ -51,7 +58,10 @@ public sealed class RequirementAgent : IRequirementAgent
 
         var response = await _llm.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        var dto = JsonExtractor.Deserialize<RequirementSpecDto>(response.Content, AgentName);
+        var json = JsonExtractor.ExtractJson(response.Content, AgentName);
+        _validator.Validate(json, SchemaNames.RequirementSpecV1, AgentName);
+
+        var dto = JsonExtractor.Deserialize<RequirementSpecDto>(json, AgentName);
         dto.Validate(AgentName);
 
         var metrics = MetricsMapper.From(response);

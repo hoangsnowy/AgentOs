@@ -4,6 +4,7 @@
 using AgenticSdlc.Api.Endpoints;
 using AgenticSdlc.Infrastructure.Agents;
 using AgenticSdlc.Infrastructure.Llm;
+using AgenticSdlc.Infrastructure.Validation;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,8 +17,9 @@ builder.Logging.AddSimpleConsole(options =>
     options.TimestampFormat = "HH:mm:ss.fff ";
 });
 
-// LLM Gateway + 5 Agents + PipelineOrchestrator
+// LLM Gateway + 5 Agents + PipelineOrchestrator + JSON Schema validation
 builder.Services.AddLlmGateway(builder.Configuration);
+builder.Services.AddValidation();
 builder.Services.AddAgents(builder.Configuration);
 
 // Application Insights — chỉ register khi có connection string (Phase 6 Azure deploy)

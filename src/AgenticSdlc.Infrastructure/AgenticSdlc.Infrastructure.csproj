@@ -13,6 +13,7 @@
     <!-- LLM SDKs -->
     <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
     <PackageReference Include="Azure.Identity" Version="1.14.0" />
+    <PackageReference Include="JsonSchema.Net" Version="7.*" />
 
     <!-- HTTP, resiliency, options, DI -->
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
@@ -22,6 +23,19 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
 
     <!-- System.Text.Json: đã có sẵn trong .NET 10 framework (tránh NU1510) -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- JSON Schemas — embed để load lúc runtime qua Assembly.GetManifestResourceStream. -->
+    <EmbeddedResource Include="..\..\docs\schemas\requirement-spec.v1.json">
+      <LogicalName>AgenticSdlc.Infrastructure.Schemas.requirement-spec.v1.json</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\docs\schemas\code-artifact.v1.json">
+      <LogicalName>AgenticSdlc.Infrastructure.Schemas.code-artifact.v1.json</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\docs\schemas\test-artifact.v1.json">
+      <LogicalName>AgenticSdlc.Infrastructure.Schemas.test-artifact.v1.json</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

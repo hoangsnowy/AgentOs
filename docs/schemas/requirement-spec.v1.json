@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-sdlc/schemas/requirement-spec.v1.json",
+  "title": "RequirementSpec v1",
+  "type": "object",
+  "required": ["title", "summary", "entities", "endpoints", "acceptanceCriteria"],
+  "additionalProperties": true,
+  "properties": {
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "summary": { "type": "string", "minLength": 1 },
+    "stakeholders": { "type": "array", "items": { "type": "string" } },
+    "functionalRequirements": { "type": "array", "items": { "type": "string" } },
+    "nonFunctionalRequirements": { "type": "array", "items": { "type": "string" } },
+    "entities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+          "fields": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "endpoints": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["method", "path", "purpose"],
+        "properties": {
+          "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+          "path": { "type": "string", "pattern": "^/" },
+          "purpose": { "type": "string", "minLength": 1 },
+          "authRequired": { "type": "boolean" }
+        }
+      }
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

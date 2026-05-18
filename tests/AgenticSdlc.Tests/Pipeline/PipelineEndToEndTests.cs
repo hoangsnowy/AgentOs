@@ -10,6 +10,7 @@ using AgenticSdlc.Domain.Pipeline;
 using AgenticSdlc.Infrastructure.Agents;
 using AgenticSdlc.Infrastructure.Llm;
 using AgenticSdlc.Infrastructure.Orchestration;
+using AgenticSdlc.Tests.Agents;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -101,9 +102,10 @@ public class PipelineEndToEndTests
         var agentsOpts = Options.Create(new AgentsOptions());
         var pipelineOpts = Options.Create(new PipelineOptions { MaxIterations = 3 });
 
-        var requirement = new RequirementAgent(factory, agentsOpts, NullLogger<RequirementAgent>.Instance);
-        var coding = new CodingAgent(factory, agentsOpts, NullLogger<CodingAgent>.Instance);
-        var testing = new TestingAgent(factory, agentsOpts, NullLogger<TestingAgent>.Instance);
+        var validator = AgentTestHelpers.Validator;
+        var requirement = new RequirementAgent(factory, agentsOpts, validator, NullLogger<RequirementAgent>.Instance);
+        var coding = new CodingAgent(factory, agentsOpts, validator, NullLogger<CodingAgent>.Instance);
+        var testing = new TestingAgent(factory, agentsOpts, validator, NullLogger<TestingAgent>.Instance);
         var qa = new QaAgent(factory, agentsOpts, NullLogger<QaAgent>.Instance);
 
         return new PipelineOrchestrator(requirement, coding, testing, qa, pipelineOpts, NullLogger<PipelineOrchestrator>.Instance);

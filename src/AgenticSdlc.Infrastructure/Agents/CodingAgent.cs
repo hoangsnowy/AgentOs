@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgenticSdlc.Application.Agents;
 using AgenticSdlc.Application.Prompts;
+using AgenticSdlc.Application.Validation;
 using AgenticSdlc.Domain;
 using AgenticSdlc.Domain.Code;
 using AgenticSdlc.Domain.Llm;
@@ -24,16 +25,22 @@ public sealed class CodingAgent : ICodingAgent
     private const string AgentName = nameof(CodingAgent);
 
     private readonly ILlmClient _llm;
+    private readonly ILlmOutputValidator _validator;
     private readonly AgentOptions _options;
     private readonly ILogger<CodingAgent> _logger;
 
     /// <summary>Khởi tạo.</summary>
-    public CodingAgent(ILlmClientFactory factory, IOptions<AgentsOptions> options, ILogger<CodingAgent> logger)
+    public CodingAgent(
+        ILlmClientFactory factory,
+        IOptions<AgentsOptions> options,
+        ILlmOutputValidator validator,
+        ILogger<CodingAgent> logger)
     {
         System.ArgumentNullException.ThrowIfNull(factory);
         System.ArgumentNullException.ThrowIfNull(options);
         _options = options.Value.Coding;
         _llm = factory.Create(_options.Provider);
+        _validator = validator ?? throw new System.ArgumentNullException(nameof(validator));
         _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
     }
 
@@ -54,7 +61,10 @@ public sealed class CodingAgent : ICodingAgent
 
         var response = await _llm.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        var dto = JsonExtractor.Deserialize<CodeArtifactDto>(response.Content, AgentName);
+        var json = JsonExtractor.ExtractJson(response.Content, AgentName);
+        _validator.Validate(json, SchemaNames.CodeArtifactV1, AgentName);
+
+        var dto = JsonExtractor.Deserialize<CodeArtifactDto>(json, AgentName);
         dto.Validate(AgentName);
 
         var metrics = MetricsMapper.From(response);

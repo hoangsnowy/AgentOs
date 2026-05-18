@@ -8,7 +8,7 @@ namespace AgenticSdlc.Domain.Llm;
 /// Upstream code (agents, orchestrator) bắt cụ thể exception này để phân biệt với lỗi business.
 /// </summary>
 [System.Serializable]
-public sealed class LlmException : System.Exception
+public class LlmException : System.Exception
 {
     /// <summary>Tên provider gây ra lỗi (<c>"Claude"</c>, <c>"AzureOpenAI"</c>, ...).</summary>
     public string? Provider { get; }

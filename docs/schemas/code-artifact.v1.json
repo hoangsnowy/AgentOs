@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-sdlc/schemas/code-artifact.v1.json",
+  "title": "CodeArtifact v1",
+  "type": "object",
+  "required": ["projectName", "files"],
+  "additionalProperties": true,
+  "properties": {
+    "projectName": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z][A-Za-z0-9._]*$" },
+    "architecture": { "type": "string" },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "content"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "content": { "type": "string" },
+          "language": { "type": "string" }
+        }
+      }
+    },
+    "notes": { "type": ["string", "null"] }
+  }
+}
