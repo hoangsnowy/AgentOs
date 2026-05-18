@@ -40,6 +40,7 @@ public class RequirementAgentTests
             AgentTestHelpers.FactoryReturning(llm),
             AgentTestHelpers.OptionsWith(new AgentsOptions()),
             AgentTestHelpers.Validator,
+            AgentTestHelpers.NewCollector(),
             NullLogger<RequirementAgent>.Instance);
 
         var spec = await agent.RunAsync(new UserStory("Hệ thống quản lý sản phẩm"));
@@ -77,6 +78,7 @@ public class RequirementAgentTests
             AgentTestHelpers.FactoryReturning(llm),
             AgentTestHelpers.OptionsWith(new AgentsOptions()),
             AgentTestHelpers.Validator,
+            AgentTestHelpers.NewCollector(),
             NullLogger<RequirementAgent>.Instance);
 
         var ex = await Should.ThrowAsync<LlmException>(() => agent.RunAsync(new UserStory("story")));
@@ -94,6 +96,7 @@ public class RequirementAgentTests
             AgentTestHelpers.FactoryReturning(llm),
             AgentTestHelpers.OptionsWith(new AgentsOptions()),
             AgentTestHelpers.Validator,
+            AgentTestHelpers.NewCollector(),
             NullLogger<RequirementAgent>.Instance);
 
         await Should.ThrowAsync<LlmException>(() => agent.RunAsync(new UserStory("story")));
@@ -113,7 +116,7 @@ public class RequirementAgentTests
         {
             Requirement = new AgentOptions { Provider = "Mock", Model = "claude-test-1", Temperature = 0.42, MaxTokens = 999 },
         };
-        var agent = new RequirementAgent(AgentTestHelpers.FactoryReturning(llm), AgentTestHelpers.OptionsWith(opts), AgentTestHelpers.Validator, NullLogger<RequirementAgent>.Instance);
+        var agent = new RequirementAgent(AgentTestHelpers.FactoryReturning(llm), AgentTestHelpers.OptionsWith(opts), AgentTestHelpers.Validator, AgentTestHelpers.NewCollector(), NullLogger<RequirementAgent>.Instance);
 
         await agent.RunAsync(new UserStory("story"));
 

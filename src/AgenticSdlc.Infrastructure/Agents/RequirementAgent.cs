@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgenticSdlc.Application.Agents;
+using AgenticSdlc.Application.Metrics;
 using AgenticSdlc.Application.Prompts;
 using AgenticSdlc.Application.Validation;
 using AgenticSdlc.Domain;
@@ -25,14 +26,16 @@ public sealed class RequirementAgent : IRequirementAgent
 
     private readonly ILlmClient _llm;
     private readonly ILlmOutputValidator _validator;
+    private readonly IMetricsCollector _collector;
     private readonly AgentOptions _options;
     private readonly ILogger<RequirementAgent> _logger;
 
-    /// <summary>Khởi tạo với factory + options + validator.</summary>
+    /// <summary>Khởi tạo.</summary>
     public RequirementAgent(
         ILlmClientFactory factory,
         IOptions<AgentsOptions> options,
         ILlmOutputValidator validator,
+        IMetricsCollector collector,
         ILogger<RequirementAgent> logger)
     {
         System.ArgumentNullException.ThrowIfNull(factory);
@@ -40,6 +43,7 @@ public sealed class RequirementAgent : IRequirementAgent
         _options = options.Value.Requirement;
         _llm = factory.Create(_options.Provider);
         _validator = validator ?? throw new System.ArgumentNullException(nameof(validator));
+        _collector = collector ?? throw new System.ArgumentNullException(nameof(collector));
         _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
     }
 
@@ -58,20 +62,29 @@ public sealed class RequirementAgent : IRequirementAgent
 
         var response = await _llm.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        var json = JsonExtractor.ExtractJson(response.Content, AgentName);
-        _validator.Validate(json, SchemaNames.RequirementSpecV1, AgentName);
+        try
+        {
+            var json = JsonExtractor.ExtractJson(response.Content, AgentName);
+            _validator.Validate(json, SchemaNames.RequirementSpecV1, AgentName);
 
-        var dto = JsonExtractor.Deserialize<RequirementSpecDto>(json, AgentName);
-        dto.Validate(AgentName);
+            var dto = JsonExtractor.Deserialize<RequirementSpecDto>(json, AgentName);
+            dto.Validate(AgentName);
 
-        var metrics = MetricsMapper.From(response);
+            var metrics = MetricsMapper.From(response);
+            _collector.Add(RunMetricFactory.From(response, AgentName, success: true, errorMessage: null));
 
-        _logger.LogInformation(
-            "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms ({Provider} {Model})",
-            AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
-            metrics.Latency.TotalMilliseconds, metrics.Provider, metrics.Model);
+            _logger.LogInformation(
+                "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms ({Provider} {Model})",
+                AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
+                metrics.Latency.TotalMilliseconds, metrics.Provider, metrics.Model);
 
-        return Map(dto, metrics);
+            return Map(dto, metrics);
+        }
+        catch (LlmException ex)
+        {
+            _collector.Add(RunMetricFactory.From(response, AgentName, success: false, errorMessage: ex.Message));
+            throw;
+        }
     }
 
     private static RequirementSpec Map(RequirementSpecDto dto, AgentMetrics metrics)

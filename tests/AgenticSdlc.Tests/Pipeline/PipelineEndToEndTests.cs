@@ -103,10 +103,11 @@ public class PipelineEndToEndTests
         var pipelineOpts = Options.Create(new PipelineOptions { MaxIterations = 3 });
 
         var validator = AgentTestHelpers.Validator;
-        var requirement = new RequirementAgent(factory, agentsOpts, validator, NullLogger<RequirementAgent>.Instance);
-        var coding = new CodingAgent(factory, agentsOpts, validator, NullLogger<CodingAgent>.Instance);
-        var testing = new TestingAgent(factory, agentsOpts, validator, NullLogger<TestingAgent>.Instance);
-        var qa = new QaAgent(factory, agentsOpts, NullLogger<QaAgent>.Instance);
+        var collector = AgentTestHelpers.NewCollector();
+        var requirement = new RequirementAgent(factory, agentsOpts, validator, collector, NullLogger<RequirementAgent>.Instance);
+        var coding = new CodingAgent(factory, agentsOpts, validator, collector, NullLogger<CodingAgent>.Instance);
+        var testing = new TestingAgent(factory, agentsOpts, validator, collector, NullLogger<TestingAgent>.Instance);
+        var qa = new QaAgent(factory, agentsOpts, collector, NullLogger<QaAgent>.Instance);
 
         return new PipelineOrchestrator(requirement, coding, testing, qa, pipelineOpts, NullLogger<PipelineOrchestrator>.Instance);
     }

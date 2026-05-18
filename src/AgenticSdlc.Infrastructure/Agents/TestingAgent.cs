@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgenticSdlc.Application.Agents;
+using AgenticSdlc.Application.Metrics;
 using AgenticSdlc.Application.Prompts;
 using AgenticSdlc.Application.Validation;
 using AgenticSdlc.Domain;
@@ -27,6 +28,7 @@ public sealed class TestingAgent : ITestingAgent
 
     private readonly ILlmClient _llm;
     private readonly ILlmOutputValidator _validator;
+    private readonly IMetricsCollector _collector;
     private readonly AgentOptions _options;
     private readonly ILogger<TestingAgent> _logger;
 
@@ -35,6 +37,7 @@ public sealed class TestingAgent : ITestingAgent
         ILlmClientFactory factory,
         IOptions<AgentsOptions> options,
         ILlmOutputValidator validator,
+        IMetricsCollector collector,
         ILogger<TestingAgent> logger)
     {
         System.ArgumentNullException.ThrowIfNull(factory);
@@ -42,6 +45,7 @@ public sealed class TestingAgent : ITestingAgent
         _options = options.Value.Testing;
         _llm = factory.Create(_options.Provider);
         _validator = validator ?? throw new System.ArgumentNullException(nameof(validator));
+        _collector = collector ?? throw new System.ArgumentNullException(nameof(collector));
         _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
     }
 
@@ -64,28 +68,37 @@ public sealed class TestingAgent : ITestingAgent
 
         var response = await _llm.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        var json = JsonExtractor.ExtractJson(response.Content, AgentName);
-        _validator.Validate(json, SchemaNames.TestArtifactV1, AgentName);
+        try
+        {
+            var json = JsonExtractor.ExtractJson(response.Content, AgentName);
+            _validator.Validate(json, SchemaNames.TestArtifactV1, AgentName);
 
-        var dto = JsonExtractor.Deserialize<TestArtifactDto>(json, AgentName);
-        dto.Validate(AgentName);
+            var dto = JsonExtractor.Deserialize<TestArtifactDto>(json, AgentName);
+            dto.Validate(AgentName);
 
-        var metrics = MetricsMapper.From(response);
+            var metrics = MetricsMapper.From(response);
+            _collector.Add(RunMetricFactory.From(response, AgentName, success: true, errorMessage: null));
 
-        _logger.LogInformation(
-            "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms — {Total} tests ({Happy}H/{Edge}E/{Err}X)",
-            AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
-            metrics.Latency.TotalMilliseconds, dto.HappyPathCount + dto.EdgeCaseCount + dto.ErrorCaseCount,
-            dto.HappyPathCount, dto.EdgeCaseCount, dto.ErrorCaseCount);
+            _logger.LogInformation(
+                "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms — {Total} tests ({Happy}H/{Edge}E/{Err}X)",
+                AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
+                metrics.Latency.TotalMilliseconds, dto.HappyPathCount + dto.EdgeCaseCount + dto.ErrorCaseCount,
+                dto.HappyPathCount, dto.EdgeCaseCount, dto.ErrorCaseCount);
 
-        return new TestArtifact(
-            Framework: dto.Framework ?? "xUnit",
-            Files: dto.Files!.Select(f => new CodeFile(f.Path!, f.Content ?? string.Empty, f.Language ?? "csharp")).ToArray(),
-            HappyPathCount: dto.HappyPathCount,
-            EdgeCaseCount: dto.EdgeCaseCount,
-            ErrorCaseCount: dto.ErrorCaseCount,
-            EstimatedCoveragePercent: dto.EstimatedCoveragePercent,
-            Metrics: metrics);
+            return new TestArtifact(
+                Framework: dto.Framework ?? "xUnit",
+                Files: dto.Files!.Select(f => new CodeFile(f.Path!, f.Content ?? string.Empty, f.Language ?? "csharp")).ToArray(),
+                HappyPathCount: dto.HappyPathCount,
+                EdgeCaseCount: dto.EdgeCaseCount,
+                ErrorCaseCount: dto.ErrorCaseCount,
+                EstimatedCoveragePercent: dto.EstimatedCoveragePercent,
+                Metrics: metrics);
+        }
+        catch (LlmException ex)
+        {
+            _collector.Add(RunMetricFactory.From(response, AgentName, success: false, errorMessage: ex.Message));
+            throw;
+        }
     }
 
     // ---- DTOs ----

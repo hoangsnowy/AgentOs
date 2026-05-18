@@ -4,6 +4,7 @@
 using AgenticSdlc.Api.Endpoints;
 using AgenticSdlc.Infrastructure.Agents;
 using AgenticSdlc.Infrastructure.Llm;
+using AgenticSdlc.Infrastructure.Metrics;
 using AgenticSdlc.Infrastructure.Validation;
 using Scalar.AspNetCore;
 
@@ -17,9 +18,18 @@ builder.Logging.AddSimpleConsole(options =>
     options.TimestampFormat = "HH:mm:ss.fff ";
 });
 
-// LLM Gateway + 5 Agents + PipelineOrchestrator + JSON Schema validation
+// LLM Gateway + 5 Agents + PipelineOrchestrator + JSON Schema validation + Metrics
 builder.Services.AddLlmGateway(builder.Configuration);
 builder.Services.AddValidation();
+var csvPath = builder.Configuration["Metrics:CsvPath"];
+if (!string.IsNullOrWhiteSpace(csvPath))
+{
+    builder.Services.AddCsvMetrics(csvPath);
+}
+else
+{
+    builder.Services.AddInMemoryMetrics();
+}
 builder.Services.AddAgents(builder.Configuration);
 
 // Application Insights — chỉ register khi có connection string (Phase 6 Azure deploy)

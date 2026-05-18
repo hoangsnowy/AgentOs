@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AgenticSdlc.Application.Agents;
+using AgenticSdlc.Application.Metrics;
 using AgenticSdlc.Application.Prompts;
 using AgenticSdlc.Domain;
 using AgenticSdlc.Domain.Code;
@@ -24,16 +25,22 @@ public sealed class QaAgent : IQaAgent
     private const string AgentName = nameof(QaAgent);
 
     private readonly ILlmClient _llm;
+    private readonly IMetricsCollector _collector;
     private readonly AgentOptions _options;
     private readonly ILogger<QaAgent> _logger;
 
     /// <summary>Khởi tạo.</summary>
-    public QaAgent(ILlmClientFactory factory, IOptions<AgentsOptions> options, ILogger<QaAgent> logger)
+    public QaAgent(
+        ILlmClientFactory factory,
+        IOptions<AgentsOptions> options,
+        IMetricsCollector collector,
+        ILogger<QaAgent> logger)
     {
         System.ArgumentNullException.ThrowIfNull(factory);
         System.ArgumentNullException.ThrowIfNull(options);
         _options = options.Value.Qa;
         _llm = factory.Create(_options.Provider);
+        _collector = collector ?? throw new System.ArgumentNullException(nameof(collector));
         _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
     }
 
@@ -57,23 +64,32 @@ public sealed class QaAgent : IQaAgent
 
         var response = await _llm.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        var dto = JsonExtractor.Deserialize<QaReportDto>(response.Content, AgentName);
-        dto.Validate(AgentName);
+        try
+        {
+            var dto = JsonExtractor.Deserialize<QaReportDto>(response.Content, AgentName);
+            dto.Validate(AgentName);
 
-        var metrics = MetricsMapper.From(response);
+            var metrics = MetricsMapper.From(response);
+            _collector.Add(RunMetricFactory.From(response, AgentName, success: true, errorMessage: null));
 
-        _logger.LogInformation(
-            "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms — score={Score} consistent={Consistent} issues={Issues}",
-            AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
-            metrics.Latency.TotalMilliseconds, dto.Score, dto.IsConsistent, dto.Issues?.Count ?? 0);
+            _logger.LogInformation(
+                "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms — score={Score} consistent={Consistent} issues={Issues}",
+                AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
+                metrics.Latency.TotalMilliseconds, dto.Score, dto.IsConsistent, dto.Issues?.Count ?? 0);
 
-        return new QaReport(
-            Score: dto.Score,
-            IsConsistent: dto.IsConsistent,
-            IterationNeeded: dto.IterationNeeded,
-            Issues: (dto.Issues ?? []).Select(i => new QaIssue(i.Severity!, i.Category!, i.Description!, i.Location)).ToArray(),
-            Recommendations: dto.Recommendations ?? [],
-            Metrics: metrics);
+            return new QaReport(
+                Score: dto.Score,
+                IsConsistent: dto.IsConsistent,
+                IterationNeeded: dto.IterationNeeded,
+                Issues: (dto.Issues ?? []).Select(i => new QaIssue(i.Severity!, i.Category!, i.Description!, i.Location)).ToArray(),
+                Recommendations: dto.Recommendations ?? [],
+                Metrics: metrics);
+        }
+        catch (LlmException ex)
+        {
+            _collector.Add(RunMetricFactory.From(response, AgentName, success: false, errorMessage: ex.Message));
+            throw;
+        }
     }
 
     // ---- DTOs ----

@@ -3,9 +3,11 @@
 
 using System;
 using AgenticSdlc.Application.Agents;
+using AgenticSdlc.Application.Metrics;
 using AgenticSdlc.Application.Validation;
 using AgenticSdlc.Domain.Llm;
 using AgenticSdlc.Infrastructure.Llm;
+using AgenticSdlc.Infrastructure.Metrics;
 using AgenticSdlc.Infrastructure.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -24,6 +26,9 @@ internal static class AgentTestHelpers
 
     /// <summary>Shared validator (3 schema embed sẵn).</summary>
     public static ILlmOutputValidator Validator => _validator.Value;
+
+    /// <summary>New in-memory metrics collector (gọi mỗi test để tránh state leak).</summary>
+    public static InMemoryMetricsCollector NewCollector() => new();
 
     public static LlmResponse StubResponse(string content)
         => new(
