@@ -1,0 +1,38 @@
+[
+  {
+    "id": "KC1-001",
+    "input": {
+      "description": "Hệ thống quản lý sản phẩm: admin tạo/xem/sửa/xoá; người dùng tra cứu theo danh mục.",
+      "locale": "vi-VN"
+    },
+    "expected": {
+      "entitiesMin": 2,
+      "endpointsMin": 4,
+      "acceptanceCriteriaMin": 3
+    }
+  },
+  {
+    "id": "KC1-002",
+    "input": {
+      "description": "Hệ thống đặt phòng khách sạn: khách tra cứu, đặt phòng có thanh toán; quản lý phê duyệt.",
+      "locale": "vi-VN"
+    },
+    "expected": {
+      "entitiesMin": 3,
+      "endpointsMin": 5,
+      "acceptanceCriteriaMin": 4
+    }
+  },
+  {
+    "id": "KC1-003",
+    "input": {
+      "description": "Hệ thống chấm công nhân viên: check-in/check-out qua QR; báo cáo công theo tháng.",
+      "locale": "vi-VN"
+    },
+    "expected": {
+      "entitiesMin": 2,
+      "endpointsMin": 3,
+      "acceptanceCriteriaMin": 3
+    }
+  }
+]

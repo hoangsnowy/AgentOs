@@ -1,0 +1,21 @@
+[
+  {
+    "id": "KC2-001",
+    "input": { "specFixture": "kc1-001-spec.json" },
+    "expected": {
+      "filesMin": 3,
+      "projectNameContains": "Product",
+      "mustHaveEntityClass": ["Product"],
+      "mustHaveEndpointRoute": ["/products"]
+    }
+  },
+  {
+    "id": "KC2-002",
+    "input": { "specFixture": "kc1-002-spec.json" },
+    "expected": {
+      "filesMin": 4,
+      "projectNameContains": "Booking",
+      "mustHaveEntityClass": ["Room", "Booking"]
+    }
+  }
+]

@@ -1,0 +1,15 @@
+[
+  {
+    "id": "KC5-001",
+    "input": {
+      "specFixture": "kc1-001-spec.json",
+      "codeFixture": "kc2-001-code.json",
+      "testsFixture": "kc3-001-tests.json"
+    },
+    "expected": {
+      "scoreRange": [0.0, 1.0],
+      "isConsistentMatchesScore": true,
+      "issuesPresentIfScoreBelow": 0.8
+    }
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "KC3-001",
+    "input": { "specFixture": "kc1-001-spec.json", "codeFixture": "kc2-001-code.json" },
+    "expected": {
+      "filesMin": 1,
+      "happyPathMin": 1,
+      "edgeCaseMin": 1,
+      "errorCaseMin": 1,
+      "frameworkEquals": "xUnit",
+      "coverageMin": 60
+    }
+  }
+]

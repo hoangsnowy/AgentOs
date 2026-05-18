@@ -137,7 +137,7 @@ curl -X POST http://localhost:5080/pipeline \
 - [x] Phase 2 — LLM Gateway (`ILlmClient` + 2 impls + factory + Mock)
 - [x] Phase 3 — Domain models + 5 agent interfaces
 - [x] Phase 4 — `PipelineOrchestrator` + endpoints
-- [ ] Phase 5 — Unit tests + benchmark KC1–KC5
+- [x] Phase 5 — Unit tests + benchmark KC1–KC5
 - [ ] Phase 6 — Azure deployment (Container Apps + App Insights)
 
 ---

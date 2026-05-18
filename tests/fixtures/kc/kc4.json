@@ -1,0 +1,25 @@
+[
+  {
+    "id": "KC4-001",
+    "input": {
+      "description": "Hệ thống quản lý sản phẩm: admin tạo/xem/sửa/xoá; người dùng tra cứu theo danh mục.",
+      "nMax": 3
+    },
+    "expected": {
+      "statusIn": ["Done", "MaxIterationReached"],
+      "iterationCountMax": 3,
+      "qaScoreFinalMin": 0.6
+    }
+  },
+  {
+    "id": "KC4-002",
+    "input": {
+      "description": "Hệ thống đặt phòng khách sạn với thanh toán + phê duyệt quản lý.",
+      "nMax": 3
+    },
+    "expected": {
+      "statusIn": ["Done", "MaxIterationReached"],
+      "iterationCountMax": 3
+    }
+  }
+]
