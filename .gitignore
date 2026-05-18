@@ -58,3 +58,9 @@ Thumbs.db
 # Logs
 **/*.log
 **/logs/
+
+# Claude Code — commit skills + settings, KHÔNG commit ephemeral worktrees / cache
+.claude/worktrees/
+.claude/cache/
+.claude/sessions/
+.claude/.session-env/
