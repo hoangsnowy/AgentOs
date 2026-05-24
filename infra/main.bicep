@@ -64,7 +64,7 @@ var lawName = '${appName}-law-${environmentName}'
 var aiName = '${appName}-ai-${environmentName}'
 var caeName = '${appName}-cae-${environmentName}'
 var caName = '${appName}-${environmentName}'
-var kvName = toLower('${appName}-kv-${suffix}')
+var kvName = toLower('${appName}-kv-${take(suffix, 8)}')
 var idName = '${appName}-id-${environmentName}'
 
 // ---- User-Assigned Managed Identity ----
