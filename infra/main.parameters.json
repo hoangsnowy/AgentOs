@@ -11,6 +11,9 @@
     "containerImage": {
       "value": "agenticsdlcacr.azurecr.io/agenticsdlc:latest"
     },
+    "webContainerImage": {
+      "value": ""
+    },
     "cpu": {
       "value": "0.5"
     },

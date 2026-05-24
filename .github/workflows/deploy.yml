@@ -97,8 +97,10 @@ jobs:
       - name: Show app URLs
         run: |
           API_FQDN=$(az containerapp show --name ${{ env.CONTAINER_APP }} --resource-group ${{ env.AZURE_RG }} --query "properties.configuration.ingress.fqdn" -o tsv)
-          WEB_FQDN=$(az containerapp show --name ${{ env.CONTAINER_APP_WEB }} --resource-group ${{ env.AZURE_RG }} --query "properties.configuration.ingress.fqdn" -o tsv)
           echo "::notice title=API::https://$API_FQDN"
           echo "::notice title=API Health::https://$API_FQDN/health"
           echo "::notice title=API Scalar::https://$API_FQDN/scalar/v1"
-          echo "::notice title=Web (Agent Studio)::https://$WEB_FQDN"
+          WEB_FQDN=$(az containerapp show --name ${{ env.CONTAINER_APP_WEB }} --resource-group ${{ env.AZURE_RG }} --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null || true)
+          if [ -n "$WEB_FQDN" ]; then
+            echo "::notice title=Web (Agent Studio)::https://$WEB_FQDN"
+          fi
