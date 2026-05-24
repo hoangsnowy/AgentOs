@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 env:
-  AZURE_RG: agenticsdlc-${{ github.event.inputs.environment || 'dev' }}-rg
+  AZURE_RG: rg-Hoang-LuanVan
   CONTAINER_APP: agenticsdlc-${{ github.event.inputs.environment || 'dev' }}
   APP_NAME: agenticsdlc
   IMAGE_TAG: ${{ github.sha }}
