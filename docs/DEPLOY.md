@@ -38,7 +38,7 @@ Xem [DEPLOYMENT.md §1-§3](DEPLOYMENT.md). Tóm tắt:
 ## Verify
 
 ```bash
-APP_URL=$(az containerapp show -n agenticsdlc-dev -g agenticsdlc-dev-rg --query properties.configuration.ingress.fqdn -o tsv)
+APP_URL=$(az containerapp show -n agenticsdlc-dev -g rg-Hoang-LuanVan --query properties.configuration.ingress.fqdn -o tsv)
 curl https://$APP_URL/health
 # → {"status":"Healthy","utc":"..."}
 curl -X POST https://$APP_URL/requirement -H "Content-Type: application/json" \
@@ -48,7 +48,7 @@ curl -X POST https://$APP_URL/requirement -H "Content-Type: application/json" \
 ## Cleanup
 
 ```bash
-az group delete --name agenticsdlc-dev-rg --yes --no-wait
+az group delete --name rg-Hoang-LuanVan --yes --no-wait
 az keyvault purge --name <kv-name>   # vì soft-delete 7 ngày
 ```
 

@@ -46,10 +46,10 @@ echo "AZURE_SUBSCRIPTION_ID = $SUB_ID"
 Workflow `deploy.yml` cần resource group + ACR có sẵn. Lần đầu tạo thủ công:
 
 ```bash
-az group create --name agenticsdlc-dev-rg --location southeastasia
+az group create --name rg-Hoang-LuanVan --location southeastasia
 
 az deployment group create \
-  --resource-group agenticsdlc-dev-rg \
+  --resource-group rg-Hoang-LuanVan \
   --template-file infra/main.bicep \
   --parameters infra/main.parameters.json \
   --parameters containerImage=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
@@ -72,7 +72,7 @@ Manual trigger qua **Actions → Deploy to Azure Container Apps → Run workflow
 ## 3. Smoke test post-deploy
 
 ```bash
-FQDN=$(az containerapp show -n agenticsdlc-dev -g agenticsdlc-dev-rg --query "properties.configuration.ingress.fqdn" -o tsv)
+FQDN=$(az containerapp show -n agenticsdlc-dev -g rg-Hoang-LuanVan --query "properties.configuration.ingress.fqdn" -o tsv)
 
 curl "https://$FQDN/health"
 # → {"status":"Healthy","utc":"..."}
@@ -88,20 +88,20 @@ Container Apps lưu tất cả revision. Roll back qua:
 
 ```bash
 # List revisions
-az containerapp revision list -n agenticsdlc-dev -g agenticsdlc-dev-rg \
+az containerapp revision list -n agenticsdlc-dev -g rg-Hoang-LuanVan \
   --query "[].{name:name, active:properties.active, image:properties.template.containers[0].image, created:properties.createdTime}" \
   -o table
 
 # Activate revision cũ
 az containerapp revision activate \
   --name <revision-name> \
-  --resource-group agenticsdlc-dev-rg \
+  --resource-group rg-Hoang-LuanVan \
   -n agenticsdlc-dev
 ```
 
 ## 5. Monitor
 
-- **Logs**: `az containerapp logs show -n agenticsdlc-dev -g agenticsdlc-dev-rg --tail 100`
+- **Logs**: `az containerapp logs show -n agenticsdlc-dev -g rg-Hoang-LuanVan --tail 100`
 - **Application Insights**: <https://portal.azure.com> → Application Insights → `agenticsdlc-ai-dev`
 - **Live metrics**: Application Insights → Live Metrics
 - **Cost log**: query KQL trong App Insights:
@@ -115,7 +115,7 @@ az containerapp revision activate \
 ## 6. Cleanup
 
 ```bash
-az group delete --name agenticsdlc-dev-rg --yes --no-wait
+az group delete --name rg-Hoang-LuanVan --yes --no-wait
 # Key Vault soft-delete → purge sau 7 ngày hoặc chủ động:
 # az keyvault purge --name <kv-name>
 ```

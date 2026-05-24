@@ -16,11 +16,11 @@
 
 ```bash
 # 1. Tạo resource group
-az group create --name agenticsdlc-dev-rg --location southeastasia
+az group create --name rg-Hoang-LuanVan --location southeastasia
 
 # 2. Deploy Bicep
 az deployment group create \
-  --resource-group agenticsdlc-dev-rg \
+  --resource-group rg-Hoang-LuanVan \
   --template-file infra/main.bicep \
   --parameters infra/main.parameters.json \
   --parameters containerImage=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
@@ -28,7 +28,7 @@ az deployment group create \
 # (lần đầu dùng image placeholder — bước build sau sẽ update)
 
 # 3. Build + push image lên ACR
-ACR=$(az acr list -g agenticsdlc-dev-rg --query "[0].loginServer" -o tsv)
+ACR=$(az acr list -g rg-Hoang-LuanVan --query "[0].loginServer" -o tsv)
 az acr login --name "$ACR"
 docker build -t "$ACR/agenticsdlc:$(git rev-parse --short HEAD)" .
 docker push "$ACR/agenticsdlc:$(git rev-parse --short HEAD)"
@@ -36,17 +36,17 @@ docker push "$ACR/agenticsdlc:$(git rev-parse --short HEAD)"
 # 4. Update Container App với image thật
 az containerapp update \
   --name agenticsdlc-dev \
-  --resource-group agenticsdlc-dev-rg \
+  --resource-group rg-Hoang-LuanVan \
   --image "$ACR/agenticsdlc:$(git rev-parse --short HEAD)"
 
 # 5. Set LLM secret vào Key Vault
-KV=$(az deployment group show -g agenticsdlc-dev-rg -n main --query "properties.outputs.keyVaultUri.value" -o tsv | sed 's|https://||;s|/||')
+KV=$(az deployment group show -g rg-Hoang-LuanVan -n main --query "properties.outputs.keyVaultUri.value" -o tsv | sed 's|https://||;s|/||')
 az keyvault secret set --vault-name "$KV" --name "Llm--Anthropic--ApiKey" --value "sk-ant-..."
 az keyvault secret set --vault-name "$KV" --name "Llm--AzureOpenAI--ApiKey" --value "..."
 az keyvault secret set --vault-name "$KV" --name "Llm--AzureOpenAI--Endpoint" --value "https://<resource>.openai.azure.com"
 
 # 6. Restart Container App để pickup secret mới
-az containerapp revision restart --name agenticsdlc-dev --resource-group agenticsdlc-dev-rg
+az containerapp revision restart --name agenticsdlc-dev --resource-group rg-Hoang-LuanVan
 ```
 
 ## Deploy tự động qua GitHub Actions
@@ -57,7 +57,7 @@ mỗi push lên `main` tự build + push image + update Container App revision.
 ## Cleanup
 
 ```bash
-az group delete --name agenticsdlc-dev-rg --yes --no-wait
+az group delete --name rg-Hoang-LuanVan --yes --no-wait
 ```
 
 > ⚠️ Key Vault soft-delete giữ 7 ngày. Để xoá hẳn:
