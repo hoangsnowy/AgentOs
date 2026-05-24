@@ -23,8 +23,11 @@ param location string = resourceGroup().location
 ])
 param environmentName string = 'dev'
 
-@description('Image full reference (vd <acr>.azurecr.io/agenticsdlc:abc123).')
+@description('Image full reference cho API (vd <acr>.azurecr.io/agenticsdlc:abc123).')
 param containerImage string
+
+@description('Image full reference cho Web/Blazor. Bỏ trống → không deploy Web container (chỉ API).')
+param webContainerImage string = ''
 
 @description('CPU cores per replica.')
 @allowed([
@@ -77,6 +80,8 @@ var lawName = '${appName}-law-${environmentName}'
 var aiName = '${appName}-ai-${environmentName}'
 var caeName = '${appName}-cae-${environmentName}'
 var caName = '${appName}-${environmentName}'
+var webAppName = '${appName}-web-${environmentName}'
+var deployWeb = !empty(webContainerImage)
 var kvName = toLower('${appName}-kv-${take(suffix, 8)}')
 var idName = '${appName}-id-${environmentName}'
 var pgServerName = toLower('${appName}-pg-${take(suffix, 8)}')
@@ -230,7 +235,46 @@ resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// ---- Container App ----
+// Secrets + env dùng chung cho cả API và Web container (cùng engine in-process).
+var containerSecrets = concat([
+  {
+    name: 'appinsights-connection-string'
+    value: appInsights.properties.ConnectionString
+  }
+], deployPostgres ? [
+  {
+    name: 'db-connection'
+    // postgres chỉ deploy khi deployPostgres=true — cùng điều kiện với nhánh này.
+    #disable-next-line BCP318
+    value: 'Host=${postgres.properties.fullyQualifiedDomainName};Port=5432;Database=${pgDatabaseName};Username=${postgresAdminLogin};Password=${postgresAdminPassword};SSL Mode=Require;Trust Server Certificate=true'
+  }
+] : [])
+
+var containerEnv = concat([
+  {
+    name: 'ASPNETCORE_ENVIRONMENT'
+    value: environmentName == 'prod' ? 'Production' : 'Staging'
+  }
+  {
+    name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+    secretRef: 'appinsights-connection-string'
+  }
+  {
+    name: 'AZURE_CLIENT_ID'
+    value: identity.properties.clientId
+  }
+  {
+    name: 'KeyVault__Endpoint'
+    value: keyVault.properties.vaultUri
+  }
+], deployPostgres ? [
+  {
+    name: 'ConnectionStrings__DefaultConnection'
+    secretRef: 'db-connection'
+  }
+] : [])
+
+// ---- Container App: API (REST + Scalar) ----
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: caName
@@ -262,19 +306,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           identity: identity.id
         }
       ]
-      secrets: concat([
-        {
-          name: 'appinsights-connection-string'
-          value: appInsights.properties.ConnectionString
-        }
-      ], deployPostgres ? [
-        {
-          name: 'db-connection'
-          // postgres chỉ deploy khi deployPostgres=true — cùng điều kiện với nhánh này.
-          #disable-next-line BCP318
-          value: 'Host=${postgres.properties.fullyQualifiedDomainName};Port=5432;Database=${pgDatabaseName};Username=${postgresAdminLogin};Password=${postgresAdminPassword};SSL Mode=Require;Trust Server Certificate=true'
-        }
-      ] : [])
+      secrets: containerSecrets
     }
     template: {
       containers: [
@@ -285,29 +317,92 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             cpu: json(cpu)
             memory: memory
           }
-          env: concat([
+          env: containerEnv
+          probes: [
             {
-              name: 'ASPNETCORE_ENVIRONMENT'
-              value: environmentName == 'prod' ? 'Production' : 'Staging'
+              type: 'Liveness'
+              httpGet: {
+                path: '/health'
+                port: 8080
+              }
+              initialDelaySeconds: 15
+              periodSeconds: 20
             }
             {
-              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-              secretRef: 'appinsights-connection-string'
+              type: 'Readiness'
+              httpGet: {
+                path: '/health'
+                port: 8080
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 10
             }
-            {
-              name: 'AZURE_CLIENT_ID'
-              value: identity.properties.clientId
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: minReplicas
+        maxReplicas: maxReplicas
+        rules: [
+          {
+            name: 'http-rule'
+            http: {
+              metadata: {
+                concurrentRequests: '50'
+              }
             }
-            {
-              name: 'KeyVault__Endpoint'
-              value: keyVault.properties.vaultUri
-            }
-          ], deployPostgres ? [
-            {
-              name: 'ConnectionStrings__DefaultConnection'
-              secretRef: 'db-connection'
-            }
-          ] : [])
+          }
+        ]
+      }
+    }
+  }
+}
+
+// ---- Container App: Web (Blazor — Agent Studio UI) ----
+// Conditional theo webContainerImage. Chia sẻ CAE/ACR/UAMI/KV/AppInsights với API.
+
+resource webApp 'Microsoft.App/containerApps@2024-03-01' = if (deployWeb) {
+  name: webAppName
+  location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${identity.id}': {}
+    }
+  }
+  dependsOn: [
+    acrPullRole
+    kvSecretsUserRole
+  ]
+  properties: {
+    managedEnvironmentId: cae.id
+    workloadProfileName: 'Consumption'
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: 8080
+        transport: 'http'
+        allowInsecure: false
+      }
+      registries: [
+        {
+          server: '${acrName}.azurecr.io'
+          identity: identity.id
+        }
+      ]
+      secrets: containerSecrets
+    }
+    template: {
+      containers: [
+        {
+          name: '${appName}-web'
+          image: webContainerImage
+          resources: {
+            cpu: json(cpu)
+            memory: memory
+          }
+          env: containerEnv
           probes: [
             {
               type: 'Liveness'
@@ -351,6 +446,8 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
 // ---- Outputs ----
 
 output containerAppFqdn string = containerApp.properties.configuration.ingress.fqdn
+#disable-next-line BCP318
+output webAppFqdn string = deployWeb ? webApp.properties.configuration.ingress.fqdn : ''
 output acrLoginServer string = acr.properties.loginServer
 output keyVaultUri string = keyVault.properties.vaultUri
 output identityClientId string = identity.properties.clientId

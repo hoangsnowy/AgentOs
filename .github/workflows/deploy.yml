@@ -23,6 +23,7 @@ permissions:
 env:
   AZURE_RG: rg-Hoang-LuanVan
   CONTAINER_APP: agenticsdlc-${{ github.event.inputs.environment || 'dev' }}
+  CONTAINER_APP_WEB: agenticsdlc-web-${{ github.event.inputs.environment || 'dev' }}
   APP_NAME: agenticsdlc
   IMAGE_TAG: ${{ github.sha }}
 
@@ -67,32 +68,37 @@ jobs:
       - name: ACR login
         run: az acr login --name ${{ steps.acr.outputs.name }}
 
-      - name: Build + push image
+      - name: Build + push images (API + Web)
         env:
-          IMAGE: ${{ steps.acr.outputs.login_server }}/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }}
+          API_IMAGE: ${{ steps.acr.outputs.login_server }}/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }}
+          WEB_IMAGE: ${{ steps.acr.outputs.login_server }}/${{ env.APP_NAME }}-web:${{ env.IMAGE_TAG }}
         run: |
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
-          echo "Pushed: $IMAGE"
+          docker build -t "$API_IMAGE" -f Dockerfile .
+          docker push "$API_IMAGE"
+          docker build -t "$WEB_IMAGE" -f Dockerfile.web .
+          docker push "$WEB_IMAGE"
+          echo "Pushed API: $API_IMAGE"
+          echo "Pushed Web: $WEB_IMAGE"
 
-      - name: Update Bicep (containerImage param)
+      - name: Update Bicep (API + Web image)
         env:
-          IMAGE: ${{ steps.acr.outputs.login_server }}/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }}
+          API_IMAGE: ${{ steps.acr.outputs.login_server }}/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }}
+          WEB_IMAGE: ${{ steps.acr.outputs.login_server }}/${{ env.APP_NAME }}-web:${{ env.IMAGE_TAG }}
         run: |
           az deployment group create \
             --resource-group ${{ env.AZURE_RG }} \
             --template-file infra/main.bicep \
             --parameters infra/main.parameters.json \
-            --parameters containerImage="$IMAGE" \
+            --parameters containerImage="$API_IMAGE" \
+                         webContainerImage="$WEB_IMAGE" \
                          environmentName="${{ github.event.inputs.environment || 'dev' }}" \
                          deployRoleAssignments=false
 
-      - name: Show app URL
+      - name: Show app URLs
         run: |
-          FQDN=$(az containerapp show \
-            --name ${{ env.CONTAINER_APP }} \
-            --resource-group ${{ env.AZURE_RG }} \
-            --query "properties.configuration.ingress.fqdn" -o tsv)
-          echo "::notice title=App URL::https://$FQDN"
-          echo "::notice title=Health::https://$FQDN/health"
-          echo "::notice title=OpenAPI::https://$FQDN/openapi/v1.json"
+          API_FQDN=$(az containerapp show --name ${{ env.CONTAINER_APP }} --resource-group ${{ env.AZURE_RG }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          WEB_FQDN=$(az containerapp show --name ${{ env.CONTAINER_APP_WEB }} --resource-group ${{ env.AZURE_RG }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "::notice title=API::https://$API_FQDN"
+          echo "::notice title=API Health::https://$API_FQDN/health"
+          echo "::notice title=API Scalar::https://$API_FQDN/scalar/v1"
+          echo "::notice title=Web (Agent Studio)::https://$WEB_FQDN"

@@ -64,6 +64,9 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseAntiforgery();
 
+// Liveness/readiness probe cho Container Apps.
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", utc = DateTime.UtcNow }));
+
 app.MapRazorComponents<App>()
    .AddInteractiveServerRenderMode();
 
