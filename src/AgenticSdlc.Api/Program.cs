@@ -43,7 +43,8 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// Bật OpenAPI + Scalar UI ở mọi env trừ Production (deploy dev chạy env Staging).
+if (!app.Environment.IsProduction())
 {
     app.MapOpenApi();
     app.MapScalarApiReference(options =>
