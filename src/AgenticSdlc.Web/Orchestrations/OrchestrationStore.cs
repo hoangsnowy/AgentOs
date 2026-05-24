@@ -1,47 +1,37 @@
 // AgenticSdlc.Web/Orchestrations/OrchestrationStore.cs
-// Phase 7b — Kho orchestration (singleton, in-memory + lưu JSON ra ContentRoot).
-// Seed sẵn 2 đồ thị: "5-Agent SDLC Pipeline" (ánh xạ pipeline luận văn) và
-// "Strict Developer" (mô phỏng ảnh Synapse để canvas trông đầy đủ ngay khi mở).
+// Phase 7b → Persistence: kho orchestration (singleton, cache in-memory cho read sync nhanh),
+// lưu bền qua IOrchestrationRepository (Postgres). Seed sẵn 2 đồ thị nếu DB trống.
+// Write dùng Task.Run để sync-over-async an toàn deadlock dưới SynchronizationContext của Blazor circuit.
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
-using Microsoft.Extensions.Hosting;
+using System.Threading.Tasks;
+using AgenticSdlc.Application.Persistence;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AgenticSdlc.Web.Orchestrations;
 
-/// <summary>CRUD orchestration. Thread-safe đủ cho demo 1 người (lock thô).</summary>
+/// <summary>CRUD orchestration. Thread-safe đủ cho demo 1 người (lock thô). Persist qua repo (DB).</summary>
 public sealed class OrchestrationStore
 {
     private static readonly JsonSerializerOptions Json = new()
     {
-        WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
     };
 
     private readonly object _gate = new();
     private readonly Dictionary<string, OrchestrationGraph> _graphs = new(StringComparer.Ordinal);
-    private readonly string _filePath;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    /// <summary>Khởi tạo: nạp file nếu có, ngược lại seed mặc định.</summary>
-    public OrchestrationStore(IHostEnvironment env)
+    /// <summary>Khởi tạo: nạp từ DB nếu có, ngược lại seed mặc định + lưu.</summary>
+    public OrchestrationStore(IServiceScopeFactory scopeFactory)
     {
-        ArgumentNullException.ThrowIfNull(env);
-        _filePath = Path.Combine(env.ContentRootPath, "App_Data", "orchestrations.json");
-
-        if (TryLoadFromDisk())
-        {
-            return;
-        }
-
-        foreach (var g in SeedDefaults())
-        {
-            _graphs[g.Id] = g;
-        }
-        PersistUnlocked();
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _scopeFactory = scopeFactory;
+        LoadOrSeed();
     }
 
     /// <summary>Tất cả orchestration, sắp theo tên.</summary>
@@ -62,15 +52,15 @@ public sealed class OrchestrationStore
         }
     }
 
-    /// <summary>Lưu (thêm mới hoặc cập nhật) + ghi đĩa.</summary>
+    /// <summary>Lưu (thêm mới hoặc cập nhật) vào cache + DB.</summary>
     public void Save(OrchestrationGraph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
         lock (_gate)
         {
             _graphs[graph.Id] = graph;
-            PersistUnlocked();
         }
+        Persist(graph);
     }
 
     /// <summary>Tạo orchestration trống với 1 node Start.</summary>
@@ -93,74 +83,84 @@ public sealed class OrchestrationStore
     /// <summary>Nhân bản orchestration (tên + " (copy)").</summary>
     public OrchestrationGraph Duplicate(string id)
     {
+        OrchestrationGraph clone;
         lock (_gate)
         {
             var src = _graphs.GetValueOrDefault(id) ?? throw new InvalidOperationException($"Orchestration '{id}' không tồn tại.");
-            var clone = Clone(src);
+            clone = Clone(src);
             clone.Id = NewId();
             clone.Name = src.Name + " (copy)";
             _graphs[clone.Id] = clone;
-            PersistUnlocked();
-            return clone;
         }
+        Persist(clone);
+        return clone;
     }
 
-    /// <summary>Xoá theo id.</summary>
+    /// <summary>Xoá theo id (cache + DB).</summary>
     public void Delete(string id)
     {
+        bool removed;
         lock (_gate)
         {
-            if (_graphs.Remove(id))
-            {
-                PersistUnlocked();
-            }
+            removed = _graphs.Remove(id);
+        }
+        if (removed)
+        {
+            RunOnRepo(repo => repo.DeleteAsync(id));
         }
     }
 
     /// <summary>Id ngắn (8 hex).</summary>
     public static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
-    // ---------------- persistence ----------------
+    // ---------------- persistence (repo/DB) ----------------
 
-    private bool TryLoadFromDisk()
+    private void LoadOrSeed()
     {
-        try
+        var records = RunOnRepo(repo => repo.ListAsync());
+        if (records.Count > 0)
         {
-            if (!File.Exists(_filePath))
+            foreach (var r in records)
             {
-                return false;
+                var g = JsonSerializer.Deserialize<OrchestrationGraph>(r.DefinitionJson, Json);
+                if (g is not null)
+                {
+                    _graphs[g.Id] = g;
+                }
             }
-            var json = File.ReadAllText(_filePath);
-            var list = JsonSerializer.Deserialize<List<OrchestrationGraph>>(json, Json);
-            if (list is null || list.Count == 0)
-            {
-                return false;
-            }
-            foreach (var g in list)
-            {
-                _graphs[g.Id] = g;
-            }
-            return true;
+            return;
         }
-        catch (Exception)
+
+        foreach (var g in SeedDefaults())
         {
-            return false; // file hỏng ⇒ seed lại
+            _graphs[g.Id] = g;
+            Persist(g);
         }
     }
 
-    private void PersistUnlocked()
+    private void Persist(OrchestrationGraph g)
     {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
-            var json = JsonSerializer.Serialize(_graphs.Values.ToList(), Json);
-            File.WriteAllText(_filePath, json);
-        }
-        catch (Exception)
-        {
-            // Demo: bỏ qua lỗi ghi đĩa (vd quyền). State vẫn còn trong RAM.
-        }
+        var record = new OrchestrationRecord(
+            g.Id, g.Name, g.Description, JsonSerializer.Serialize(g, Json), DateTimeOffset.UtcNow);
+        RunOnRepo(repo => repo.UpsertAsync(record));
     }
+
+    // Sync-over-async an toàn: Task.Run thoát SynchronizationContext của Blazor circuit (tránh deadlock).
+    private void RunOnRepo(Func<IOrchestrationRepository, Task> action) =>
+        Task.Run(async () =>
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IOrchestrationRepository>();
+            await action(repo).ConfigureAwait(false);
+        }).GetAwaiter().GetResult();
+
+    private IReadOnlyList<OrchestrationRecord> RunOnRepo(Func<IOrchestrationRepository, Task<IReadOnlyList<OrchestrationRecord>>> action) =>
+        Task.Run(async () =>
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IOrchestrationRepository>();
+            return await action(repo).ConfigureAwait(false);
+        }).GetAwaiter().GetResult();
 
     private static OrchestrationGraph Clone(OrchestrationGraph src)
         => JsonSerializer.Deserialize<OrchestrationGraph>(JsonSerializer.Serialize(src, Json), Json)!;

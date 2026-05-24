@@ -7,6 +7,7 @@ using AgenticSdlc.Application.Pipeline;
 using AgenticSdlc.Infrastructure.Agents;
 using AgenticSdlc.Infrastructure.Llm;
 using AgenticSdlc.Infrastructure.Metrics;
+using AgenticSdlc.Infrastructure.Persistence;
 using AgenticSdlc.Infrastructure.Validation;
 using AgenticSdlc.Web.Components;
 using AgenticSdlc.Web.Services;
@@ -31,6 +32,9 @@ builder.Services.AddValidation();
 builder.Services.AddInMemoryMetrics();
 builder.Services.AddAgents(builder.Configuration);
 
+// Persistence (Postgres). Không có ConnectionStrings:DefaultConnection → no-op repos (in-memory).
+builder.Services.AddPersistence(builder.Configuration);
+
 // --- Override cho lớp trình diễn ---
 
 // 1) Nguồn LLM nhận biết chế độ Demo: UseDemo ⇒ trả JSON canned (chạy offline, có Quality Loop);
@@ -48,6 +52,9 @@ builder.Services.AddScoped<IPipelineProgressSink>(sp => sp.GetRequiredService<Ci
 builder.Services.AddSingleton<AgenticSdlc.Web.Orchestrations.OrchestrationStore>();
 
 var app = builder.Build();
+
+// Apply EF migration lúc startup (no-op nếu chưa cấu hình DB).
+await app.Services.InitializePersistenceAsync();
 
 if (!app.Environment.IsDevelopment())
 {
