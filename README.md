@@ -139,7 +139,7 @@ curl -X POST http://localhost:5080/pipeline \
 - [x] Phase 4 — `PipelineOrchestrator` + endpoints
 - [x] Phase 5 — Unit tests + benchmark KC1–KC5
 - [x] Phase 6 — Azure deployment (Container Apps + App Insights)
-- [x] Phase 7 — Pipeline Studio (Blazor Server, realtime UI) — xem [docs/PHASE_7.md](docs/PHASE_7.md)
+- [x] Phase 7 — Agent Studio (Blazor Server, realtime UI + orchestration editor) — xem [docs/PHASE_7.md](docs/PHASE_7.md)
 
 ---
 

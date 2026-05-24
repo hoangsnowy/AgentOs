@@ -1,4 +1,4 @@
-# Phase 7 — Pipeline Studio (Blazor Server, realtime UI)
+# Phase 7 — Agent Studio (Blazor Server, realtime UI + orchestration editor)
 
 > Status: ✅ Build + test xanh (.NET 10.0.202, 154 pass / 4 skip live-smoke), chạy live verify trên trình duyệt OK.
 > Quality Loop demo đúng: QA fail vòng 1 (0.62) → pass vòng 2 (0.92), 5 tác tử hiển thị realtime.
