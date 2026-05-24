@@ -20,7 +20,6 @@ COPY . .
 RUN dotnet publish src/AgenticSdlc.Web/AgenticSdlc.Web.csproj \
     -c Release \
     -o /app/publish \
-    --no-restore \
     /p:UseAppHost=false
 
 # ---- Stage 2: runtime ----
