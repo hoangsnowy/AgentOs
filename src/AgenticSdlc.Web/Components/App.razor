@@ -10,11 +10,11 @@
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="orchestration.css" />
     <link rel="icon" href="data:," />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="@(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="@(new Microsoft.AspNetCore.Components.Web.InteractiveServerRenderMode(prerender: false))" />
     <script src="_content/Z.Blazor.Diagrams/script.min.js"></script>
     <script src="_framework/blazor.web.js"></script>
 </body>
