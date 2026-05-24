@@ -1,8 +1,8 @@
-# KC Dataset — Mục 2.5 luận văn
+# KC Dataset — Thesis Section 2.5
 
-5 file dataset cho kịch bản thực nghiệm KC1-KC5. Mỗi file = mảng test case `{id, input, expected}`.
+5 dataset files for the experimental scenarios KC1-KC5. Each file = an array of test cases `{id, input, expected}`.
 
-| File | KC | Endpoint chạy | Metric đo |
+| File | KC | Endpoint run | Metrics measured |
 |---|---|---|---|
 | `kc1.json` | KC1 — Requirement Analysis | `POST /requirement` | tokens, cost, entitiesCount, endpointsCount, acceptanceCriteriaCount |
 | `kc2.json` | KC2 — Code Generation | `POST /code` | tokens, cost, filesCount, must-have class/route |
@@ -10,31 +10,31 @@
 | `kc4.json` | KC4 — Pipeline End-to-End | `POST /pipeline` | total tokens/cost, iteration count, final status, qa score |
 | `kc5.json` | KC5 — QA Consistency | `POST /qa` | tokens, cost, score, isConsistent, issues count |
 
-## Cách chạy
+## How to run
 
-Dùng skill `/kc-bench`:
+Use the `/kc-bench` skill:
 
 ```
-/kc-bench all              # tất cả 5 KC, default provider Mock
-/kc-bench KC4              # chỉ KC4 (pipeline)
-/kc-bench KC1,KC4 --real   # chạy thật với Claude+Azure (cost warning)
+/kc-bench all              # all 5 KC, default provider Mock
+/kc-bench KC4              # only KC4 (pipeline)
+/kc-bench KC1,KC4 --real   # run live with Claude+Azure (cost warning)
 ```
 
-Skill tự:
-1. Start API local nếu chưa chạy.
-2. Loop từng case × N lặp (default 3).
-3. POST request, đo metric.
-4. Aggregate → `docs/bench/kc-summary-{date}.xlsx` + markdown.
+The skill automatically:
+1. Starts the API locally if it is not already running.
+2. Loops over each case × N iterations (default 3).
+3. POSTs the request, measures metrics.
+4. Aggregates → `docs/bench/kc-summary-{date}.xlsx` + markdown.
 
-## Dependency fixture (kc2/kc3/kc5)
+## Fixture dependencies (kc2/kc3/kc5)
 
-KC2/KC3/KC5 cần output từ KC trước (vd KC2 cần `RequirementSpec` từ KC1).
-Trường `specFixture`, `codeFixture`, `testsFixture` trỏ tới snapshot fixture
-đã được record (skill `/fixture-record` sinh các file này).
+KC2/KC3/KC5 need output from a previous KC (e.g. KC2 needs the `RequirementSpec` from KC1).
+The `specFixture`, `codeFixture`, `testsFixture` fields point to a recorded snapshot fixture
+(the `/fixture-record` skill generates these files).
 
-Nếu fixture chưa tồn tại, bench skill tự skip case + báo cáo lý do.
+If a fixture does not yet exist, the bench skill automatically skips the case and reports the reason.
 
-## Mở rộng
+## Extending
 
-Thêm case mới: append vào JSON, đặt `id` unique (vd `KC1-004`).
-KHÔNG đổi shape `expected` mà không update bench harness song song.
+Add a new case: append to the JSON, set a unique `id` (e.g. `KC1-004`).
+Do NOT change the `expected` shape without updating the bench harness in parallel.

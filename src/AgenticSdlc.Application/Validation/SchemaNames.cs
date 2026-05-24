@@ -1,9 +1,9 @@
 // AgenticSdlc.Application/Validation/SchemaNames.cs
-// Sprint 3 — tên schema chuẩn (khớp logical name khi đăng ký).
+// Sprint 3 — canonical schema names (match the logical name used at registration).
 
 namespace AgenticSdlc.Application.Validation;
 
-/// <summary>Constants tên schema đăng ký với <see cref="ILlmOutputValidator"/>.</summary>
+/// <summary>Schema name constants registered with <see cref="ILlmOutputValidator"/>.</summary>
 public static class SchemaNames
 {
     /// <summary>RequirementSpec v1.</summary>

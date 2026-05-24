@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Llm/LlmRequestTests.cs
-// Sprint 1 — Unit test cho LlmRequest record.
+// Sprint 1 — Unit tests for the LlmRequest record.
 
 using System;
 using AgenticSdlc.Domain.Llm;

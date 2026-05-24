@@ -1,8 +1,8 @@
-// Repository cho Agent Studio orchestration graph. Lưu dạng JSON string (Web tự (de)serialize
-// sang OrchestrationGraph của nó) → Application/Infrastructure không phụ thuộc Web.
+// Repository for the Agent Studio orchestration graph. Stored as a JSON string (the Web layer
+// (de)serializes it to its own OrchestrationGraph) → Application/Infrastructure do not depend on Web.
 namespace AgenticSdlc.Application.Persistence;
 
-/// <summary>CRUD orchestration definition (Agent Studio editor state).</summary>
+/// <summary>CRUD for the orchestration definition (Agent Studio editor state).</summary>
 public interface IOrchestrationRepository
 {
     Task<IReadOnlyList<OrchestrationRecord>> ListAsync(CancellationToken ct = default);
@@ -14,7 +14,7 @@ public interface IOrchestrationRepository
     Task DeleteAsync(string id, CancellationToken ct = default);
 }
 
-/// <summary>1 orchestration graph (DefinitionJson = full graph serialize bởi Web).</summary>
+/// <summary>A single orchestration graph (DefinitionJson = full graph serialized by the Web layer).</summary>
 public sealed record OrchestrationRecord(
     string Id,
     string Name,

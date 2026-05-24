@@ -1,0 +1,14 @@
+# Normalize line endings: LF for all text files (stops CRLF churn on Windows/CI).
+* text=auto eol=lf
+
+# Binary files — never normalize.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.xlsx binary
+*.docx binary
+*.pptx binary

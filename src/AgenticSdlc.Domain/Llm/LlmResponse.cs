@@ -4,15 +4,15 @@
 namespace AgenticSdlc.Domain.Llm;
 
 /// <summary>
-/// Response trả về từ <see cref="ILlmClient.SendAsync(LlmRequest, System.Threading.CancellationToken)"/>.
+/// Response returned from <see cref="ILlmClient.SendAsync(LlmRequest, System.Threading.CancellationToken)"/>.
 /// </summary>
-/// <param name="Content">Text content (đã extract khỏi shape của provider). Bắt buộc, có thể rỗng.</param>
-/// <param name="InputTokens">Số token input đã tiêu thụ.</param>
-/// <param name="OutputTokens">Số token output đã sinh.</param>
-/// <param name="CostUsd">Cost ước tính theo USD (do <c>CostCalculator</c> tính).</param>
-/// <param name="Latency">Thời gian end-to-end (đo bằng <see cref="System.Diagnostics.Stopwatch"/> trong client).</param>
-/// <param name="Model">Tên model đã thực sự sinh response (provider có thể alias).</param>
-/// <param name="Provider">Tên provider: <c>"Claude"</c>, <c>"AzureOpenAI"</c>, hoặc <c>"Mock"</c>.</param>
+/// <param name="Content">Text content (extracted from the provider's shape). Required, may be empty.</param>
+/// <param name="InputTokens">Number of input tokens consumed.</param>
+/// <param name="OutputTokens">Number of output tokens generated.</param>
+/// <param name="CostUsd">Estimated cost in USD (computed by <c>CostCalculator</c>).</param>
+/// <param name="Latency">End-to-end time (measured with <see cref="System.Diagnostics.Stopwatch"/> in the client).</param>
+/// <param name="Model">Name of the model that actually generated the response (the provider may alias it).</param>
+/// <param name="Provider">Provider name: <c>"Claude"</c>, <c>"AzureOpenAI"</c>, or <c>"Mock"</c>.</param>
 public sealed record LlmResponse(
     string Content,
     int InputTokens,

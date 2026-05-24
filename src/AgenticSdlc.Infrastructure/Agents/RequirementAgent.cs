@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Agents/RequirementAgent.cs
-// Phase 4 — Impl IRequirementAgent. Gọi LLM với system prompt structured-output, parse JSON.
+// Phase 4 — IRequirementAgent impl. Calls the LLM with a structured-output system prompt and parses JSON.
 
 using System.Collections.Generic;
 using System.Linq;
@@ -19,7 +19,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgenticSdlc.Infrastructure.Agents;
 
-/// <summary>Phân tích user story → <see cref="RequirementSpec"/> dạng JSON structured.</summary>
+/// <summary>Analyzes a user story → a structured JSON <see cref="RequirementSpec"/>.</summary>
 public sealed class RequirementAgent : IRequirementAgent
 {
     private const string AgentName = nameof(RequirementAgent);
@@ -30,7 +30,7 @@ public sealed class RequirementAgent : IRequirementAgent
     private readonly AgentOptions _options;
     private readonly ILogger<RequirementAgent> _logger;
 
-    /// <summary>Khởi tạo.</summary>
+    /// <summary>Initializes.</summary>
     public RequirementAgent(
         ILlmClientFactory factory,
         IOptions<AgentsOptions> options,
@@ -99,7 +99,7 @@ public sealed class RequirementAgent : IRequirementAgent
             AcceptanceCriteria: dto.AcceptanceCriteria ?? [],
             Metrics: metrics);
 
-    // ---- DTOs cho JSON deserialize (khớp schema trong SystemPrompt) ----
+    // ---- DTOs for JSON deserialization (matching the schema in the SystemPrompt) ----
     private sealed class RequirementSpecDto
     {
         public string? Title { get; set; }

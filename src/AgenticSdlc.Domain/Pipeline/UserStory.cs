@@ -1,17 +1,17 @@
 // AgenticSdlc.Domain/Pipeline/UserStory.cs
-// Phase 3 — Input của toàn pipeline (free-form user story hoặc requirement statement).
+// Phase 3 — Input for the whole pipeline (free-form user story or requirement statement).
 
 namespace AgenticSdlc.Domain.Pipeline;
 
 /// <summary>
-/// Input cho pipeline: 1 user story ngôn ngữ tự nhiên + tham số ngắn.
+/// Input for the pipeline: a single natural-language user story + short parameters.
 /// </summary>
-/// <param name="Description">Nội dung user story / requirement statement. Bắt buộc, không rỗng.</param>
-/// <param name="NMax">Số iteration tối đa của QA loop (clamp tại PipelineOrchestrator). Mặc định <c>3</c>.</param>
-/// <param name="Locale">Mã ngôn ngữ ưu tiên cho output (vd <c>"vi-VN"</c>, <c>"en-US"</c>). Mặc định <c>"vi-VN"</c>.</param>
+/// <param name="Description">User story / requirement statement text. Required, non-empty.</param>
+/// <param name="NMax">Maximum number of QA loop iterations (clamped in the PipelineOrchestrator). Default <c>3</c>.</param>
+/// <param name="Locale">Preferred language code for the output (e.g. <c>"vi-VN"</c>, <c>"en-US"</c>). Default <c>"vi-VN"</c>.</param>
 public sealed record UserStory(string Description, int NMax = 3, string Locale = "vi-VN")
 {
-    /// <summary>Validate input. Ném <see cref="System.ArgumentException"/> nếu sai.</summary>
+    /// <summary>Validates the input. Throws <see cref="System.ArgumentException"/> if invalid.</summary>
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(Description))

@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Agents/CodingAgent.cs
-// Phase 4 — Impl ICodingAgent. Sinh source code C# Clean Architecture từ RequirementSpec.
+// Phase 4 — ICodingAgent impl. Generates C# Clean Architecture source code from a RequirementSpec.
 
 using System.Collections.Generic;
 using System.Linq;
@@ -20,7 +20,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgenticSdlc.Infrastructure.Agents;
 
-/// <summary>Sinh source code C# Clean Architecture từ requirement spec (+ optional QA feedback).</summary>
+/// <summary>Generates C# Clean Architecture source code from a requirement spec (+ optional QA feedback).</summary>
 public sealed class CodingAgent : ICodingAgent
 {
     private const string AgentName = nameof(CodingAgent);
@@ -31,7 +31,7 @@ public sealed class CodingAgent : ICodingAgent
     private readonly AgentOptions _options;
     private readonly ILogger<CodingAgent> _logger;
 
-    /// <summary>Khởi tạo.</summary>
+    /// <summary>Initializes.</summary>
     public CodingAgent(
         ILlmClientFactory factory,
         IOptions<AgentsOptions> options,

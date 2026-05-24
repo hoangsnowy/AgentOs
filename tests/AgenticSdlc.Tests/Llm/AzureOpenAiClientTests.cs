@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Llm/AzureOpenAiClientTests.cs
-// Sprint 1 — Unit test AzureOpenAiClient với fake HttpMessageHandler.
+// Sprint 1 — Unit tests for AzureOpenAiClient with a fake HttpMessageHandler.
 
 using System;
 using System.Net;

@@ -1,18 +1,18 @@
 // AgenticSdlc.Web/Services/Demo/DemoRunContext.cs
-// Phase 7 — Trạng thái theo circuit, quyết định lần chạy hiện tại dùng nguồn LLM nào.
+// Phase 7 — Per-circuit state that decides which LLM source the current run uses.
 
 namespace AgenticSdlc.Web.Services.Demo;
 
 /// <summary>
-/// Ngữ cảnh 1 lần chạy pipeline trên 1 circuit Blazor. Trang Studio đặt
-/// <see cref="UseDemo"/> trước khi resolve orchestrator; <see cref="DemoAwareLlmClientFactory"/>
-/// đọc cờ này để chọn DemoLlmClient (offline) hay client thật.
+/// Context for a single pipeline run on one Blazor circuit. The Studio page sets
+/// <see cref="UseDemo"/> before resolving the orchestrator; <see cref="DemoAwareLlmClientFactory"/>
+/// reads this flag to pick DemoLlmClient (offline) or the real client.
 /// </summary>
 public sealed class DemoRunContext
 {
     /// <summary>
-    /// <c>true</c> ⇒ mọi agent dùng <see cref="DemoLlmClient"/> (JSON canned, chạy offline).
-    /// <c>false</c> ⇒ dùng provider thật theo cấu hình từng agent (Claude / Azure OpenAI).
+    /// <c>true</c> ⇒ every agent uses <see cref="DemoLlmClient"/> (canned JSON, runs offline).
+    /// <c>false</c> ⇒ uses the real provider per each agent's configuration (Claude / Azure OpenAI).
     /// </summary>
     public bool UseDemo { get; set; } = true;
 }

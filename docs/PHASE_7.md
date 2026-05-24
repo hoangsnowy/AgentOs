@@ -1,142 +1,142 @@
 # Phase 7 — Agent Studio (Blazor Server, realtime UI + orchestration editor)
 
-> Status: ✅ Build + test xanh (.NET 10.0.202, 154 pass / 4 skip live-smoke), chạy live verify trên trình duyệt OK.
-> Quality Loop demo đúng: QA fail vòng 1 (0.62) → pass vòng 2 (0.92), 5 tác tử hiển thị realtime.
+> Status: ✅ Build + tests green (.NET 10.0.202, 154 pass / 4 skip live-smoke), live verify in the browser OK.
+> Quality Loop demo correct: QA fails iteration 1 (0.62) → passes iteration 2 (0.92), 5 agents shown in realtime.
 
-## Mục tiêu
+## Objectives
 
-Bổ sung lớp trình diễn realtime cho prototype: một UI Blazor Server cho phép nhập user story,
-bấm chạy và **xem 5 tác tử phối hợp theo thời gian thực** (timeline agent + vòng QA + điểm số),
-cùng panel metrics (token / cost / latency) và tab xem artefact sinh ra (Requirement / Code / Test / QA).
+Add a realtime presentation layer to the prototype: a Blazor Server UI that lets you enter a user story,
+click run, and **watch the 5 agents collaborate in real time** (agent timeline + QA iterations + scores),
+along with a metrics panel (token / cost / latency) and a tab to view the generated artefacts (Requirement / Code / Test / QA).
 
-Phục vụ trực tiếp **Mục 2.5** (kịch bản thực nghiệm: input → output → đánh giá nhìn thấy được) và
-**Mục 2.6** (số liệu hiệu quả), và là công cụ demo trực quan cho buổi bảo vệ (cho thấy pattern
-Leader–Specialists–Quality Loop chạy sống).
+This directly serves **Section 2.5** (the experimental scenario: input → output → visible evaluation) and
+**Section 2.6** (effectiveness metrics), and is a visual demo tool for the defense (showing the
+Leader–Specialists–Quality Loop pattern running live).
 
-## Kế hoạch (đã thống nhất)
+## Plan (agreed)
 
-- Host: **Blazor Server** (Blazor Web App, InteractiveServer render mode). Circuit chạy trên SignalR
-  ⇒ realtime push "miễn phí", không cần viết Hub thủ công.
-- Tích hợp: project Web **tham chiếu Infrastructure trực tiếp**, gọi thẳng `PipelineOrchestrator`.
-- Cơ chế realtime: orchestrator phát sự kiện tiến trình; component lắng nghe rồi `StateHasChanged()`.
+- Host: **Blazor Server** (Blazor Web App, InteractiveServer render mode). The circuit runs over SignalR
+  ⇒ realtime push "for free", with no need to write a Hub by hand.
+- Integration: the Web project **references Infrastructure directly**, calling `PipelineOrchestrator` directly.
+- Realtime mechanism: the orchestrator emits progress events; the component listens and then calls `StateHasChanged()`.
 
-## Deliverable
+## Deliverables
 
-### Lõi (giữ TreatWarningsAsErrors=true)
+### Core (keeping TreatWarningsAsErrors=true)
 
-- `Domain/Pipeline/PipelineProgressEvent.cs` — record sự kiện tiến trình + enum `PipelineStage`, `PipelinePhase`.
-- `Application/Pipeline/IPipelineProgressSink.cs` — cổng phát tiến trình (abstraction).
-- `Infrastructure/Pipeline/NullPipelineProgressSink.cs` — bản no-op, đăng ký mặc định trong `AddAgents`
-  (qua `TryAddSingleton`) ⇒ API + 80 test cũ KHÔNG đổi hành vi.
-- `Infrastructure/Orchestration/PipelineOrchestrator.cs` — thêm tham số ctor **tuỳ chọn**
-  `IPipelineProgressSink? progress = null` (non-breaking với 4 call-site test dùng `new PipelineOrchestrator(...6 args...)`).
-  Chèn `ReportAsync` ở: Requirement start/done, mỗi vòng Coding/Testing/QA start/done, QA-completed (kèm score),
-  Aggregate, và các nhánh Failed.
+- `Domain/Pipeline/PipelineProgressEvent.cs` — a progress event record + enums `PipelineStage`, `PipelinePhase`.
+- `Application/Pipeline/IPipelineProgressSink.cs` — the progress-emission port (abstraction).
+- `Infrastructure/Pipeline/NullPipelineProgressSink.cs` — a no-op implementation, registered by default in `AddAgents`
+  (via `TryAddSingleton`) ⇒ the API + the 80 existing tests have UNCHANGED behavior.
+- `Infrastructure/Orchestration/PipelineOrchestrator.cs` — adds an **optional** ctor parameter
+  `IPipelineProgressSink? progress = null` (non-breaking with the 4 test call-sites using `new PipelineOrchestrator(...6 args...)`).
+  Inserts `ReportAsync` at: Requirement start/done, each Coding/Testing/QA iteration start/done, QA-completed (with score),
+  Aggregate, and the Failed branches.
 
-### Project trình diễn `src/AgenticSdlc.Web` (TreatWarningsAsErrors=false)
+### Presentation project `src/AgenticSdlc.Web` (TreatWarningsAsErrors=false)
 
-- `AgenticSdlc.Web.csproj`, `Program.cs`, `appsettings.json`, `Properties/launchSettings.json` (cổng 5180).
+- `AgenticSdlc.Web.csproj`, `Program.cs`, `appsettings.json`, `Properties/launchSettings.json` (port 5180).
 - `Components/`: `App.razor`, `Routes.razor`, `_Imports.razor`, `Layout/MainLayout.razor`,
-  `Pages/PipelineStudio.razor` (trang chính, route `/`).
-- `wwwroot/app.css` (theme tối).
-- `Services/CircuitPipelineProgress.cs` — `IPipelineProgressSink` scoped theo circuit; chuyển sự kiện cho
-  `Listener` mà component đăng ký.
-- `Services/CodeHighlighter.cs` — tô màu cú pháp C# nhẹ, an toàn XSS (HTML-encode trước, regex 1 lượt).
-- `Services/Demo/DemoRunContext.cs` — cờ `UseDemo` theo circuit.
-- `Services/Demo/DemoLlmClient.cs` — nguồn LLM "canned" offline: nhận biết agent qua system prompt
-  ("Bạn là … Agent"), trả JSON hợp lệ theo schema, **mô phỏng QA fail vòng 1 → pass vòng 2** (cấu hình
+  `Pages/PipelineStudio.razor` (the main page, route `/`).
+- `wwwroot/app.css` (dark theme).
+- `Services/CircuitPipelineProgress.cs` — an `IPipelineProgressSink` scoped per circuit; forwards events to
+  the `Listener` that the component registers.
+- `Services/CodeHighlighter.cs` — lightweight C# syntax highlighting, XSS-safe (HTML-encode first, single regex pass).
+- `Services/Demo/DemoRunContext.cs` — a `UseDemo` flag per circuit.
+- `Services/Demo/DemoLlmClient.cs` — an offline "canned" LLM source: recognises the agent via the system prompt
+  ("You are the … Agent"), returns valid JSON per schema, **simulates QA fail iteration 1 → pass iteration 2** (configured via
   `Demo:FailingQaRounds`, `Demo:StepDelayMs`).
-- `Services/Demo/DemoAwareLlmClientFactory.cs` — override `ILlmClientFactory`: `UseDemo` ⇒ DemoLlmClient,
-  ngược lại uỷ quyền `LlmClientFactory` thật (Claude/Azure theo appsettings).
+- `Services/Demo/DemoAwareLlmClientFactory.cs` — overrides `ILlmClientFactory`: `UseDemo` ⇒ DemoLlmClient,
+  otherwise delegates to the real `LlmClientFactory` (Claude/Azure per appsettings).
 
 ### Solution
 
-- `AgenticSdlc.sln` — đã thêm project `AgenticSdlc.Web` (GUID `...006`) vào solution folder `src`.
+- `AgenticSdlc.sln` — added the `AgenticSdlc.Web` project (GUID `...006`) to the `src` solution folder.
 
-## Quyết định kỹ thuật
+## Technical decisions
 
-- **Vì sao không viết SignalR Hub riêng?** Blazor Server đã có circuit (SignalR) sẵn; dùng
-  `IPipelineProgressSink` scoped + `InvokeAsync(StateHasChanged)` là đủ realtime, ít code hơn, idiomatic.
-  (Nếu sau cần nhiều người cùng xem 1 lần chạy mới cần Hub broadcast.)
-- **Vì sao có DemoLlmClient mà không dùng Mock fixture?** `MockLlmClient` hash-based, miss ⇒ "stub-response"
-  (không phải JSON) ⇒ agent parse fail. Fixture lại brittle (xem Phase 5). DemoLlmClient trả JSON đúng
-  schema, deterministic, và minh hoạ được Quality Loop — chạy offline không cần API key.
-- **Vì sao tham số progress để optional (= null → NullPipelineProgressSink.Instance)?** Để 4 call-site test
-  `new PipelineOrchestrator(...)` 6 tham số vẫn biên dịch; DI (API/Web) vẫn inject sink đã đăng ký.
-- **Chuyển nguồn LLM lúc chạy:** trang resolve `IOrchestratorAgent` từ `IServiceProvider` của circuit
-  SAU khi đặt `DemoRunContext.UseDemo` (vì agent đọc `factory.Create` ở constructor).
+- **Why not write a dedicated SignalR Hub?** Blazor Server already has a circuit (SignalR); using a
+  scoped `IPipelineProgressSink` + `InvokeAsync(StateHasChanged)` is realtime enough, less code, and idiomatic.
+  (A broadcast Hub is only needed later if multiple people watch one run together.)
+- **Why a DemoLlmClient instead of Mock fixtures?** `MockLlmClient` is hash-based; a miss ⇒ "stub-response"
+  (not JSON) ⇒ the agent fails to parse. Fixtures are also brittle (see Phase 5). DemoLlmClient returns JSON that matches the
+  schema, is deterministic, and illustrates the Quality Loop — running offline with no API key.
+- **Why is the progress parameter optional (= null → NullPipelineProgressSink.Instance)?** So the 4 test call-sites
+  `new PipelineOrchestrator(...)` with 6 parameters still compile; DI (API/Web) still injects the registered sink.
+- **Switching the LLM source at runtime:** the page resolves `IOrchestratorAgent` from the circuit's `IServiceProvider`
+  AFTER setting `DemoRunContext.UseDemo` (because the agent reads `factory.Create` in its constructor).
 
-## Cách chạy
+## How to run
 
 ```bash
-# tại D:\LuanVan\prototype
+# at D:\LuanVan\prototype
 dotnet build AgenticSdlc.sln -c Release
-dotnet test  AgenticSdlc.sln -c Release          # kỳ vọng: 80 test cũ vẫn xanh
-dotnet run --project src/AgenticSdlc.Web         # mở http://localhost:5180
+dotnet test  AgenticSdlc.sln -c Release          # expected: the 80 existing tests still green
+dotnet run --project src/AgenticSdlc.Web         # open http://localhost:5180
 ```
 
-Nhập user story → bấm "Chạy pipeline" (mặc định chế độ Demo offline) → quan sát timeline realtime.
+Enter a user story → click "Run pipeline" (offline Demo mode by default) → observe the realtime timeline.
 
-## Việc còn lại (TODO cho phiên sau)
+## Remaining work (TODO for a later session)
 
-- [x] Build + test xác nhận; sửa lỗi cú pháp/analyzer nhỏ nếu có (project Web đã tắt TWAE nên ít rủi ro).
-- [x] Tick checkbox Phase 7 trong `README.md` mục "Lộ trình" sau khi build xanh.
+- [x] Build + test confirmation; fix minor syntax/analyzer errors if any (the Web project has TWAE off, so low risk).
+- [x] Tick the Phase 7 checkbox in the `README.md` "Roadmap" section after the build is green.
 
-> Các mục tuỳ chọn (export, test interpreter, …) đã chuyển xuống mục **Backlog** bên dưới.
+> The optional items (export, test interpreter, …) have been moved to the **Backlog** section below.
 
-### Bug đã sửa khi verify live
+### Bug fixed during live verify
 
-`DemoLlmClient` nhận diện agent bằng `Contains(sys, "Testing Agent")` — nhưng system prompt
-của Testing Agent có câu *"…cho code đã được **Coding Agent** sinh ra…"*, mà nhánh `"Coding Agent"`
-được kiểm tra TRƯỚC ⇒ lần gọi Testing bị route nhầm sang `CodeJson` (shape code-artifact, thiếu
-`happyPathCount/edgeCaseCount/errorCaseCount`) ⇒ fail schema `test-artifact.v1`, pipeline đứt ở bước Testing.
-Sửa: khớp theo dòng định danh đầy đủ `"Bạn là <X> Agent"` (đúng ý đồ ghi trong header file) thay vì suffix trần.
+`DemoLlmClient` identified the agent via `Contains(sys, "Testing Agent")` — but the Testing Agent's system prompt
+contains the phrase *"…for the code produced by the **Coding Agent**…"*, and the `"Coding Agent"` branch
+was checked FIRST ⇒ the Testing call was misrouted to `CodeJson` (the code-artifact shape, missing
+`happyPathCount/edgeCaseCount/errorCaseCount`) ⇒ it failed the `test-artifact.v1` schema, breaking the pipeline at the Testing step.
+Fix: match on the full identifier line `"You are the <X> Agent"` (as intended per the file header) instead of the bare suffix.
 
-## Phase 7b — Orchestration Studio (editor kéo-thả kiểu Synapse)
+## Phase 7b — Orchestration Studio (Synapse-style drag-and-drop editor)
 
-> Status: ✅ Build + test xanh (154 pass), verify live trên trình duyệt OK.
+> Status: ✅ Build + tests green (154 pass), live verify in the browser OK.
 
-Bổ sung editor node-graph trực quan (cảm hứng từ Synapse) thay cho timeline tuyến tính:
-canvas nền tối, card từng step, nối edge có nhãn route, minimap, vòng QA vẽ thành chu trình.
+Adds a visual node-graph editor (inspired by Synapse) in place of the linear timeline:
+a dark canvas, a card per step, route-labelled edges, a minimap, and the QA loop drawn as a cycle.
 
-- **Route**: `/` = Orchestration Studio (editor); `/timeline` = view realtime cũ (giữ nguyên).
-- **Dependency mới**: `Z.Blazor.Diagrams` 3.0.4.1 (lib node-editor Blazor thuần, MIT) — chỉ trong project Web.
-- **Mô hình** (`Orchestrations/`): `OrchestrationGraph` / `GraphNode` / `GraphEdge` / `StepType`;
-  `OrchestrationStore` (singleton, seed + lưu `App_Data/orchestrations.json`); `StepNodeModel : NodeModel`.
-- **Seed**: `5-Agent SDLC Pipeline` (ánh xạ KC1–KC5, Run chạy được) + `Strict Developer` (mô phỏng ảnh Synapse).
-- **Editor**: palette "Add step" (14 loại) → thêm node; kéo di chuyển; nối port vẽ edge; inspector sửa
-  tiêu đề/role/in/out/max/route; Save / New / Duplicate / Delete; selector đổi orchestration; zoom + fit.
-- **Run** (`OrchestrationStudio.Run`): thông dịch đồ thị — đi từ node Start theo edge, mỗi node 1 lượt LLM
-  (Demo offline), sáng node realtime + stream Run Log. Evaluator rẽ nhánh theo `isConsistent` ⇒ minh hoạ
-  vòng lặp QA (fail vòng 1 → loop → pass vòng 2). Model gán theo vai trò ⇒ cost ước tính khớp hybrid LLM.
-- **Quyết định**: dùng `Z.Blazor.Diagrams` (node = Razor component) thay vì nhúng React/Svelte Flow — giữ toàn
-  bộ trong C#/Blazor, bind realtime dễ; canvas tái tạo qua `@key="_graph.Id"` khi đổi orchestration.
+- **Routes**: `/` = Orchestration Studio (editor); `/timeline` = the old realtime view (kept as-is).
+- **New dependency**: `Z.Blazor.Diagrams` 3.0.4.1 (a pure-Blazor node-editor lib, MIT) — only in the Web project.
+- **Models** (`Orchestrations/`): `OrchestrationGraph` / `GraphNode` / `GraphEdge` / `StepType`;
+  `OrchestrationStore` (singleton, seeds + persists to `App_Data/orchestrations.json`); `StepNodeModel : NodeModel`.
+- **Seeds**: `5-Agent SDLC Pipeline` (maps to KC1–KC5, Run works) + `Strict Developer` (replicates the Synapse screenshot).
+- **Editor**: an "Add step" palette (14 types) → add nodes; drag to move; connect ports to draw edges; an inspector edits
+  title/role/in/out/max/route; Save / New / Duplicate / Delete; a selector to switch orchestration; zoom + fit.
+- **Run** (`OrchestrationStudio.Run`): interprets the graph — starting from the Start node along the edges, one LLM turn per node
+  (offline Demo), lighting up nodes in realtime + streaming the Run Log. The evaluator branches on `isConsistent` ⇒ illustrating the
+  QA loop (fail iteration 1 → loop → pass iteration 2). Models are assigned by role ⇒ the estimated cost matches the hybrid LLM.
+- **Decision**: use `Z.Blazor.Diagrams` (node = Razor component) rather than embedding React/Svelte Flow — keeping everything
+  in C#/Blazor, with easy realtime binding; the canvas is recreated via `@key="_graph.Id"` when switching orchestration.
 
-## Backlog — phát triển sau (NGOÀI scope hiện tại)
+## Backlog — future development (OUT of current scope)
 
-Các mục dưới đây cố ý để **stub / trang trí** trong bản này (đủ minh hoạ luận văn). Ghi lại để mở rộng sau:
+The items below are intentionally left as **stubs / decoration** in this version (enough to illustrate the thesis). Recorded for later expansion:
 
-### UI hiện chỉ trang trí
-- [ ] **Sidebar 18 mục** (General, Build Agents, MCP Servers, Tool Builder, Repos, DB Configs, Models,
+### UI currently decorative only
+- [ ] **18-item sidebar** (General, Build Agents, MCP Servers, Tool Builder, Repos, DB Configs, Models,
   Messaging, Integrations, Schedules, Vault, Usage, Import/Export, Logs, Memory, API Keys, Support & Docs) —
-  hiện chỉ "Orchestrations" hoạt động; còn lại bấm không làm gì.
-- [ ] **Build with AI** — nút disabled. Ý tưởng: nhập mô tả → LLM sinh ra đồ thị orchestration tự động.
-- [ ] **Deploy as Agent** — nút disabled. Ý tưởng: export orchestration thành endpoint/agent chạy được.
+  currently only "Orchestrations" works; the rest do nothing when clicked.
+- [ ] **Build with AI** — disabled button. Idea: enter a description → the LLM generates the orchestration graph automatically.
+- [ ] **Deploy as Agent** — disabled button. Idea: export the orchestration as a runnable endpoint/agent.
 
-### Run / thực thi (đáng làm nhất cho luận văn)
-- [ ] **Run gọi LLM thật** — thêm toggle Demo/Real như trang `/timeline` (hiện orchestration chỉ chạy Demo offline).
-- [ ] **Recent Runs lưu lịch sử** — mỗi lần Run lưu token/cost/latency/thời điểm; tab xem lại + so sánh.
-- [ ] **Guardrails enforce** — hiện chỉ hiển thị text; chưa chặn/kiểm lúc Run.
+### Run / execution (the most worthwhile for the thesis)
+- [ ] **Run with a real LLM** — add a Demo/Real toggle like the `/timeline` page (the orchestration currently only runs offline Demo).
+- [ ] **Recent Runs history** — each Run stores token/cost/latency/timestamp; a tab to review + compare.
+- [ ] **Guardrails enforcement** — currently only displays text; does not yet block/check at Run time.
 
-### Semantics node nâng cao (giờ chạy như LLM generic)
-- [ ] **Tool** gọi tool/hàm thật · **Parallel** fork nhánh thật · **Merge** gộp · **Transform** map dữ liệu ·
-  **Extract JSON** · **Switch / If-Else** rẽ nhánh theo điều kiện thật · **Print** log giá trị.
+### Advanced node semantics (currently run as a generic LLM)
+- [ ] **Tool** calls a real tool/function · **Parallel** actually forks branches · **Merge** merges · **Transform** maps data ·
+  **Extract JSON** · **Switch / If-Else** branches on real conditions · **Print** logs values.
 
-### Khác
-- [ ] Nút **export kết quả** ra `.md/.json` cho phụ lục.
-- [ ] **Test** cho `PipelineOrchestrator` thứ tự sự kiện + cho `OrchestrationStudio.Run` interpreter.
+### Other
+- [ ] An **export results** button to `.md/.json` for the appendix.
+- [ ] **Tests** for `PipelineOrchestrator` event ordering + for the `OrchestrationStudio.Run` interpreter.
 
-## Lưu ý dọn dẹp
+## Cleanup note
 
-Trong lúc tạo code có 1 file bị ghi nhầm vào `OneDrive\...\Documents\Claude\Projects\LuanVan\prototype\src\...`
-(không phải repo thật). Repo thật ở `D:\LuanVan`. Xoá thư mục thừa đó nếu còn.
+While generating code, one file was mistakenly written to `OneDrive\...\Documents\Claude\Projects\LuanVan\prototype\src\...`
+(not the real repo). The real repo is at `D:\LuanVan`. Delete that stray directory if it still exists.

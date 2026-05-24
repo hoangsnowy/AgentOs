@@ -1,7 +1,7 @@
 // AgenticSdlc.Web/Services/CodeHighlighter.cs
-// Phase 7 — Tô màu cú pháp C# "nhẹ" cho hiển thị read-only. An toàn XSS: HTML-encode
-// trước, rồi 1 lượt regex alternation (comment > string > keyword > number) nên mỗi ký tự
-// thuộc tối đa 1 token, không lồng nhau.
+// Phase 7 — "Lightweight" C# syntax highlighting for read-only display. XSS-safe: HTML-encode
+// first, then a single regex alternation pass (comment > string > keyword > number) so each character
+// belongs to at most 1 token, with no nesting.
 
 using System.Net;
 using System.Text.RegularExpressions;
@@ -9,10 +9,10 @@ using Microsoft.AspNetCore.Components;
 
 namespace AgenticSdlc.Web.Services;
 
-/// <summary>Bộ tô màu cú pháp tối giản, trả <see cref="MarkupString"/> đã an toàn để render.</summary>
+/// <summary>A minimal syntax highlighter that returns a render-safe <see cref="MarkupString"/>.</summary>
 public static partial class CodeHighlighter
 {
-    /// <summary>Tô màu một đoạn mã C#. Trả MarkupString (đã HTML-encode + bọc span).</summary>
+    /// <summary>Highlight a C# snippet. Returns a MarkupString (HTML-encoded + wrapped in spans).</summary>
     public static MarkupString Highlight(string? code)
     {
         if (string.IsNullOrEmpty(code))

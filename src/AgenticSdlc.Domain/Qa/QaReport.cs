@@ -1,20 +1,20 @@
 // AgenticSdlc.Domain/Qa/QaReport.cs
-// Phase 3 — Output của QaAgent — báo cáo nhất quán requirement-code-test.
+// Phase 3 — Output of QaAgent — requirement-code-test consistency report.
 
 using System.Collections.Generic;
 
 namespace AgenticSdlc.Domain.Qa;
 
 /// <summary>
-/// Báo cáo QA — đánh giá nhất quán giữa <c>RequirementSpec</c>, <c>CodeArtifact</c>, <c>TestArtifact</c>.
-/// Field <see cref="IterationNeeded"/> drive vòng lặp của <c>PipelineOrchestrator</c>.
+/// QA report — evaluates consistency between <c>RequirementSpec</c>, <c>CodeArtifact</c>, <c>TestArtifact</c>.
+/// The <see cref="IterationNeeded"/> field drives the <c>PipelineOrchestrator</c> loop.
 /// </summary>
-/// <param name="Score">Điểm tổng [0.0, 1.0]. ≥ <see cref="QaThresholds.PassScore"/> → pass.</param>
-/// <param name="IsConsistent">Cờ nhất quán tổng thể.</param>
-/// <param name="IterationNeeded">Cờ tiếp tục loop. <c>true</c> = cần regenerate code/test.</param>
-/// <param name="Issues">Danh sách vấn đề phát hiện (drift requirement-vs-code, test thiếu, ...).</param>
-/// <param name="Recommendations">Khuyến nghị cho lần regenerate kế tiếp.</param>
-/// <param name="Metrics">Metric agent.</param>
+/// <param name="Score">Overall score [0.0, 1.0]. ≥ <see cref="QaThresholds.PassScore"/> → pass.</param>
+/// <param name="IsConsistent">Overall consistency flag.</param>
+/// <param name="IterationNeeded">Continue-loop flag. <c>true</c> = code/test needs regenerating.</param>
+/// <param name="Issues">List of detected issues (requirement-vs-code drift, missing tests, ...).</param>
+/// <param name="Recommendations">Recommendations for the next regeneration.</param>
+/// <param name="Metrics">Agent metric.</param>
 public sealed record QaReport(
     double Score,
     bool IsConsistent,
@@ -23,16 +23,16 @@ public sealed record QaReport(
     IReadOnlyList<string> Recommendations,
     AgentMetrics Metrics);
 
-/// <summary>1 vấn đề QA.</summary>
-/// <param name="Severity">Mức độ (<c>Critical</c> / <c>Major</c> / <c>Minor</c>).</param>
-/// <param name="Category">Phân loại (<c>RequirementCoverage</c>, <c>TestCoverage</c>, <c>CodeQuality</c>, ...).</param>
-/// <param name="Description">Mô tả chi tiết.</param>
-/// <param name="Location">Vị trí (file path, line, requirement ID).</param>
+/// <summary>A single QA issue.</summary>
+/// <param name="Severity">Severity (<c>Critical</c> / <c>Major</c> / <c>Minor</c>).</param>
+/// <param name="Category">Category (<c>RequirementCoverage</c>, <c>TestCoverage</c>, <c>CodeQuality</c>, ...).</param>
+/// <param name="Description">Detailed description.</param>
+/// <param name="Location">Location (file path, line, requirement ID).</param>
 public sealed record QaIssue(string Severity, string Category, string Description, string? Location = null);
 
-/// <summary>Ngưỡng QA hardcode cho prototype luận văn.</summary>
+/// <summary>Hardcoded QA thresholds for the thesis prototype.</summary>
 public static class QaThresholds
 {
-    /// <summary>Điểm tối thiểu để pass (Mục 2.4.5 luận văn).</summary>
+    /// <summary>Minimum score to pass (thesis Section 2.4.5).</summary>
     public const double PassScore = 0.8;
 }

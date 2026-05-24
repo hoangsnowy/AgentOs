@@ -14,6 +14,7 @@
 @inject OrchestrationStore Store
 @inject ILlmClientFactory LlmFactory
 @inject DemoRunContext DemoCtx
+@inject Microsoft.JSInterop.IJSRuntime JS
 @implements IDisposable
 
 <PageTitle>Orchestrations — Agentic SDLC</PageTitle>
@@ -42,7 +43,12 @@
                 <h1>Orchestrations</h1>
                 <p>Design multi-agent workflows with visual canvas</p>
             </div>
-            <a class="syn-close" href="/timeline" title="Xem timeline cũ">✕</a>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button class="syn-theme-toggle" @onclick="ToggleTheme" title="Toggle light/dark theme">
+                    @(_theme == "light" ? "🌙 Dark" : "☀ Light")
+                </button>
+                <a class="syn-close" href="/timeline" title="View legacy timeline">✕</a>
+            </div>
         </div>
 
         <!-- toolbar -->
@@ -68,7 +74,7 @@
         <!-- name + desc -->
         <div class="syn-namerow">
             <input class="syn-name" @bind="_graph.Name" @bind:event="oninput" />
-            <input class="syn-desc" @bind="_graph.Description" @bind:event="oninput" placeholder="Mô tả orchestration…" />
+            <input class="syn-desc" @bind="_graph.Description" @bind:event="oninput" placeholder="Orchestration description…" />
         </div>
 
         <!-- add step palette -->
@@ -107,16 +113,16 @@
                         <span>@StepName(_selected.Data.Type) · node</span>
                         <button class="ins-x" @onclick="CloseInspector">✕</button>
                     </div>
-                    <label>Tiêu đề
+                    <label>Title
                         <input @bind="_selected.Data.Title" @bind:event="oninput" @bind:after="InspectorChanged" />
                     </label>
                     @if (_selected.Data.Type == StepType.Agent)
                     {
-                        <label>Vai trò (Requirement / Coding / Testing / Qa)
+                        <label>Role (Requirement / Coding / Testing / Qa)
                             <input @bind="_selected.Data.AgentRole" @bind:event="oninput" @bind:after="InspectorChanged" />
                         </label>
                     }
-                    <label>Mô tả
+                    <label>Description
                         <textarea @bind="_selected.Data.Description" @bind:event="oninput" @bind:after="InspectorChanged"></textarea>
                     </label>
                     <div class="ins-row">
@@ -128,11 +134,11 @@
                     </div>
                     @if (_selected.Data.Category == StepCategory.Evaluator)
                     {
-                        <label>routes (cách nhau dấu phẩy)
+                        <label>routes (comma-separated)
                             <input @bind="RoutesText" @bind:event="oninput" @bind:after="InspectorChanged" />
                         </label>
                     }
-                    <button class="ins-del" @onclick="DeleteSelectedNode">🗑 Xoá node</button>
+                    <button class="ins-del" @onclick="DeleteSelectedNode">🗑 Delete node</button>
                 </div>
             }
         </div>
@@ -154,7 +160,7 @@
                 {
                     @if (_graph.Guardrails.Count == 0)
                     {
-                        <p class="muted">Chưa có guardrail.</p>
+                        <p class="muted">No guardrails yet.</p>
                     }
                     <ul class="syn-guard">@foreach (var g in _graph.Guardrails){<li>🛡 @g</li>}</ul>
                 }
@@ -174,7 +180,7 @@
                 }
                 else
                 {
-                    <p class="muted">@_recentRuns lần chạy gần đây (demo — chưa lưu lịch sử).</p>
+                    <p class="muted">@_recentRuns recent runs (demo — history not persisted).</p>
                 }
             </div>
         </div>
@@ -218,6 +224,20 @@
         }
         BuildDiagram();
     }
+
+    private string _theme = "dark";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _theme = await JS.InvokeAsync<string>("agenticTheme.get");
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleTheme()
+        => _theme = await JS.InvokeAsync<string>("agenticTheme.toggle");
 
     private void BuildDiagram()
     {
@@ -353,7 +373,7 @@
 
     private void SyncFromCanvas()
     {
-        // Vị trí node
+        // Node positions
         foreach (var (id, m) in _nodeModels)
         {
             var n = _graph.Nodes.FirstOrDefault(x => x.Id == id);
@@ -363,7 +383,7 @@
                 n.Y = m.Position.Y;
             }
         }
-        // Edge do user vẽ thêm trên canvas
+        // Edges the user drew on the canvas
         var edges = new List<GraphEdge>();
         foreach (var link in _diagram.Links)
         {
@@ -387,7 +407,7 @@
         SyncFromCanvas();
         Store.Save(_graph);
         _all = Store.All().ToList();
-        Log("💾 Đã lưu orchestration.");
+        Log("💾 Orchestration saved.");
     }
 
     private void Duplicate()
@@ -412,8 +432,8 @@
 
     private CancellationTokenSource? _runCts;
 
-    /// <summary>Thông dịch đồ thị: đi từ node Start theo edge, mỗi node 1 lượt LLM (Demo),
-    /// sáng node realtime + stream Run Log. Evaluator rẽ nhánh theo isConsistent ⇒ minh hoạ vòng lặp.</summary>
+    /// <summary>Interprets the graph: starts at the Start node and follows edges, one LLM call per node (Demo),
+    /// lighting up nodes in realtime + streaming the Run Log. Evaluator branches on isConsistent ⇒ illustrates the loop.</summary>
     private async Task Run()
     {
         if (_running)
@@ -423,19 +443,19 @@
         _bottomTab = 2;
         ResetRunState();
         _running = true;
-        DemoCtx.UseDemo = true; // orchestration chạy offline bằng dữ liệu Demo
+        DemoCtx.UseDemo = true; // orchestration runs offline using Demo data
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
 
         var start = _graph.Nodes.FirstOrDefault(n => n.IsStart) ?? _graph.Nodes.FirstOrDefault();
         if (start is null)
         {
-            Log("⚠ Đồ thị rỗng — không có node để chạy.");
+            Log("⚠ Empty graph — no node to run.");
             _running = false;
             return;
         }
 
-        Log($"▶ Run \"{_graph.Name}\"  ·  input: {(string.IsNullOrWhiteSpace(_runInput) ? "(mặc định)" : _runInput)}");
+        Log($"▶ Run \"{_graph.Name}\"  ·  input: {(string.IsNullOrWhiteSpace(_runInput) ? "(default)" : _runInput)}");
         var client = LlmFactory.CreateDefault();
         var visits = new Dictionary<string, int>(StringComparer.Ordinal);
 
@@ -475,7 +495,7 @@
 
                 if (current.Type == StepType.End)
                 {
-                    Log("■ Hoàn tất orchestration.");
+                    Log("■ Orchestration complete.");
                     break;
                 }
 
@@ -483,12 +503,12 @@
             }
             if (guard >= 30)
             {
-                Log("⚠ Dừng: chạm giới hạn 30 bước (tránh vòng lặp vô hạn).");
+                Log("⚠ Stopped: hit the 30-step limit (to avoid infinite loops).");
             }
         }
         catch (OperationCanceledException)
         {
-            Log("⏹ Đã huỷ run.");
+            Log("⏹ Run cancelled.");
         }
         finally
         {
@@ -502,7 +522,7 @@
 
     private async Task<(string meta, bool? consistent)> ExecuteNodeAsync(GraphNode node, ILlmClient client, CancellationToken ct)
     {
-        // Human: không gọi LLM — auto-answer trong chế độ demo.
+        // Human: no LLM call — auto-answer in demo mode.
         if (node.Type == StepType.Human)
         {
             await Task.Delay(450, ct).ConfigureAwait(false);
@@ -532,13 +552,13 @@
                 consistent = p.GetBoolean();
             }
         }
-        catch (System.Text.Json.JsonException) { /* output không phải JSON object — bỏ qua */ }
+        catch (System.Text.Json.JsonException) { /* output is not a JSON object — ignore */ }
 
         var meta = $"{resp.InputTokens}→{resp.OutputTokens} tok · ${resp.CostUsd:0.0000} · {resp.Latency.TotalMilliseconds:0}ms";
         return (meta, consistent);
     }
 
-    /// <summary>Chọn node kế: Evaluator + chưa nhất quán + còn lượt ⇒ rẽ nhánh lùi (loop); ngược lại đi tới.</summary>
+    /// <summary>Pick the next node: Evaluator + not yet consistent + iterations left ⇒ branch backward (loop); otherwise go forward.</summary>
     private GraphNode? ChooseNext(GraphNode node, bool? consistent, Dictionary<string, int> visits)
     {
         var outs = _graph.Edges.Where(e => e.SourceId == node.Id).ToList();
@@ -562,7 +582,9 @@
 
     private string SystemFor(GraphNode n)
     {
-        // Tận dụng DemoLlmClient: prompt có "Bạn là <X> Agent" ⇒ trả JSON canned đúng schema.
+        // Leverages DemoLlmClient: a prompt containing "You are the <X> Agent" ⇒ returns canned JSON matching the schema.
+        // NOTE: the "You are the <X> Agent" prefix is a routing key matched by DemoLlmClient and the Application
+        // prompt files (Application/Prompts/*.cs) — keep these system-prompt literals in sync.
         if (n.Type == StepType.Agent && !string.IsNullOrWhiteSpace(n.AgentRole))
         {
             var role = n.AgentRole switch
@@ -570,19 +592,19 @@
                 "Requirement" => "Requirement", "Coding" => "Coding", "Testing" => "Testing",
                 "Qa" => "QA", _ => n.AgentRole,
             };
-            return $"Bạn là {role} Agent trong hệ thống Agentic SDLC.";
+            return $"You are the {role} Agent in the Agentic SDLC system.";
         }
         if (n.Category == StepCategory.Evaluator)
         {
-            return "Bạn là QA Agent trong hệ thống Agentic SDLC.";
+            return "You are the QA Agent in the Agentic SDLC system.";
         }
-        return $"Bạn là trợ lý thực thi bước '{n.Title}'. Trả lời ngắn gọn.";
+        return $"You are an assistant executing step '{n.Title}'. Answer concisely.";
     }
 
     private string UserFor(GraphNode n)
-        => $"Bước: {n.Title}\nMô tả: {n.Description}\nĐầu vào: {n.Input}\nUser input: {(_runInput.Length == 0 ? "(mặc định)" : _runInput)}";
+        => $"Step: {n.Title}\nDescription: {n.Description}\nInput: {n.Input}\nUser input: {(_runInput.Length == 0 ? "(default)" : _runInput)}";
 
-    // Gán model thật theo vai trò ⇒ cost ước tính khớp chiến lược hybrid của luận văn.
+    // Assign the real model per role ⇒ estimated cost matches the thesis's hybrid strategy.
     private static string ModelFor(GraphNode n) => n.AgentRole switch
     {
         "Requirement" => "claude-sonnet-4",

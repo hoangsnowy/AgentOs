@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Llm/CostCalculator.cs
-// Sprint 1 — Tính cost theo model + token. Pricing hardcode (Q2/2026 snapshot).
+// Sprint 1 — Compute cost by model + tokens. Hardcoded pricing (Q2/2026 snapshot).
 
 using System.Collections.Generic;
 
@@ -13,7 +13,7 @@ namespace AgenticSdlc.Infrastructure.Llm;
 ///   <item>gpt-4.1 — input $2.50, output $10.00</item>
 ///   <item>gpt-4o-mini — input $0.15, output $0.60</item>
 /// </list>
-/// Model name matching là case-insensitive và <c>StartsWith</c> (cho phép suffix kiểu "claude-sonnet-4-20250514").
+/// Model name matching is case-insensitive and uses <c>StartsWith</c> (allows suffixes like "claude-sonnet-4-20250514").
 /// </summary>
 public static class CostCalculator
 {
@@ -27,8 +27,8 @@ public static class CostCalculator
     };
 
     /// <summary>
-    /// Tính cost (USD) cho 1 cặp (inputTokens, outputTokens) trên model.
-    /// Nếu model không match bảng pricing, trả về <c>0m</c> (để không break test offline; log warning lên ILogger là trách nhiệm caller).
+    /// Computes the cost (USD) for a single (inputTokens, outputTokens) pair on a model.
+    /// If the model does not match the pricing table, returns <c>0m</c> (so offline tests are not broken; logging a warning to ILogger is the caller's responsibility).
     /// </summary>
     public static decimal Calculate(string model, int inputTokens, int outputTokens)
     {
@@ -43,7 +43,7 @@ public static class CostCalculator
             {
                 var input = (decimal)inputTokens / 1_000_000m * p.InputPerMillion;
                 var output = (decimal)outputTokens / 1_000_000m * p.OutputPerMillion;
-                // Round 6 chữ số sau dấu phẩy — đủ resolution cho tổng chi phí pipeline.
+                // Round to 6 decimal places — enough resolution for the total pipeline cost.
                 return System.Math.Round(input + output, 6, System.MidpointRounding.AwayFromZero);
             }
         }
@@ -51,7 +51,7 @@ public static class CostCalculator
         return 0m;
     }
 
-    /// <summary>Trả về true nếu pricing cho model có trong bảng.</summary>
+    /// <summary>Returns true if pricing for the model exists in the table.</summary>
     public static bool IsKnown(string model)
     {
         if (string.IsNullOrWhiteSpace(model))

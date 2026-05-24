@@ -1,23 +1,23 @@
 // AgenticSdlc.Domain/Requirements/RequirementSpec.cs
-// Phase 3 — Output của RequirementAgent — structured requirement specification.
+// Phase 3 — Output of RequirementAgent — structured requirement specification.
 
 using System.Collections.Generic;
 
 namespace AgenticSdlc.Domain.Requirements;
 
 /// <summary>
-/// Structured requirement specification — output của <c>IRequirementAgent</c>.
-/// JSON-serializable, để truyền sang CodingAgent + TestingAgent + QaAgent.
+/// Structured requirement specification — output of <c>IRequirementAgent</c>.
+/// JSON-serializable, to be passed to CodingAgent + TestingAgent + QaAgent.
 /// </summary>
-/// <param name="Title">Tiêu đề ngắn của tính năng.</param>
-/// <param name="Summary">1-2 câu tóm tắt.</param>
-/// <param name="Stakeholders">Vai trò liên quan (vd "admin", "khách hàng vãng lai").</param>
-/// <param name="FunctionalRequirements">Yêu cầu chức năng — vd "Admin tạo sản phẩm với SKU duy nhất".</param>
-/// <param name="NonFunctionalRequirements">Yêu cầu phi chức năng — vd "API response p95 ≤ 200ms".</param>
-/// <param name="Entities">Entity domain — driver cho CodingAgent sinh model.</param>
-/// <param name="Endpoints">Endpoint API — surface cần expose.</param>
-/// <param name="AcceptanceCriteria">Tiêu chí chấp nhận — driver cho TestingAgent.</param>
-/// <param name="Metrics">Metric agent (token, cost, latency).</param>
+/// <param name="Title">Short feature title.</param>
+/// <param name="Summary">1-2 sentence summary.</param>
+/// <param name="Stakeholders">Relevant roles (e.g. "admin", "walk-in customer").</param>
+/// <param name="FunctionalRequirements">Functional requirements — e.g. "Admin creates a product with a unique SKU".</param>
+/// <param name="NonFunctionalRequirements">Non-functional requirements — e.g. "API response p95 ≤ 200ms".</param>
+/// <param name="Entities">Domain entities — driver for CodingAgent to generate models.</param>
+/// <param name="Endpoints">API endpoints — the surface to expose.</param>
+/// <param name="AcceptanceCriteria">Acceptance criteria — driver for TestingAgent.</param>
+/// <param name="Metrics">Agent metric (token, cost, latency).</param>
 public sealed record RequirementSpec(
     string Title,
     string Summary,
@@ -29,15 +29,15 @@ public sealed record RequirementSpec(
     IReadOnlyList<string> AcceptanceCriteria,
     AgentMetrics Metrics);
 
-/// <summary>Entity domain mô tả — chuyển thẳng cho CodingAgent sinh class/record.</summary>
-/// <param name="Name">Tên entity (PascalCase).</param>
-/// <param name="Fields">Danh sách field <c>{Name}: {Type}</c>.</param>
-/// <param name="Notes">Ghi chú thêm (constraint, invariant).</param>
+/// <summary>Domain entity descriptor — passed directly to CodingAgent to generate a class/record.</summary>
+/// <param name="Name">Entity name (PascalCase).</param>
+/// <param name="Fields">List of fields <c>{Name}: {Type}</c>.</param>
+/// <param name="Notes">Additional notes (constraints, invariants).</param>
 public sealed record EntityDescriptor(string Name, IReadOnlyList<string> Fields, string? Notes = null);
 
-/// <summary>API endpoint mô tả.</summary>
+/// <summary>API endpoint descriptor.</summary>
 /// <param name="Method">HTTP method (<c>GET</c>, <c>POST</c>, ...).</param>
-/// <param name="Path">Route template (vd <c>/products/{id}</c>).</param>
-/// <param name="Purpose">Mô tả mục đích.</param>
-/// <param name="AuthRequired">Có yêu cầu auth không.</param>
+/// <param name="Path">Route template (e.g. <c>/products/{id}</c>).</param>
+/// <param name="Purpose">Description of the purpose.</param>
+/// <param name="AuthRequired">Whether authentication is required.</param>
 public sealed record EndpointDescriptor(string Method, string Path, string Purpose, bool AuthRequired = false);

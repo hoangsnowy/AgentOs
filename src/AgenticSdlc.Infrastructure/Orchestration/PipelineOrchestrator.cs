@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Orchestration/PipelineOrchestrator.cs
-// Phase 4 — Implement IOrchestratorAgent. Run 4 specialist + QA loop tối đa NMax iteration.
+// Phase 4 — Implements IOrchestratorAgent. Runs the 4 specialists + QA loop up to NMax iterations.
 
 using System.Collections.Generic;
 using System.Threading;
@@ -20,11 +20,11 @@ using Microsoft.Extensions.Options;
 namespace AgenticSdlc.Infrastructure.Orchestration;
 
 /// <summary>
-/// Điều phối luồng KC4 (Mục 2.4 luận văn):
+/// Orchestrates the KC4 flow (thesis Section 2.4):
 /// <list type="number">
 ///   <item>RequirementAgent(story) → spec</item>
-///   <item>Vòng lặp ≤ NMax: CodingAgent → TestingAgent → QaAgent → check IsConsistent</item>
-///   <item>Trả PipelineResult với history QA + tổng metrics</item>
+///   <item>Loop ≤ NMax: CodingAgent → TestingAgent → QaAgent → check IsConsistent</item>
+///   <item>Return a PipelineResult with the QA history + total metrics</item>
 /// </list>
 /// </summary>
 public sealed class PipelineOrchestrator : IOrchestratorAgent
@@ -37,16 +37,16 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
     private readonly ILogger<PipelineOrchestrator> _logger;
     private readonly IPipelineProgressSink _progress;
 
-    /// <summary>Khởi tạo.</summary>
+    /// <summary>Initializes.</summary>
     /// <param name="requirement">Requirement Agent (KC1).</param>
     /// <param name="coding">Coding Agent (KC2).</param>
     /// <param name="testing">Testing Agent (KC3).</param>
     /// <param name="qa">QA Agent (KC5).</param>
-    /// <param name="options">Cấu hình pipeline.</param>
+    /// <param name="options">Pipeline configuration.</param>
     /// <param name="logger">Logger.</param>
     /// <param name="progress">
-    /// Cổng phát tiến trình realtime — tham số tuỳ chọn để không phá vỡ call-site cũ.
-    /// <c>null</c> ⇒ dùng <see cref="NullPipelineProgressSink"/> (no-op).
+    /// Realtime progress sink — an optional parameter so existing call-sites are not broken.
+    /// <c>null</c> ⇒ use <see cref="NullPipelineProgressSink"/> (no-op).
     /// </param>
     public PipelineOrchestrator(
         IRequirementAgent requirement,
@@ -81,7 +81,7 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
         // KC1 — Requirement Agent.
         RequirementSpec spec;
         await ReportStartAsync(PipelineStage.Requirement, 0, maxIterations,
-            "Phân tích user story → requirement spec", cancellationToken).ConfigureAwait(false);
+            "Analyze user story → requirement spec", cancellationToken).ConfigureAwait(false);
         try
         {
             spec = await _requirement.RunAsync(story, cancellationToken).ConfigureAwait(false);
@@ -94,7 +94,7 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
         }
 
         await ReportDoneAsync(PipelineStage.Requirement, 0, maxIterations,
-            $"Spec: {spec.Title} ({spec.FunctionalRequirements.Count} FR, {spec.Entities.Count} entity)",
+            $"Spec: {spec.Title} ({spec.FunctionalRequirements.Count} FR, {spec.Entities.Count} entities)",
             spec.Metrics, cancellationToken).ConfigureAwait(false);
 
         var qaHistory = new List<QaReport>(maxIterations);
@@ -113,23 +113,23 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
             {
                 // KC2 — Coding Agent.
                 await ReportStartAsync(PipelineStage.Coding, iter, maxIterations,
-                    iter == 1 ? "Sinh source code từ spec" : "Tái sinh code theo feedback QA", cancellationToken).ConfigureAwait(false);
+                    iter == 1 ? "Generate source code from spec" : "Regenerate code based on QA feedback", cancellationToken).ConfigureAwait(false);
                 code = await _coding.RunAsync(spec, lastQa, cancellationToken).ConfigureAwait(false);
                 await ReportDoneAsync(PipelineStage.Coding, iter, maxIterations,
-                    $"{code.Files.Count} file ({code.Architecture})", code.Metrics, cancellationToken).ConfigureAwait(false);
+                    $"{code.Files.Count} files ({code.Architecture})", code.Metrics, cancellationToken).ConfigureAwait(false);
 
                 // KC3 — Testing Agent.
                 stage = PipelineStage.Testing;
                 await ReportStartAsync(PipelineStage.Testing, iter, maxIterations,
-                    "Sinh test case (happy / edge / error)", cancellationToken).ConfigureAwait(false);
+                    "Generate test cases (happy / edge / error)", cancellationToken).ConfigureAwait(false);
                 tests = await _testing.RunAsync(spec, code, lastQa, cancellationToken).ConfigureAwait(false);
                 await ReportDoneAsync(PipelineStage.Testing, iter, maxIterations,
-                    $"{tests.TotalCount} test (cov ~{tests.EstimatedCoveragePercent}%)", tests.Metrics, cancellationToken).ConfigureAwait(false);
+                    $"{tests.TotalCount} tests (cov ~{tests.EstimatedCoveragePercent}%)", tests.Metrics, cancellationToken).ConfigureAwait(false);
 
                 // KC5 — QA Agent.
                 stage = PipelineStage.Qa;
                 await ReportStartAsync(PipelineStage.Qa, iter, maxIterations,
-                    "Đánh giá nhất quán requirement-code-test", cancellationToken).ConfigureAwait(false);
+                    "Assess requirement-code-test consistency", cancellationToken).ConfigureAwait(false);
                 lastQa = await _qa.RunAsync(spec, code, tests, cancellationToken).ConfigureAwait(false);
             }
             catch (LlmException ex)
@@ -151,8 +151,8 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
                     Iteration: iter,
                     MaxIterations: maxIterations,
                     Message: lastQa.IsConsistent
-                        ? $"QA pass (score {lastQa.Score:0.00}) — thoát loop"
-                        : $"QA chưa đạt (score {lastQa.Score:0.00}, {lastQa.Issues.Count} vấn đề)",
+                        ? $"QA pass (score {lastQa.Score:0.00}) — exit loop"
+                        : $"QA not passing (score {lastQa.Score:0.00}, {lastQa.Issues.Count} issues)",
                     QaScore: lastQa.Score,
                     QaConsistent: lastQa.IsConsistent,
                     Metrics: lastQa.Metrics),
@@ -169,8 +169,8 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
 
         await ReportDoneAsync(PipelineStage.Aggregate, qaHistory.Count, maxIterations,
             status == PipelineStatus.Done
-                ? $"Hoàn tất sau {qaHistory.Count} vòng — QA pass"
-                : $"Chạm giới hạn {maxIterations} vòng — QA chưa đạt",
+                ? $"Completed after {qaHistory.Count} iterations — QA pass"
+                : $"Reached the limit of {maxIterations} iterations — QA not passing",
             total, cancellationToken).ConfigureAwait(false);
 
         return new PipelineResult(
@@ -235,7 +235,7 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
             Status: PipelineStatus.Failed,
             TotalMetrics: AgentMetrics.Empty)
         {
-            // Hint cho debug — exception in log đầy đủ.
+            // Hint for debugging — the exception is fully logged.
         };
 
     private static RequirementSpec ErrorSpec(System.Exception ex)

@@ -1,113 +1,67 @@
-# Infra — Azure Container Apps deployment
+# Infra — Azure deploy via azd (Aspire)
 
-## Stack
+Deployment is driven by **.NET Aspire + Azure Developer CLI (`azd`)**. The AppHost
+(`src/AgenticSdlc.AppHost`) is the single source of truth for the topology; `azd`
+provisions everything from it:
 
-| Resource | SKU | Mục đích |
-|---|---|---|
-| Azure Container Registry | Basic | Lưu image Docker |
-| Container Apps Environment | Consumption | Host Container App (auto-scale, scale-to-zero) |
-| Container App | — | Run `AgenticSdlc.Api` |
-| Log Analytics Workspace | PerGB2018 | Centralized log + diagnostic |
-| Application Insights | Workspace-based | APM, distributed trace, agent cost log |
-| Key Vault | Standard | Lưu Anthropic + Azure OpenAI API key |
-| User-Assigned Identity | — | ACR pull + Key Vault Secrets read |
+| Resource | From the app model |
+|---|---|
+| Container Apps Environment + Log Analytics | implicit (Aspire) |
+| Azure Container Registry | implicit (image push) |
+| Container App: API | `AddProject("api")` |
+| Container App: Web (Agent Studio) | `AddProject("web")` |
+| Azure Database for PostgreSQL flexible | `AddAzurePostgresFlexibleServer("postgres")` |
+| Managed identity + role assignments | implicit (Aspire) |
 
-## Deploy thủ công (lần đầu)
+> The old hand-written `infra/main.bicep` + `.github/workflows/deploy.yml` (Docker build +
+> `az containerapp`) were **removed** — `azd` replaces them. `azd` builds container images
+> via the .NET SDK (no Dockerfile needed); `Dockerfile`/`Dockerfile.web` are kept only for
+> standalone `docker build`.
 
-```bash
-# 1. Tạo resource group
-az group create --name rg-Hoang-LuanVan --location southeastasia
-
-# 2. Deploy Bicep
-az deployment group create \
-  --resource-group rg-Hoang-LuanVan \
-  --template-file infra/main.bicep \
-  --parameters infra/main.parameters.json \
-  --parameters containerImage=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
-
-# (lần đầu dùng image placeholder — bước build sau sẽ update)
-
-# 3. Build + push image lên ACR
-ACR=$(az acr list -g rg-Hoang-LuanVan --query "[0].loginServer" -o tsv)
-az acr login --name "$ACR"
-docker build -t "$ACR/agenticsdlc:$(git rev-parse --short HEAD)" .
-docker push "$ACR/agenticsdlc:$(git rev-parse --short HEAD)"
-
-# 4. Update Container App với image thật
-az containerapp update \
-  --name agenticsdlc-dev \
-  --resource-group rg-Hoang-LuanVan \
-  --image "$ACR/agenticsdlc:$(git rev-parse --short HEAD)"
-
-# 5. Set LLM secret vào Key Vault
-KV=$(az deployment group show -g rg-Hoang-LuanVan -n main --query "properties.outputs.keyVaultUri.value" -o tsv | sed 's|https://||;s|/||')
-az keyvault secret set --vault-name "$KV" --name "Llm--Anthropic--ApiKey" --value "sk-ant-..."
-az keyvault secret set --vault-name "$KV" --name "Llm--AzureOpenAI--ApiKey" --value "..."
-az keyvault secret set --vault-name "$KV" --name "Llm--AzureOpenAI--Endpoint" --value "https://<resource>.openai.azure.com"
-
-# 6. Restart Container App để pickup secret mới
-az containerapp revision restart --name agenticsdlc-dev --resource-group rg-Hoang-LuanVan
-```
-
-## Deploy tự động qua GitHub Actions
-
-Sau khi setup OIDC federated credential (xem `.github/workflows/deploy.yml`),
-mỗi push lên `main` tự build + push image + update Container App revision.
-
-## Persistence (Postgres) — tuỳ chọn
-
-App lưu pipeline run + metrics + Agent Studio state vào Postgres qua EF Core.
-Không có `ConnectionStrings:DefaultConnection` → app chạy stateless (no-op repos).
-
-**Local dev:**
+## First deploy (local)
 
 ```bash
-docker compose up -d          # Postgres 16 tại localhost:5432
-# set connection string cho Api + Web:
-cd src/AgenticSdlc.Api && dotnet user-secrets set "ConnectionStrings:DefaultConnection" \
-  "Host=localhost;Port=5432;Database=agentic_sdlc;Username=postgres;Password=postgres"
+azd auth login
+azd up                 # prompts for env name + subscription + region, then provisions + deploys
 ```
 
-Migration tự apply lúc app khởi động (`Database.Migrate()`). Sinh migration mới:
+`azd up` prints the API + Web URLs. Re-deploy after code changes: `azd deploy` (or `azd up`).
+
+## LLM secrets
 
 ```bash
-dotnet ef migrations add <Name> \
-  --project src/AgenticSdlc.Infrastructure --startup-project src/AgenticSdlc.Infrastructure \
-  --output-dir Persistence/Migrations
+azd env set Llm__Anthropic__ApiKey   "sk-ant-..."
+azd env set Llm__AzureOpenAI__ApiKey "..."
+azd env set Llm__AzureOpenAI__Endpoint "https://<resource>.openai.azure.com"
+azd deploy
 ```
 
-**Azure (bật Postgres flexible server ~$13/tháng):** deploy với `deployPostgres=true`:
+(The Web also runs offline in Demo mode without keys.)
+
+## CI/CD (GitHub Actions)
+
+Easiest: `azd pipeline config` — wires OIDC + the repo secrets/variables and a workflow.
+The committed [`.github/workflows/azd-deploy.yml`](../.github/workflows/azd-deploy.yml) runs
+`azd up` on push to `main`. It needs:
+
+- secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` (existing OIDC app)
+- variables `AZURE_ENV_NAME`, `AZURE_LOCATION`
+
+⚠️ The OIDC service principal needs **Owner** or **User Access Administrator** — `azd`
+creates role assignments for the managed identity (ACR pull, Key Vault). Contributor alone fails.
+
+## Local dev (run everything)
 
 ```bash
-az deployment group create -g rg-Hoang-LuanVan --template-file infra/main.bicep \
-  --parameters infra/main.parameters.json \
-  --parameters containerImage=<acr>/agenticsdlc:<tag> deployPostgres=true \
-               postgresAdminPassword='<mật-khẩu-mạnh>'
+azd auth login            # or just run the AppHost without Azure
+dotnet run --project src/AgenticSdlc.AppHost
 ```
 
-Bicep tự tạo server + DB + firewall (allow Azure services) + inject
-`ConnectionStrings__DefaultConnection` làm Container App secret. Mặc định
-`deployPostgres=false` để workflow CI không phát sinh cost ngoài ý muốn.
+The AppHost runs Postgres as a local container + API + Web + the Aspire dashboard, with
+connection strings wired automatically.
 
 ## Cleanup
 
 ```bash
-az group delete --name rg-Hoang-LuanVan --yes --no-wait
+azd down --purge
 ```
-
-> ⚠️ Key Vault soft-delete giữ 7 ngày. Để xoá hẳn:
-> `az keyvault purge --name <kv-name>`
-
-## Cost estimate (Q2/2026, southeastasia)
-
-| Resource | Free / Min cost / Tháng |
-|---|---|
-| Container Apps (Consumption, idle/0 replica) | ~$0 (chỉ trả request thực tế) |
-| Container Apps (1 replica 0.5 CPU 1GB chạy liên tục) | ~$15-20 |
-| Log Analytics (5GB free + ingest) | ~$0-3 |
-| App Insights (5GB free) | ~$0 |
-| ACR Basic | ~$5 |
-| Key Vault Standard | ~$0.03 / 10k ops |
-| **Tổng prototype dev (scale-to-zero)** | **~$5-10/tháng** |
-
-Khi có demo / load test, cost LLM (Anthropic + Azure OpenAI) sẽ vượt xa cost infra.

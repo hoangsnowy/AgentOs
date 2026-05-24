@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Agents/TestingAgent.cs
-// Phase 4 — Impl ITestingAgent. Sinh xUnit test (happy/edge/error) từ spec + code.
+// Phase 4 — ITestingAgent impl. Generates xUnit tests (happy/edge/error) from spec + code.
 
 using System.Collections.Generic;
 using System.Linq;
@@ -21,7 +21,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgenticSdlc.Infrastructure.Agents;
 
-/// <summary>Sinh bộ test xUnit phân loại happy/edge/error.</summary>
+/// <summary>Generates an xUnit test suite categorized as happy/edge/error.</summary>
 public sealed class TestingAgent : ITestingAgent
 {
     private const string AgentName = nameof(TestingAgent);
@@ -32,7 +32,7 @@ public sealed class TestingAgent : ITestingAgent
     private readonly AgentOptions _options;
     private readonly ILogger<TestingAgent> _logger;
 
-    /// <summary>Khởi tạo.</summary>
+    /// <summary>Initializes.</summary>
     public TestingAgent(
         ILlmClientFactory factory,
         IOptions<AgentsOptions> options,

@@ -1,18 +1,18 @@
 # Live LLM Smoke Test
 
-Chứng minh ClaudeClient + AzureOpenAiClient gọi được API thật. Mặc định **skip** trong `dotnet test` để CI không cần secret + không tốn tiền.
+Proves that ClaudeClient + AzureOpenAiClient can call the real API. **Skipped** by default in `dotnet test` so CI needs no secrets + costs nothing.
 
-## Chạy khi nào
+## When to run
 
-- Trước demo bảo vệ — confirm 2 client thật vẫn hoạt động.
-- Khi bump model version hoặc đổi endpoint config.
-- KHÔNG chạy trong CI mặc định.
+- Before the defense demo — to confirm the 2 real clients still work.
+- When bumping the model version or changing the endpoint config.
+- NOT in CI by default.
 
-## Cost ước tính
+## Estimated cost
 
-~$0.01 mỗi run (2 call, mỗi call ≤ 100 output tokens với model rẻ).
+~$0.01 per run (2 calls, each ≤ 100 output tokens with a cheap model).
 
-## Cách chạy (PowerShell)
+## How to run (PowerShell)
 
 ```powershell
 # 1. Set env vars
@@ -25,10 +25,10 @@ $env:AZURE_OPENAI_ENDPOINT = "https://<resource>.openai.azure.com"
 $env:ANTHROPIC_MODEL = "claude-haiku-4-5"           # default
 $env:AZURE_OPENAI_DEPLOYMENT = "gpt-4.1"            # default
 
-# 2. Chạy chỉ smoke
+# 2. Run the smoke test only
 dotnet test --filter "FullyQualifiedName~LiveLlmSmokeTests"
 
-# 3. Unset sau khi xong
+# 3. Unset when done
 $env:RUN_LIVE_LLM = $null
 $env:ANTHROPIC_API_KEY = $null
 $env:AZURE_OPENAI_API_KEY = $null
@@ -40,23 +40,23 @@ $env:AZURE_OPENAI_API_KEY = $null
 Passed!  - Failed: 0, Passed: 2, Skipped: 0
 ```
 
-Mỗi test assert:
-- Response content non-empty.
-- `InputTokens > 0`, `OutputTokens > 0` (provider trả usage thật).
-- `Latency < 30s` (timeout HttpClient 30s).
-- `Provider` = "Claude" hoặc "AzureOpenAI".
+Each test asserts:
+- Response content is non-empty.
+- `InputTokens > 0`, `OutputTokens > 0` (the provider returns real usage).
+- `Latency < 30s` (HttpClient 30s timeout).
+- `Provider` = "Claude" or "AzureOpenAI".
 
-## Khi skip
+## When skipped
 
-Nếu `RUN_LIVE_LLM != 1` hoặc thiếu API key, test in:
+If `RUN_LIVE_LLM != 1` or an API key is missing, the test prints:
 
 ```
-Skipped: 2 — RUN_LIVE_LLM != 1 hoặc <KEY> not set.
+Skipped: 2 — RUN_LIVE_LLM != 1 or <KEY> not set.
 ```
 
-## Bảo mật
+## Security
 
-- KHÔNG commit API key.
-- KHÔNG paste key vào fixture / log / commit message.
-- Rotate key sau bảo vệ nếu lo lộ.
-- CI workflow `live-smoke.yml` (chưa tạo) sẽ dùng GitHub Secrets, chạy manual `workflow_dispatch`.
+- Do NOT commit API keys.
+- Do NOT paste keys into fixtures / logs / commit messages.
+- Rotate keys after the defense if leakage is a concern.
+- The CI workflow `live-smoke.yml` (not yet created) will use GitHub Secrets, run manually via `workflow_dispatch`.

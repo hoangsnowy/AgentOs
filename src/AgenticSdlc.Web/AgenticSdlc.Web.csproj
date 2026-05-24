@@ -5,17 +5,18 @@
     <AssemblyName>AgenticSdlc.Web</AssemblyName>
     <UserSecretsId>agentic-sdlc-net-prototype</UserSecretsId>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <!-- Phase 7 — Project trình diễn (Blazor Server). Nới TreatWarningsAsErrors để
-         vòng lặp UI mượt; lõi (Domain/Application/Infrastructure/Api) vẫn giữ nghiêm. -->
+    <!-- Phase 7 — Demo project (Blazor Server). Relax TreatWarningsAsErrors for a
+         smooth UI loop; the core (Domain/Application/Infrastructure/Api) stays strict. -->
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\AgenticSdlc.Infrastructure\AgenticSdlc.Infrastructure.csproj" />
+    <ProjectReference Include="..\AgenticSdlc.ServiceDefaults\AgenticSdlc.ServiceDefaults.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Z.Blazor.Diagrams" Version="3.0.4.1" />
+    <PackageReference Include="Z.Blazor.Diagrams" />
   </ItemGroup>
 
 </Project>

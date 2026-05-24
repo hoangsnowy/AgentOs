@@ -1,5 +1,5 @@
 // AgenticSdlc.Application/Prompts/CodingPrompt.cs
-// Sprint 3 — tách prompt khỏi CodingAgent. Version v1.
+// Sprint 3 — extracted the prompt from CodingAgent. Version v1.
 
 using System.Text;
 using System.Text.Json;
@@ -8,7 +8,7 @@ using AgenticSdlc.Domain.Requirements;
 
 namespace AgenticSdlc.Application.Prompts;
 
-/// <summary>System + User template cho Coding Agent (v1).</summary>
+/// <summary>System + User template for the Coding Agent (v1).</summary>
 public static class CodingPrompt
 {
     /// <summary>Prompt version.</summary>
@@ -16,29 +16,29 @@ public static class CodingPrompt
 
     /// <summary>System prompt.</summary>
     public const string System = """
-        Bạn là Coding Agent trong hệ thống Agentic SDLC.
-        Sinh source code C# (.NET 10) theo kiến trúc Clean Architecture cho specification user cung cấp.
+        You are the Coding Agent in the Agentic SDLC system.
+        Generate C# source code (.NET 10) following Clean Architecture for the specification the user provides.
 
-        Trả về CHỈ JSON theo schema:
+        Return ONLY JSON following the schema:
         {
           "projectName": "PascalCase",
           "architecture": "Clean Architecture",
           "files": [
             { "path": "src/<Layer>/<File>.cs", "content": "<source code>", "language": "csharp" }
           ],
-          "notes": "Ghi chú giả định / TODO (tiếng Việt)"
+          "notes": "Assumption / TODO notes (in English)"
         }
 
-        Quy tắc:
-        - PHẢI có ≥ 1 entity class trong layer Domain.
-        - PHẢI có ≥ 1 controller hoặc minimal API endpoint trong layer Api.
-        - Code phải compile với .NET 10 (nullable enable, file-scoped namespace).
-        - Path dùng forward slash.
-        - Nếu có previousFeedback: ưu tiên fix mọi issue Severity Critical/Major trong feedback.
-        - KHÔNG markdown fence quanh JSON, KHÔNG prose trước/sau.
+        Rules:
+        - MUST have ≥ 1 entity class in the Domain layer.
+        - MUST have ≥ 1 controller or minimal API endpoint in the Api layer.
+        - The code must compile with .NET 10 (nullable enable, file-scoped namespace).
+        - Use forward slashes in paths.
+        - If previousFeedback is present: prioritize fixing every Critical/Major severity issue in the feedback.
+        - No markdown fence around the JSON, no prose before/after.
         """;
 
-    /// <summary>Render user prompt từ spec + optional QA feedback.</summary>
+    /// <summary>Renders the user prompt from the spec + optional QA feedback.</summary>
     public static string RenderUser(RequirementSpec spec, QaReport? previousFeedback = null)
     {
         global::System.ArgumentNullException.ThrowIfNull(spec);
@@ -57,7 +57,7 @@ public static class CodingPrompt
         if (previousFeedback is not null)
         {
             sb.AppendLine();
-            sb.AppendLine("Previous QA feedback (cần fix trong lần này):");
+            sb.AppendLine("Previous QA feedback (must be fixed this time):");
             sb.AppendLine(JsonSerializer.Serialize(new
             {
                 previousFeedback.Score,
@@ -67,7 +67,7 @@ public static class CodingPrompt
         }
 
         sb.AppendLine();
-        sb.AppendLine("Sinh CodeArtifact JSON.");
+        sb.AppendLine("Generate the CodeArtifact JSON.");
         return sb.ToString();
     }
 }

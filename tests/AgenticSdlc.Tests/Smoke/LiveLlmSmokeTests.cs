@@ -1,6 +1,6 @@
 // AgenticSdlc.Tests/Smoke/LiveLlmSmokeTests.cs
-// Sprint 5 — smoke test gọi LLM thật. Skip mặc định, chạy khi RUN_LIVE_LLM=1 + có API key.
-// Document: docs/RUN_LIVE_SMOKE.md.
+// Sprint 5 — smoke test that calls the real LLM. Skipped by default, runs when RUN_LIVE_LLM=1 + an API key is present.
+// Doc: docs/RUN_LIVE_SMOKE.md.
 
 using System;
 using System.Net.Http;
@@ -42,8 +42,8 @@ public class LiveLlmSmokeTests
         var client = new ClaudeClient(http, opts, NullLogger<ClaudeClient>.Instance);
 
         var request = new LlmRequest(
-            SystemPrompt: "Bạn là trợ lý ngắn gọn. Trả lời 1 câu duy nhất.",
-            UserPrompt: "Nói xin chào bằng tiếng Việt.",
+            SystemPrompt: "You are a concise assistant. Reply in one sentence.",
+            UserPrompt: "Say hello in Vietnamese.",
             Model: opts.Value.Claude.Model,
             Temperature: 0.0,
             MaxTokens: 100);
@@ -102,7 +102,7 @@ public class LiveLlmSmokeTests
     {
         if (Environment.GetEnvironmentVariable(RunFlag) != "1")
         {
-            Assert.Skip($"{RunFlag} != 1 — set to 1 để chạy live smoke (cost ~$0.01/run).");
+            Assert.Skip($"{RunFlag} != 1 — set to 1 to run the live smoke test (cost ~$0.01/run).");
         }
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(requireProvider)))
         {

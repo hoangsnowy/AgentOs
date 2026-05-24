@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Llm/MockLlmClient.cs
-// Sprint 1 — Mock LLM client đọc fixture từ disk. Dùng cho test offline và demo.
+// Sprint 1 — Mock LLM client that reads fixtures from disk. Used for offline tests and demos.
 
 using System;
 using System.Diagnostics;
@@ -16,9 +16,9 @@ using Microsoft.Extensions.Options;
 namespace AgenticSdlc.Infrastructure.Llm;
 
 /// <summary>
-/// Mock client: hash (model + systemPrompt + userPrompt) → tra fixture JSON trong folder cấu hình
-/// (<see cref="MockOptions.FixturePath"/>). Nếu hit → load fixture; nếu miss → stub response.
-/// Dùng cho test offline, CI không có API key, và demo deterministic.
+/// Mock client: hashes (model + systemPrompt + userPrompt) → looks up a JSON fixture in the configured folder
+/// (<see cref="MockOptions.FixturePath"/>). On hit → load the fixture; on miss → stub response.
+/// Used for offline tests, CI without an API key, and deterministic demos.
 /// </summary>
 public sealed class MockLlmClient : ILlmClient
 {
@@ -28,7 +28,7 @@ public sealed class MockLlmClient : ILlmClient
     /// <inheritdoc />
     public string Provider => "Mock";
 
-    /// <summary>Khởi tạo với options + logger.</summary>
+    /// <summary>Initializes with options + logger.</summary>
     public MockLlmClient(IOptions<LlmOptions> options, ILogger<MockLlmClient> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -44,7 +44,7 @@ public sealed class MockLlmClient : ILlmClient
 
         var stopwatch = Stopwatch.StartNew();
 
-        // Giả lập latency để code hạ nguồn không assume zero-latency.
+        // Simulate latency so downstream code does not assume zero-latency.
         if (_options.SimulatedLatencyMs > 0)
         {
             await Task.Delay(_options.SimulatedLatencyMs, cancellationToken).ConfigureAwait(false);
@@ -90,7 +90,7 @@ public sealed class MockLlmClient : ILlmClient
     }
 
     /// <summary>
-    /// SHA-256 hash của (model + systemPrompt + userPrompt). 16 hex chars đầu — đủ unique trong scope test.
+    /// SHA-256 hash of (model + systemPrompt + userPrompt). First 16 hex chars — unique enough within the test scope.
     /// </summary>
     public static string ComputeHash(LlmRequest request)
     {
@@ -113,14 +113,14 @@ public sealed class MockLlmClient : ILlmClient
             return null;
         }
 
-        // 1) Thử <FixturePath>/<hash>.json
+        // 1) Try <FixturePath>/<hash>.json
         var byHash = Path.Combine(_options.FixturePath, $"{hash}.json");
         if (File.Exists(byHash))
         {
             return byHash;
         }
 
-        // 2) Thử resolve tương đối AppContext.BaseDirectory (output dir của test).
+        // 2) Try resolving relative to AppContext.BaseDirectory (the test output dir).
         var fromBase = Path.Combine(AppContext.BaseDirectory, _options.FixturePath, $"{hash}.json");
         if (File.Exists(fromBase))
         {
@@ -130,7 +130,7 @@ public sealed class MockLlmClient : ILlmClient
         return byHash;
     }
 
-    /// <summary>Rough token estimate: ~4 ký tự / token. Đủ tốt cho mock — không reflect tokenizer thật.</summary>
+    /// <summary>Rough token estimate: ~4 chars / token. Good enough for the mock — does not reflect the real tokenizer.</summary>
     private static int EstimateTokens(string text)
         => string.IsNullOrEmpty(text) ? 0 : Math.Max(1, text.Length / 4);
 
@@ -140,7 +140,7 @@ public sealed class MockLlmClient : ILlmClient
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
-    /// <summary>Shape JSON của fixture file.</summary>
+    /// <summary>JSON shape of the fixture file.</summary>
     private sealed class MockFixture
     {
         public string Content { get; set; } = string.Empty;

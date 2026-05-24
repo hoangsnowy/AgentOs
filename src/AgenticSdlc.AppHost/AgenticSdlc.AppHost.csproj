@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.2.4" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AgenticSdlc.AppHost</RootNamespace>
+    <AssemblyName>AgenticSdlc.AppHost</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsAspireHost>true</IsAspireHost>
+    <UserSecretsId>agentic-sdlc-net-prototype</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting" />
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.Azure.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgenticSdlc.Api\AgenticSdlc.Api.csproj" IsAspireProjectResource="true" />
+    <ProjectReference Include="..\AgenticSdlc.Web\AgenticSdlc.Web.csproj" IsAspireProjectResource="true" />
+  </ItemGroup>
+
+</Project>

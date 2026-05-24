@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Llm/MockLlmClientTests.cs
-// Sprint 1 — Unit test cho MockLlmClient (fixture load + stub fallback).
+// Sprint 1 — Unit tests for MockLlmClient (fixture load + stub fallback).
 
 using System;
 using System.IO;
@@ -86,7 +86,7 @@ public class MockLlmClientTests : IDisposable
     [Fact]
     public async Task SendAsync_LatencyMeasured_Positive()
     {
-        // Arrange — đặt latency 5ms để chắc chắn Stopwatch capture > 0.
+        // Arrange — set latency to 5ms to ensure the Stopwatch captures > 0.
         var opts = Options.Create(new LlmOptions
         {
             Mock = new MockOptions { FixturePath = _tempDir, SimulatedLatencyMs = 5 },

@@ -2,7 +2,7 @@
   {
     "id": "KC1-001",
     "input": {
-      "description": "Hệ thống quản lý sản phẩm: admin tạo/xem/sửa/xoá; người dùng tra cứu theo danh mục.",
+      "description": "Product management system: admin creates/views/edits/deletes; users browse by category.",
       "locale": "vi-VN"
     },
     "expected": {
@@ -14,7 +14,7 @@
   {
     "id": "KC1-002",
     "input": {
-      "description": "Hệ thống đặt phòng khách sạn: khách tra cứu, đặt phòng có thanh toán; quản lý phê duyệt.",
+      "description": "Hotel booking system: guests search and book rooms with payment; management approves.",
       "locale": "vi-VN"
     },
     "expected": {
@@ -26,7 +26,7 @@
   {
     "id": "KC1-003",
     "input": {
-      "description": "Hệ thống chấm công nhân viên: check-in/check-out qua QR; báo cáo công theo tháng.",
+      "description": "Employee time-tracking system: check-in/check-out via QR; monthly attendance reports.",
       "locale": "vi-VN"
     },
     "expected": {

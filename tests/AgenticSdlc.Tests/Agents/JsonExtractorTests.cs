@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Agents/JsonExtractorTests.cs
-// Phase 4 — JsonExtractor handle 3 dạng: direct, fenced, prose-wrapped.
+// Phase 4 — JsonExtractor handles 3 forms: direct, fenced, prose-wrapped.
 
 using AgenticSdlc.Domain.Llm;
 using AgenticSdlc.Infrastructure.Agents;

@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/EndToEnd/KcBenchHarness.cs
-// Sprint 4 — shared harness cho 5 KC test class. Single CSV sink TestResults/kc_metrics.csv.
+// Sprint 4 — shared harness for the 5 KC test classes. Single CSV sink TestResults/kc_metrics.csv.
 
 using System;
 using System.IO;
@@ -20,16 +20,16 @@ using NSubstitute;
 
 namespace AgenticSdlc.Tests.EndToEnd;
 
-/// <summary>Shared bench infra — 1 CSV collector cho tất cả KC test class.</summary>
+/// <summary>Shared bench infra — a single CSV collector for all KC test classes.</summary>
 public static class KcBenchHarness
 {
-    /// <summary>Path tới CSV output, relative to test run dir.</summary>
+    /// <summary>Path to the CSV output, relative to the test run dir.</summary>
     public static readonly string CsvPath =
         Path.Combine(AppContext.BaseDirectory, "TestResults", "kc_metrics.csv");
 
     private static readonly Lazy<CsvMetricsCollector> _collector = new(() =>
     {
-        // Wipe file lúc bắt đầu test run đầu tiên.
+        // Wipe the file at the start of the first test run.
         if (File.Exists(CsvPath))
         {
             File.Delete(CsvPath);
@@ -52,10 +52,10 @@ public static class KcBenchHarness
         return sc.BuildServiceProvider().GetRequiredService<ILlmOutputValidator>();
     });
 
-    /// <summary>Shared validator (3 schema embed sẵn).</summary>
+    /// <summary>Shared validator (3 schemas embedded).</summary>
     public static ILlmOutputValidator Validator => _validator.Value;
 
-    /// <summary>Build 1 agent (Requirement / Coding / Testing / Qa) gắn shared collector.</summary>
+    /// <summary>Build a single agent (Requirement / Coding / Testing / Qa) wired to the shared collector.</summary>
     public static RequirementAgent BuildRequirement(ILlmClient llm)
     {
         var factory = FactoryReturning(llm);

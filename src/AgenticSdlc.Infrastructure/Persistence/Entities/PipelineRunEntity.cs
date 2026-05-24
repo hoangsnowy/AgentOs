@@ -1,5 +1,5 @@
-// Persistence entity cho 1 pipeline run. Cột quan hệ để query (Chương 4) +
-// cột jsonb ResultJson chứa full PipelineResult đã serialize.
+// Persistence entity for a single pipeline run. Relational columns for querying (Chapter 4) +
+// the jsonb ResultJson column holding the full serialized PipelineResult.
 namespace AgenticSdlc.Infrastructure.Persistence.Entities;
 
 internal sealed class PipelineRunEntity
@@ -8,7 +8,7 @@ internal sealed class PipelineRunEntity
 
     public string UserStoryText { get; set; } = string.Empty;
 
-    /// <summary>Tên enum PipelineStatus: Done / MaxIterationReached / Failed.</summary>
+    /// <summary>PipelineStatus enum name: Done / MaxIterationReached / Failed.</summary>
     public string Status { get; set; } = string.Empty;
 
     public decimal TotalCostUsd { get; set; }
@@ -23,7 +23,7 @@ internal sealed class PipelineRunEntity
 
     public DateTimeOffset? CompletedAtUtc { get; set; }
 
-    /// <summary>Full PipelineResult serialize JSON (cột jsonb).</summary>
+    /// <summary>Full PipelineResult serialized as JSON (jsonb column).</summary>
     public string ResultJson { get; set; } = string.Empty;
 
     public List<RunMetricEntity> Metrics { get; } = [];

@@ -1,4 +1,4 @@
-// Test PipelineRunRepository với EF Core InMemory (jsonb column type bị bỏ qua — đủ verify repo logic).
+// Tests PipelineRunRepository with EF Core InMemory (the jsonb column type is ignored — enough to verify the repo logic).
 using AgenticSdlc.Application.Metrics;
 using AgenticSdlc.Application.Persistence;
 using AgenticSdlc.Domain;
@@ -41,7 +41,7 @@ public sealed class PipelineRunRepositoryTests
             got.ShouldNotBeNull();
             got.Id.ShouldBe(runId);
             got.Result.Status.ShouldBe(PipelineStatus.Done);
-            got.Result.Spec.Title.ShouldBe("Quản lý SP");
+            got.Result.Spec.Title.ShouldBe("Product Mgmt");
             got.Result.QaHistory.Count.ShouldBe(1);
             got.Result.TotalMetrics.CostUsd.ShouldBe(record.Result.TotalMetrics.CostUsd);
             got.Metrics.Count.ShouldBe(2);
@@ -74,7 +74,7 @@ public sealed class PipelineRunRepositoryTests
 
             list.Count.ShouldBe(1);
             list[0].Status.ShouldBe(nameof(PipelineStatus.Done));
-            list[0].UserStoryPreview.ShouldBe("Quản lý sản phẩm");
+            list[0].UserStoryPreview.ShouldBe("Product management");
         }
     }
 
@@ -83,14 +83,14 @@ public sealed class PipelineRunRepositoryTests
 
     private static PipelineRunRecord SampleRecord(Guid id, DateTimeOffset? createdAt = null)
     {
-        var spec = new RequirementSpec("Quản lý SP", "Tóm tắt", [], [], [], [], [], [], M(0.01m, 100, 50));
+        var spec = new RequirementSpec("Product Mgmt", "Summary", [], [], [], [], [], [], M(0.01m, 100, 50));
         var code = new CodeArtifact("Shop", "Clean Architecture", [], null, M(0.02m, 200, 100));
         var tests = new TestArtifact("xUnit", [], 2, 1, 1, 80, M(0.01m, 150, 80));
         var qa = new QaReport(0.9, true, false, [], [], M(0.005m, 50, 30));
         var total = spec.Metrics.Add(code.Metrics).Add(tests.Metrics).Add(qa.Metrics);
 
         var result = new PipelineResult(
-            new UserStory("Quản lý sản phẩm", 3, "vi-VN"),
+            new UserStory("Product management", 3, "vi-VN"),
             spec, code, tests, [qa], PipelineStatus.Done, total);
 
         var metrics = new List<RunMetric>

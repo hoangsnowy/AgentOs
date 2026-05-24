@@ -1,23 +1,23 @@
-## Mô tả thay đổi
+## Change description
 
-<!-- Tóm tắt ngắn gọn PR này làm gì và vì sao. -->
+<!-- A brief summary of what this PR does and why. -->
 
-## Loại thay đổi
+## Type of change
 
-- [ ] Feature mới (new agent / endpoint / capability)
+- [ ] New feature (new agent / endpoint / capability)
 - [ ] Bugfix
-- [ ] Refactor (không thay đổi hành vi)
-- [ ] Tài liệu / README
-- [ ] Cấu hình hạ tầng / CI
+- [ ] Refactor (no behavior change)
+- [ ] Documentation / README
+- [ ] Infrastructure / CI configuration
 
-## Tham chiếu đề án
+## Thesis references
 
-<!-- Liên kết tới Mục/Bảng/Hình trong luận văn nếu áp dụng (vd. Mục 2.4.2, Bảng 2.3). -->
+<!-- Link to the Section/Table/Figure in the thesis if applicable (e.g. Section 2.4.2, Table 2.3). -->
 
 ## Checklist
 
-- [ ] `dotnet build` pass cục bộ ở chế độ Release
-- [ ] `dotnet test` pass (kèm coverage nếu có)
-- [ ] Không commit secret (API key, connection string)
-- [ ] README / docs đã update nếu thay đổi hành vi public
-- [ ] Có đo lường được khi liên quan đến chất lượng đầu ra của tác tử
+- [ ] `dotnet build` passes locally in Release mode
+- [ ] `dotnet test` passes (with coverage if available)
+- [ ] No secrets committed (API keys, connection strings)
+- [ ] README / docs updated if public behavior changed
+- [ ] Measurable results provided when related to agent output quality

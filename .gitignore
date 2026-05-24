@@ -25,7 +25,7 @@
 # Rider
 **/.idea/
 
-# App runtime data (orchestrations seed tự sinh lại lúc startup)
+# App runtime data (orchestration seed is regenerated at startup)
 **/App_Data/
 
 # Cache and temp
@@ -62,7 +62,7 @@ Thumbs.db
 **/*.log
 **/logs/
 
-# Claude Code — commit skills + settings, KHÔNG commit ephemeral worktrees / cache
+# Claude Code — commit skills + settings, do NOT commit ephemeral worktrees / cache
 .claude/worktrees/
 .claude/cache/
 .claude/sessions/

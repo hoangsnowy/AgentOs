@@ -1,4 +1,4 @@
-// JSON options dùng chung khi serialize artifact/graph vào cột jsonb.
+// Shared JSON options used when serializing artifact/graph into a jsonb column.
 using System.Text.Json;
 using System.Text.Json.Serialization;
 

@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Agents/RequirementAgentTests.cs
-// Phase 4 — Unit test cho RequirementAgent.
+// Phase 4 — Unit tests for RequirementAgent.
 
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,14 +21,14 @@ public class RequirementAgentTests
     {
         var json = """
             {
-              "title": "Quản lý sản phẩm",
-              "summary": "Cho phép admin CRUD sản phẩm.",
-              "stakeholders": ["admin", "khách hàng"],
-              "functionalRequirements": ["Admin tạo sản phẩm"],
+              "title": "Product management",
+              "summary": "Allows admin to CRUD products.",
+              "stakeholders": ["admin", "customer"],
+              "functionalRequirements": ["Admin creates a product"],
               "nonFunctionalRequirements": ["p95 < 200ms"],
               "entities": [{"name":"Product","fields":["id: Guid","sku: string"],"notes":null}],
-              "endpoints": [{"method":"POST","path":"/products","purpose":"Tạo sản phẩm","authRequired":true}],
-              "acceptanceCriteria": ["SKU unique","Validate giá > 0","Authorization admin"]
+              "endpoints": [{"method":"POST","path":"/products","purpose":"Create a product","authRequired":true}],
+              "acceptanceCriteria": ["SKU unique","Validate price > 0","Authorization admin"]
             }
             """;
 
@@ -43,9 +43,9 @@ public class RequirementAgentTests
             AgentTestHelpers.NewCollector(),
             NullLogger<RequirementAgent>.Instance);
 
-        var spec = await agent.RunAsync(new UserStory("Hệ thống quản lý sản phẩm"));
+        var spec = await agent.RunAsync(new UserStory("Product management system"));
 
-        spec.Title.ShouldBe("Quản lý sản phẩm");
+        spec.Title.ShouldBe("Product management");
         spec.Entities.Count.ShouldBe(1);
         spec.Entities[0].Name.ShouldBe("Product");
         spec.Endpoints[0].AuthRequired.ShouldBeTrue();

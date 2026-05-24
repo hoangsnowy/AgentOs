@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Validation/DependencyInjection.cs
-// Sprint 3 — DI cho ILlmOutputValidator. Đăng ký 3 schema từ embedded resource.
+// Sprint 3 — DI for ILlmOutputValidator. Registers 3 schemas from embedded resources.
 
 using System;
 using System.IO;
@@ -9,12 +9,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AgenticSdlc.Infrastructure.Validation;
 
-/// <summary>DI extension cho validation layer.</summary>
+/// <summary>DI extension for the validation layer.</summary>
 public static class ValidationServiceCollectionExtensions
 {
     private const string ResourcePrefix = "AgenticSdlc.Infrastructure.Schemas.";
 
-    /// <summary>Đăng ký <see cref="JsonSchemaValidator"/> singleton + load 3 schema từ embedded resource.</summary>
+    /// <summary>Registers a <see cref="JsonSchemaValidator"/> singleton + loads 3 schemas from embedded resources.</summary>
     public static IServiceCollection AddValidation(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);

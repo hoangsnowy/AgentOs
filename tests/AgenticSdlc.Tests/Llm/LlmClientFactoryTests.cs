@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Llm/LlmClientFactoryTests.cs
-// Sprint 1 — Unit test cho LlmClientFactory (resolve theo provider name).
+// Sprint 1 — Unit tests for LlmClientFactory (resolve by provider name).
 
 using System;
 using AgenticSdlc.Domain.Llm;

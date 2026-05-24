@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Llm/DependencyInjection.cs
-// Sprint 1 — Extension đăng ký LLM Gateway vào IServiceCollection.
+// Sprint 1 — Extension that registers the LLM Gateway into IServiceCollection.
 
 using System;
 using AgenticSdlc.Domain.Llm;
@@ -10,18 +10,18 @@ using Microsoft.Extensions.Options;
 namespace AgenticSdlc.Infrastructure.Llm;
 
 /// <summary>
-/// DI extension cho LLM Gateway. Gọi 1 lần trong <c>Program.cs</c> của API project.
+/// DI extension for the LLM Gateway. Call once in the API project's <c>Program.cs</c>.
 /// </summary>
 public static class LlmGatewayServiceCollectionExtensions
 {
     /// <summary>
     /// Register:
     /// <list type="bullet">
-    ///   <item>Bind <see cref="LlmOptions"/> từ section <c>"Llm"</c>.</item>
+    ///   <item>Bind <see cref="LlmOptions"/> from section <c>"Llm"</c>.</item>
     ///   <item><see cref="ClaudeClient"/>, <see cref="AzureOpenAiClient"/>, <see cref="MockLlmClient"/> (concrete).</item>
     ///   <item><see cref="ILlmClientFactory"/> → <see cref="LlmClientFactory"/>.</item>
-    ///   <item><see cref="ILlmClient"/> → resolve qua factory tại runtime.</item>
-    ///   <item>Named <c>HttpClient</c> cho mỗi provider qua <see cref="IHttpClientFactory"/>.</item>
+    ///   <item><see cref="ILlmClient"/> → resolved via the factory at runtime.</item>
+    ///   <item>Named <c>HttpClient</c> for each provider via <see cref="IHttpClientFactory"/>.</item>
     /// </list>
     /// </summary>
     public static IServiceCollection AddLlmGateway(this IServiceCollection services, IConfiguration configuration)
@@ -33,7 +33,7 @@ public static class LlmGatewayServiceCollectionExtensions
             .Bind(configuration.GetSection(LlmOptions.SectionName))
             .ValidateOnStart();
 
-        // Named HttpClient — IHttpClientFactory để tránh socket exhaustion.
+        // Named HttpClient — IHttpClientFactory to avoid socket exhaustion.
         services.AddHttpClient(ClaudeClient.HttpClientName, (sp, http) =>
         {
             var opts = sp.GetRequiredService<IOptions<LlmOptions>>().Value.Claude;
@@ -60,7 +60,7 @@ public static class LlmGatewayServiceCollectionExtensions
             }
         });
 
-        // Concrete clients — singleton-ish, nhưng để Transient để mỗi resolve có HttpClient mới từ factory.
+        // Concrete clients — singleton-ish, but kept Transient so each resolve gets a fresh HttpClient from the factory.
         services.AddTransient<ClaudeClient>(sp =>
         {
             var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(ClaudeClient.HttpClientName);

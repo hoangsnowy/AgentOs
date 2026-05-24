@@ -1,29 +1,29 @@
 // AgenticSdlc.Application/Metrics/MetricsContext.cs
-// Sprint 4 — AsyncLocal ambient context cho KcId + RunId + Iteration. KC test set context trước khi RunAsync.
+// Sprint 4 — AsyncLocal ambient context for KcId + RunId + Iteration. KC tests set the context before RunAsync.
 
 using System;
 using System.Threading;
 
 namespace AgenticSdlc.Application.Metrics;
 
-/// <summary>Ambient context — set bằng <see cref="BeginScope"/>, đọc bằng <see cref="Current"/>.</summary>
+/// <summary>Ambient context — set via <see cref="BeginScope"/>, read via <see cref="Current"/>.</summary>
 public sealed class MetricsContext
 {
     private static readonly AsyncLocal<MetricsContext?> _current = new();
 
-    /// <summary>Context hiện tại (null nếu chưa set).</summary>
+    /// <summary>Current context (null if not set).</summary>
     public static MetricsContext? Current => _current.Value;
 
-    /// <summary>RunId (1 pipeline call = 1 RunId).</summary>
+    /// <summary>RunId (one pipeline call = one RunId).</summary>
     public required string RunId { get; init; }
 
-    /// <summary>KcId (KC1..KC5 hoặc "ad-hoc").</summary>
+    /// <summary>KcId (KC1..KC5 or "ad-hoc").</summary>
     public required string KcId { get; init; }
 
-    /// <summary>Iteration counter của QA loop. 0 cho call ngoài loop.</summary>
+    /// <summary>QA loop iteration counter. 0 for calls outside the loop.</summary>
     public int Iteration { get; init; }
 
-    /// <summary>Set context cho scope hiện tại. Dispose khôi phục context cũ.</summary>
+    /// <summary>Sets the context for the current scope. Disposing restores the previous context.</summary>
     public static IDisposable BeginScope(string runId, string kcId, int iteration = 0)
     {
         var prev = _current.Value;
@@ -31,11 +31,11 @@ public sealed class MetricsContext
         return new Scope(prev);
     }
 
-    /// <summary>Bump iteration counter trong scope hiện tại (tạo scope mới).</summary>
+    /// <summary>Bumps the iteration counter within the current scope (creates a new scope).</summary>
     public static IDisposable BeginIteration(int iteration)
     {
         var cur = _current.Value
-            ?? throw new InvalidOperationException("BeginIteration cần BeginScope trước đó.");
+            ?? throw new InvalidOperationException("BeginIteration requires a prior BeginScope.");
         var prev = _current.Value;
         _current.Value = new MetricsContext { RunId = cur.RunId, KcId = cur.KcId, Iteration = iteration };
         return new Scope(prev);

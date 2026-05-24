@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Llm/AzureOpenAiClient.cs
-// Sprint 1 — Azure OpenAI Chat Completions client (raw HttpClient, không SDK).
+// Sprint 1 — Azure OpenAI Chat Completions client (raw HttpClient, no SDK).
 
 using System;
 using System.Diagnostics;
@@ -16,13 +16,13 @@ using Microsoft.Extensions.Options;
 namespace AgenticSdlc.Infrastructure.Llm;
 
 /// <summary>
-/// Client gọi Azure OpenAI Chat Completions tại
+/// Client calling Azure OpenAI Chat Completions at
 /// <c>POST {endpoint}/openai/deployments/{model}/chat/completions?api-version={apiVersion}</c>.
 /// Authentication: header <c>api-key</c>.
 /// </summary>
 public sealed class AzureOpenAiClient : ILlmClient
 {
-    /// <summary>Named HttpClient key dùng cho <see cref="IHttpClientFactory"/>.</summary>
+    /// <summary>Named HttpClient key used for <see cref="IHttpClientFactory"/>.</summary>
     public const string HttpClientName = "AgenticSdlc.AzureOpenAiClient";
 
     private readonly HttpClient _http;
@@ -32,7 +32,7 @@ public sealed class AzureOpenAiClient : ILlmClient
     /// <inheritdoc />
     public string Provider => "AzureOpenAI";
 
-    /// <summary>Khởi tạo client.</summary>
+    /// <summary>Initializes the client.</summary>
     public AzureOpenAiClient(HttpClient http, IOptions<LlmOptions> options, ILogger<AzureOpenAiClient> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -182,7 +182,7 @@ public sealed class AzureOpenAiClient : ILlmClient
         WriteIndented = false,
     };
 
-    // ----- DTOs khớp Azure OpenAI chat shape -----
+    // ----- DTOs matching the Azure OpenAI chat shape -----
 
     private sealed class ChatRequestDto
     {

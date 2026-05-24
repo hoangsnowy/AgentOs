@@ -1,7 +1,7 @@
 // AgenticSdlc.Web/Orchestrations/OrchestrationStore.cs
-// Phase 7b → Persistence: kho orchestration (singleton, cache in-memory cho read sync nhanh),
-// lưu bền qua IOrchestrationRepository (Postgres). Seed sẵn 2 đồ thị nếu DB trống.
-// Write dùng Task.Run để sync-over-async an toàn deadlock dưới SynchronizationContext của Blazor circuit.
+// Phase 7b → Persistence: orchestration store (singleton, in-memory cache for fast synchronous reads),
+// persisted via IOrchestrationRepository (Postgres). Seeds 2 graphs if the DB is empty.
+// Writes use Task.Run for deadlock-safe sync-over-async under the Blazor circuit's SynchronizationContext.
 
 using System;
 using System.Collections.Generic;
@@ -13,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AgenticSdlc.Web.Orchestrations;
 
-/// <summary>CRUD orchestration. Thread-safe đủ cho demo 1 người (lock thô). Persist qua repo (DB).</summary>
+/// <summary>Orchestration CRUD. Thread-safe enough for a single-user demo (coarse lock). Persisted via the repo (DB).</summary>
 public sealed class OrchestrationStore
 {
     private static readonly JsonSerializerOptions Json = new()
@@ -26,7 +26,7 @@ public sealed class OrchestrationStore
     private readonly Dictionary<string, OrchestrationGraph> _graphs = new(StringComparer.Ordinal);
     private readonly IServiceScopeFactory _scopeFactory;
 
-    /// <summary>Khởi tạo: nạp từ DB nếu có, ngược lại seed mặc định + lưu.</summary>
+    /// <summary>Initialize: load from the DB if present, otherwise seed the defaults + save.</summary>
     public OrchestrationStore(IServiceScopeFactory scopeFactory)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);
@@ -34,7 +34,7 @@ public sealed class OrchestrationStore
         LoadOrSeed();
     }
 
-    /// <summary>Tất cả orchestration, sắp theo tên.</summary>
+    /// <summary>All orchestrations, sorted by name.</summary>
     public IReadOnlyList<OrchestrationGraph> All()
     {
         lock (_gate)
@@ -43,7 +43,7 @@ public sealed class OrchestrationStore
         }
     }
 
-    /// <summary>Lấy theo id, null nếu không có.</summary>
+    /// <summary>Get by id, null if not found.</summary>
     public OrchestrationGraph? Get(string id)
     {
         lock (_gate)
@@ -52,7 +52,7 @@ public sealed class OrchestrationStore
         }
     }
 
-    /// <summary>Lưu (thêm mới hoặc cập nhật) vào cache + DB.</summary>
+    /// <summary>Save (insert or update) into the cache + DB.</summary>
     public void Save(OrchestrationGraph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
@@ -63,30 +63,30 @@ public sealed class OrchestrationStore
         Persist(graph);
     }
 
-    /// <summary>Tạo orchestration trống với 1 node Start.</summary>
+    /// <summary>Create an empty orchestration with a single Start node.</summary>
     public OrchestrationGraph Create(string name = "New Orchestration")
     {
         var g = new OrchestrationGraph
         {
             Id = NewId(),
             Name = name,
-            Description = "Mô tả orchestration…",
+            Description = "Orchestration description…",
             Nodes =
             [
-                new GraphNode { Id = NewId(), Type = StepType.Agent, Title = "Start", X = 80, Y = 200, IsStart = true, Description = "Điểm bắt đầu", Output = "result", MaxIterations = 1 },
+                new GraphNode { Id = NewId(), Type = StepType.Agent, Title = "Start", X = 80, Y = 200, IsStart = true, Description = "Entry point", Output = "result", MaxIterations = 1 },
             ],
         };
         Save(g);
         return g;
     }
 
-    /// <summary>Nhân bản orchestration (tên + " (copy)").</summary>
+    /// <summary>Duplicate an orchestration (name + " (copy)").</summary>
     public OrchestrationGraph Duplicate(string id)
     {
         OrchestrationGraph clone;
         lock (_gate)
         {
-            var src = _graphs.GetValueOrDefault(id) ?? throw new InvalidOperationException($"Orchestration '{id}' không tồn tại.");
+            var src = _graphs.GetValueOrDefault(id) ?? throw new InvalidOperationException($"Orchestration '{id}' does not exist.");
             clone = Clone(src);
             clone.Id = NewId();
             clone.Name = src.Name + " (copy)";
@@ -96,7 +96,7 @@ public sealed class OrchestrationStore
         return clone;
     }
 
-    /// <summary>Xoá theo id (cache + DB).</summary>
+    /// <summary>Delete by id (cache + DB).</summary>
     public void Delete(string id)
     {
         bool removed;
@@ -110,7 +110,7 @@ public sealed class OrchestrationStore
         }
     }
 
-    /// <summary>Id ngắn (8 hex).</summary>
+    /// <summary>Short id (8 hex chars).</summary>
     public static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
     // ---------------- persistence (repo/DB) ----------------
@@ -145,7 +145,7 @@ public sealed class OrchestrationStore
         RunOnRepo(repo => repo.UpsertAsync(record));
     }
 
-    // Sync-over-async an toàn: Task.Run thoát SynchronizationContext của Blazor circuit (tránh deadlock).
+    // Deadlock-safe sync-over-async: Task.Run escapes the Blazor circuit's SynchronizationContext (avoids deadlock).
     private void RunOnRepo(Func<IOrchestrationRepository, Task> action) =>
         Task.Run(async () =>
         {
@@ -173,7 +173,7 @@ public sealed class OrchestrationStore
         yield return SeedStrictDeveloper();
     }
 
-    /// <summary>Đồ thị ánh xạ pipeline 5 tác tử của luận văn — "Run" chạy thật được.</summary>
+    /// <summary>Graph mapping the thesis's 5-agent pipeline — "Run" actually executes.</summary>
     private static OrchestrationGraph SeedSdlcPipeline()
     {
         string req = "req", cod = "cod", tst = "tst", qa = "qa", agg = "agg";
@@ -181,22 +181,22 @@ public sealed class OrchestrationStore
         {
             Id = "sdlc-5agent",
             Name = "5-Agent SDLC Pipeline",
-            Description = "Leader–Specialists–Quality Loop (KC1–KC5). Run được bằng tác tử thật/Demo.",
+            Description = "Leader–Specialists–Quality Loop (KC1–KC5). Runnable with real agents/Demo.",
             StateSchemaJson = "{\n  \"userStory\": \"string\",\n  \"spec\": \"RequirementSpec\",\n  \"code\": \"CodeArtifact\",\n  \"tests\": \"TestArtifact\",\n  \"qa\": \"QaReport\"\n}",
-            Guardrails = ["QA score ≥ 0.8 mới pass", "Tối đa NMax vòng lặp", "Output mỗi agent phải hợp JSON schema"],
+            Guardrails = ["QA score ≥ 0.8 to pass", "At most NMax iterations", "Each agent's output must match the JSON schema"],
             Nodes =
             [
                 new GraphNode { Id = req, Type = StepType.Agent, AgentRole = "Requirement", Title = "Requirement Agent", X = 60, Y = 220, IsStart = true,
-                    Description = "Phân tích user story → spec", Input = "userStory", Output = "spec", MaxIterations = 1 },
+                    Description = "Analyze user story → spec", Input = "userStory", Output = "spec", MaxIterations = 1 },
                 new GraphNode { Id = cod, Type = StepType.Agent, AgentRole = "Coding", Title = "Coding Agent", X = 340, Y = 220,
-                    Description = "Sinh source code C# (Clean Arch)", Input = "spec, qa", Output = "code", MaxIterations = 3 },
+                    Description = "Generate C# source code (Clean Arch)", Input = "spec, qa", Output = "code", MaxIterations = 3 },
                 new GraphNode { Id = tst, Type = StepType.Agent, AgentRole = "Testing", Title = "Testing Agent", X = 620, Y = 220,
-                    Description = "Sinh xUnit test (happy/edge/error)", Input = "spec, code", Output = "tests", MaxIterations = 3 },
+                    Description = "Generate xUnit tests (happy/edge/error)", Input = "spec, code", Output = "tests", MaxIterations = 3 },
                 new GraphNode { Id = qa, Type = StepType.Evaluator, Title = "QA Agent", X = 900, Y = 220,
-                    Description = "Đánh giá nhất quán req-code-test", Input = "spec, code, tests", Output = "qa", MaxIterations = 3,
+                    Description = "Evaluate req-code-test consistency", Input = "spec, code, tests", Output = "qa", MaxIterations = 3,
                     Routes = ["pass", "fail"] },
                 new GraphNode { Id = agg, Type = StepType.End, Title = "Aggregate", X = 1180, Y = 120,
-                    Description = "Chốt kết quả + tổng chi phí", Input = "all", Output = "result" },
+                    Description = "Finalize result + total cost", Input = "all", Output = "result" },
             ],
             Edges =
             [
@@ -209,7 +209,7 @@ public sealed class OrchestrationStore
         };
     }
 
-    /// <summary>Mô phỏng đồ thị "Strict Developer" trong ảnh Synapse (chỉ để trình diễn look).</summary>
+    /// <summary>Recreates the "Strict Developer" graph from the Synapse screenshot (just to demo the look).</summary>
     private static OrchestrationGraph SeedStrictDeveloper()
     {
         string plan = "n_plan", ev1 = "n_ev1", aplan = "n_aplan", appr = "n_appr", ev2 = "n_ev2",
@@ -220,13 +220,13 @@ public sealed class OrchestrationStore
             Id = "strict-developer",
             Name = "Strict Developer",
             Description = "Always keep human in the loop to continue",
-            Guardrails = ["Human phê duyệt plan trước khi code", "Review code trước khi commit"],
+            Guardrails = ["Human approves the plan before coding", "Review code before committing"],
             Nodes =
             [
                 new GraphNode { Id = plan, Type = StepType.Agent, AgentRole = "Coding", Title = "Development plan", X = 380, Y = 470, IsStart = true,
                     Description = "Code Planner", Input = "plan, plan_review_evaluation, user_answers", Output = "plan", MaxIterations = 5 },
                 new GraphNode { Id = ev1, Type = StepType.Evaluator, Title = "Evaluator Step", X = 660, Y = 470,
-                    Description = "Đánh giá plan", Input = "plan", Output = "check_plan", MaxIterations = 5, Routes = ["ask_user", "continue"] },
+                    Description = "Evaluate plan", Input = "plan", Output = "check_plan", MaxIterations = 5, Routes = ["ask_user", "continue"] },
                 new GraphNode { Id = aplan, Type = StepType.Human, Title = "Answer Planner", X = 840, Y = 320,
                     Description = "Answer the questions", Input = "plan, check_plan", Output = "user_answers", MaxIterations = 3 },
                 new GraphNode { Id = appr, Type = StepType.Human, Title = "Approve Plan", X = 380, Y = 690,

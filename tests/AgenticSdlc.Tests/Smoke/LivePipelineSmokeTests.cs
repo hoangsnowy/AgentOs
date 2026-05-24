@@ -1,6 +1,6 @@
 // AgenticSdlc.Tests/Smoke/LivePipelineSmokeTests.cs
-// Sprint 6 — live end-to-end pipeline (Requirement → Coding → Testing → QA) gọi LLM thật.
-// Skip default. Budget guard: max 5 LLM call, max $0.50.
+// Sprint 6 — live end-to-end pipeline (Requirement → Coding → Testing → QA) calling the real LLM.
+// Skipped by default. Budget guard: max 5 LLM calls, max $0.50.
 
 using System;
 using System.Collections.Generic;
@@ -60,7 +60,7 @@ public class LivePipelineSmokeTests
         var collector = sp.GetRequiredService<InMemoryMetricsCollector>();
 
         var userStory = new UserStory(
-            "Hệ thống TODO list đơn giản: người dùng tạo task với tiêu đề, đánh dấu hoàn thành, xoá task. Hỗ trợ liệt kê task chưa hoàn thành.",
+            "A simple TODO list system: users create a task with a title, mark it complete, and delete a task. Supports listing incomplete tasks.",
             NMax: 1);
 
         PipelineResult? result = null;
@@ -81,7 +81,7 @@ public class LivePipelineSmokeTests
         var totalCost = snapshot.Sum(m => m.CostUsd);
         var callCount = snapshot.Count;
 
-        // Capture transcript before assertions để có file dù assert fail.
+        // Capture the transcript before assertions so we still get a file even if an assertion fails.
         var transcriptPath = Path.Combine(AppContext.BaseDirectory, "TestResults", outputFile);
         Directory.CreateDirectory(Path.GetDirectoryName(transcriptPath)!);
         var transcript = new
@@ -155,7 +155,7 @@ public class LivePipelineSmokeTests
     {
         if (Environment.GetEnvironmentVariable(RunFlag) != "1")
         {
-            Assert.Skip($"{RunFlag} != 1 — set 1 để chạy live pipeline (cost ≤ ${MaxBudgetUsd}/run).");
+            Assert.Skip($"{RunFlag} != 1 — set to 1 to run the live pipeline (cost ≤ ${MaxBudgetUsd}/run).");
         }
         if (string.Equals(provider, "Claude", StringComparison.OrdinalIgnoreCase))
         {
@@ -169,7 +169,7 @@ public class LivePipelineSmokeTests
             if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AzureKey))
                 || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AzureEndpoint)))
             {
-                Assert.Skip($"{AzureKey} hoặc {AzureEndpoint} not set.");
+                Assert.Skip($"{AzureKey} or {AzureEndpoint} not set.");
             }
         }
     }

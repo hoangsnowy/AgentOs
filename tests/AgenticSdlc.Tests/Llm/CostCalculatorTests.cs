@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Llm/CostCalculatorTests.cs
-// Sprint 1 — Unit test pricing cho 4 model đã biết.
+// Sprint 1 — Unit tests for pricing of the 4 known models.
 
 using AgenticSdlc.Infrastructure.Llm;
 using Shouldly;
@@ -60,8 +60,8 @@ public class CostCalculatorTests
     [InlineData("unknown", false)]
     public void IsKnown_VariousModels_BehavesAsExpected(string model, bool expected)
     {
-        // Lưu ý: "gpt-4.1-mini" KHỚP prefix "gpt-4.1" → returns true. Adjust test theo logic prefix.
-        // Để tránh ambiguity, dùng model rõ ràng:
+        // Note: "gpt-4.1-mini" MATCHES the "gpt-4.1" prefix → returns true. Adjust the test to the prefix logic.
+        // To avoid ambiguity, use an explicit model:
         if (model == "gpt-4.1-mini")
         {
             CostCalculator.IsKnown(model).ShouldBeTrue(); // prefix "gpt-4.1" hits.

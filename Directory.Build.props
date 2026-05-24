@@ -1,5 +1,5 @@
 <!--
-  Directory.Build.props — common settings cho mọi project trong solution.
+  Directory.Build.props — common settings for every project in the solution.
   .NET 10 LTS, C# 14, nullable + warnings as errors, modern analyzers.
 -->
 <Project>
@@ -14,16 +14,16 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <DebugType>portable</DebugType>
     <DebugSymbols>true</DebugSymbols>
-    <!-- Sprint 1: tạm suppress CA1848 (LoggerMessage delegates) + CA1873 (lazy eval) cho prototype.
-         Đổi lại false hoặc remove sau Sprint 5 khi refactor sang source-generated LoggerMessage. -->
+    <!-- Sprint 1: temporarily suppress CA1848 (LoggerMessage delegates) + CA1873 (lazy eval) for the prototype.
+         Switch back to false or remove after Sprint 5 when refactoring to source-generated LoggerMessage. -->
     <NoWarn>$(NoWarn);CA1848;CA1873</NoWarn>
   </PropertyGroup>
 
-  <!-- Test projects: suppress analyzer warnings không phù hợp cho test code.
-       CA1816: Dispose() trong test fixture không cần GC.SuppressFinalize.
-       CA1859: ServiceProvider return type vi mô không cần tối ưu trong test helper.
-       xUnit1051: TestContext.Current.CancellationToken chỉ có trong xUnit v3 framework runner;
-                  Sprint 1 dùng CancellationToken.None đơn giản, refactor sau khi cần test cancellation. -->
+  <!-- Test projects: suppress analyzer warnings not appropriate for test code.
+       CA1816: Dispose() in a test fixture does not need GC.SuppressFinalize.
+       CA1859: the micro ServiceProvider return type does not need optimizing in a test helper.
+       xUnit1051: TestContext.Current.CancellationToken only exists in the xUnit v3 framework runner;
+                  Sprint 1 uses a simple CancellationToken.None, refactor later when cancellation tests are needed. -->
   <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
     <NoWarn>$(NoWarn);CA1816;CA1859;xUnit1051</NoWarn>
   </PropertyGroup>

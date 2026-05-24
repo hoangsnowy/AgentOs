@@ -1,4 +1,4 @@
-// EF Core DbContext cho persistence layer (Postgres). 3 bảng:
+// EF Core DbContext for the persistence layer (Postgres). 3 tables:
 // pipeline_runs (run + artifact jsonb), run_metrics (1 LLM call), orchestrations (Agent Studio state).
 using AgenticSdlc.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;

@@ -1,4 +1,4 @@
-// No-op repos khi KHÔNG cấu hình connection string (CI/local không DB → app chạy stateless).
+// No-op repos when NO connection string is configured (CI/local without a DB → app runs stateless).
 using AgenticSdlc.Application.Persistence;
 
 namespace AgenticSdlc.Infrastructure.Persistence.Repositories;

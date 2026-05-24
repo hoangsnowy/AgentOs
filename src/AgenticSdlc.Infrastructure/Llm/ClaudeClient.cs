@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Llm/ClaudeClient.cs
-// Sprint 1 — Anthropic Messages API client (raw HttpClient, không SDK).
+// Sprint 1 — Anthropic Messages API client (raw HttpClient, no SDK).
 
 using System;
 using System.Diagnostics;
@@ -16,12 +16,12 @@ using Microsoft.Extensions.Options;
 namespace AgenticSdlc.Infrastructure.Llm;
 
 /// <summary>
-/// Client gọi Anthropic Messages API tại <c>POST /v1/messages</c>.
+/// Client calling the Anthropic Messages API at <c>POST /v1/messages</c>.
 /// Authentication: header <c>x-api-key</c>; version: header <c>anthropic-version</c>.
 /// </summary>
 public sealed class ClaudeClient : ILlmClient
 {
-    /// <summary>Named HttpClient key dùng cho <see cref="IHttpClientFactory"/>.</summary>
+    /// <summary>Named HttpClient key used for <see cref="IHttpClientFactory"/>.</summary>
     public const string HttpClientName = "AgenticSdlc.ClaudeClient";
 
     private readonly HttpClient _http;
@@ -31,7 +31,7 @@ public sealed class ClaudeClient : ILlmClient
     /// <inheritdoc />
     public string Provider => "Claude";
 
-    /// <summary>Khởi tạo client. <paramref name="http"/> nên được resolve qua <see cref="IHttpClientFactory"/>.</summary>
+    /// <summary>Initializes the client. <paramref name="http"/> should be resolved via <see cref="IHttpClientFactory"/>.</summary>
     public ClaudeClient(HttpClient http, IOptions<LlmOptions> options, ILogger<ClaudeClient> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -49,13 +49,13 @@ public sealed class ClaudeClient : ILlmClient
             _http.BaseAddress = new Uri(_options.Endpoint.TrimEnd('/') + "/");
         }
 
-        // Timeout: ưu tiên giá trị đã set bên ngoài (qua AddHttpClient), fallback options.
+        // Timeout: prefer the value already set externally (via AddHttpClient), fall back to options.
         if (_http.Timeout == TimeSpan.FromSeconds(100) /* default */ && _options.TimeoutSeconds > 0)
         {
             _http.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         }
 
-        // Headers nên set 1 lần (idempotent — kiểm tra trước khi add để tránh duplicate khi reused client).
+        // Headers should be set once (idempotent — check before adding to avoid duplicates when the client is reused).
         if (!_http.DefaultRequestHeaders.Contains("x-api-key") && !string.IsNullOrWhiteSpace(_options.ApiKey))
         {
             _http.DefaultRequestHeaders.Add("x-api-key", _options.ApiKey);
@@ -112,7 +112,7 @@ public sealed class ClaudeClient : ILlmClient
             Provider: Provider);
     }
 
-    /// <summary>1 lần POST. Ném <see cref="TransientHttpException"/> nếu 429/5xx, <see cref="LlmException"/> nếu 4xx khác hoặc malformed.</summary>
+    /// <summary>A single POST. Throws <see cref="TransientHttpException"/> on 429/5xx, <see cref="LlmException"/> on other 4xx or malformed responses.</summary>
     private async Task<ClaudeResponseDto> PostOnceAsync(ClaudeRequestDto payload, CancellationToken ct)
     {
         using var response = await _http.PostAsJsonAsync("v1/messages", payload, JsonOpts, ct).ConfigureAwait(false);
@@ -170,7 +170,7 @@ public sealed class ClaudeClient : ILlmClient
             return string.Empty;
         }
 
-        // Anthropic trả về array of content blocks; chỉ lấy type="text".
+        // Anthropic returns an array of content blocks; only take type="text".
         var parts = new System.Text.StringBuilder();
         foreach (var block in dto.Content)
         {
@@ -189,7 +189,7 @@ public sealed class ClaudeClient : ILlmClient
         WriteIndented = false,
     };
 
-    // ----- DTOs (internal, shape khớp Anthropic API) -----
+    // ----- DTOs (internal, shape matching the Anthropic API) -----
 
     private sealed class ClaudeRequestDto
     {

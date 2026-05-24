@@ -1,6 +1,6 @@
-// Decorator quanh IOrchestratorAgent: sinh RunId, set MetricsContext (để per-call RunMetric
-// mang RunId), chạy pipeline, rồi lưu PipelineResult + metrics vào DB. Persist là best-effort —
-// lỗi DB không làm hỏng kết quả run đã thành công.
+// Decorator around IOrchestratorAgent: generates a RunId, sets the MetricsContext (so each per-call
+// RunMetric carries the RunId), runs the pipeline, then saves the PipelineResult + metrics to the DB.
+// Persistence is best-effort — a DB error must not corrupt the result of a successful run.
 using AgenticSdlc.Application.Agents;
 using AgenticSdlc.Application.Metrics;
 using AgenticSdlc.Application.Persistence;
@@ -69,11 +69,11 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
         {
             throw;
         }
-#pragma warning disable CA1031 // Persist best-effort: lỗi DB không được làm hỏng run đã thành công.
+#pragma warning disable CA1031 // Persist best-effort: a DB error must not corrupt a successful run.
         catch (Exception ex)
 #pragma warning restore CA1031
         {
-            _logger.LogError(ex, "Lưu pipeline run {RunId} thất bại — kết quả vẫn trả về cho client.", runId);
+            _logger.LogError(ex, "Failed to save pipeline run {RunId} — the result is still returned to the client.", runId);
         }
     }
 }

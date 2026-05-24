@@ -1,27 +1,27 @@
 // AgenticSdlc.Domain/Llm/ILlmClient.cs
-// Sprint 1 — Contract cho LLM Gateway (Domain layer, không reference Infrastructure).
+// Sprint 1 — Contract for the LLM Gateway (Domain layer, does not reference Infrastructure).
 
 namespace AgenticSdlc.Domain.Llm;
 
 /// <summary>
-/// Abstraction cho mọi LLM provider (Claude, Azure OpenAI, Mock, ...).
-/// 5 agent (Requirement / Coding / Testing / QA / Orchestrator) depend on interface này — KHÔNG depend on
-/// concrete client — tuân theo Dependency Inversion Principle (Mục 2.4.2 luận văn).
+/// Abstraction for every LLM provider (Claude, Azure OpenAI, Mock, ...).
+/// The 5 agents (Requirement / Coding / Testing / QA / Orchestrator) depend on this interface — NOT on a
+/// concrete client — following the Dependency Inversion Principle (thesis Section 2.4.2).
 /// </summary>
 public interface ILlmClient
 {
     /// <summary>
-    /// Provider tag, dùng cho logging và <see cref="LlmResponse.Provider"/>.
+    /// Provider tag, used for logging and <see cref="LlmResponse.Provider"/>.
     /// </summary>
     string Provider { get; }
 
     /// <summary>
-    /// Gửi 1 request tới provider và trả về response. Mọi retry/timeout logic phải đã được handle bên trong.
-    /// Ném <see cref="LlmException"/> khi đã exhausted retry hoặc gặp lỗi không recoverable.
+    /// Sends a single request to the provider and returns the response. All retry/timeout logic must be handled internally.
+    /// Throws <see cref="LlmException"/> when retries are exhausted or a non-recoverable error occurs.
     /// </summary>
-    /// <param name="request">Request đã validate.</param>
-    /// <param name="cancellationToken">Token huỷ.</param>
-    /// <returns>Response với content, token usage, cost, latency.</returns>
+    /// <param name="request">The validated request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Response with content, token usage, cost, latency.</returns>
     System.Threading.Tasks.Task<LlmResponse> SendAsync(
         LlmRequest request,
         System.Threading.CancellationToken cancellationToken = default);

@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Validation/JsonSchemaValidatorTests.cs
-// Sprint 3 — 3 pass + 3 fail per schema = 18 test cho JSON Schema validation.
+// Sprint 3 — 3 pass + 3 fail per schema = 18 tests for JSON Schema validation.
 
 using AgenticSdlc.Application.Validation;
 using AgenticSdlc.Infrastructure.Validation;
@@ -25,10 +25,10 @@ public class JsonSchemaValidatorTests
     {
         var json = """
             {
-              "title": "Quản lý sản phẩm",
-              "summary": "CRUD sản phẩm.",
+              "title": "Product management",
+              "summary": "Product CRUD.",
               "entities": [{"name":"Product","fields":["id: Guid"]}],
-              "endpoints": [{"method":"POST","path":"/products","purpose":"Tạo"}],
+              "endpoints": [{"method":"POST","path":"/products","purpose":"Create"}],
               "acceptanceCriteria": ["a","b","c"]
             }
             """;

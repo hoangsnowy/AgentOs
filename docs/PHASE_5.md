@@ -2,53 +2,53 @@
 
 > Status: ✅ Done — 2026-05-18
 
-## Mục tiêu
+## Objectives
 
-Hoàn thiện coverage test cho 5 agent + orchestrator, bổ sung dataset KC1-KC5 (Mục 2.5 luận văn) và bench harness để chạy thực nghiệm offline (Mock provider) hoặc online (Claude / Azure OpenAI).
+Complete the test coverage for the 5 agents + orchestrator, add the KC1-KC5 dataset (thesis Section 2.5) and a bench harness to run experiments offline (Mock provider) or online (Claude / Azure OpenAI).
 
-## Deliverable
+## Deliverables
 
 ### Tests
 
-- `tests/AgenticSdlc.Tests/Pipeline/SequencedLlmClient.cs` — test `ILlmClient` trả response theo thứ tự gọi (in-memory queue, capture request cho assertion).
-- `tests/AgenticSdlc.Tests/Pipeline/PipelineEndToEndTests.cs` — 3 case E2E:
-  - `Pipeline_QaPassFirstIteration_AggregatesAllMetrics` — 4 canned response, pass ngay vòng 1, verify tổng metric.
-  - `Pipeline_QaFailsThenPasses_TwoIterations` — 7 canned response, vòng 1 QA fail → vòng 2 pass.
-  - `Pipeline_MalformedRequirementResponse_ReturnsFailed` — verify failure mode.
+- `tests/AgenticSdlc.Tests/Pipeline/SequencedLlmClient.cs` — a test `ILlmClient` that returns responses in call order (in-memory queue, captures requests for assertions).
+- `tests/AgenticSdlc.Tests/Pipeline/PipelineEndToEndTests.cs` — 3 E2E cases:
+  - `Pipeline_QaPassFirstIteration_AggregatesAllMetrics` — 4 canned responses, passes on iteration 1, verifies aggregated metrics.
+  - `Pipeline_QaFailsThenPasses_TwoIterations` — 7 canned responses, QA fails on iteration 1 → passes on iteration 2.
+  - `Pipeline_MalformedRequirementResponse_ReturnsFailed` — verifies the failure mode.
 
-Tổng test count: **80** (+3 từ Phase 4).
+Total test count: **80** (+3 from Phase 4).
 
 ### KC dataset
 
-`tests/fixtures/kc/kc{1-5}.json` — mỗi file mảng `{id, input, expected}`. README mô tả convention + cách thêm case.
+`tests/fixtures/kc/kc{1-5}.json` — each file is an array of `{id, input, expected}`. The README describes the convention + how to add a case.
 
 ### Bench harness
 
-Skill `/kc-bench` (đã ship Phase 2-skills) là entrypoint chạy bench. Skill tự:
-1. Start API local nếu cần (`dotnet run --project src/AgenticSdlc.Api`).
-2. Loop dataset × N iteration (default 3).
-3. POST request, capture metric từ response body.
-4. Aggregate → `.xlsx` + `.md` report dùng skill `xlsx` của Anthropic.
+The `/kc-bench` skill (shipped in Phase 2-skills) is the entrypoint for running the bench. The skill automatically:
+1. Starts the API locally if needed (`dotnet run --project src/AgenticSdlc.Api`).
+2. Loops over the dataset × N iterations (default 3).
+3. POSTs requests, capturing metrics from the response body.
+4. Aggregates → `.xlsx` + `.md` report using Anthropic's `xlsx` skill.
 
-Bench KHÔNG implement standalone tool — leveraging skill stack đã có, tránh trùng lặp.
+The bench does NOT implement a standalone tool — it leverages the existing skill stack to avoid duplication.
 
-## Quyết định kỹ thuật
+## Technical decisions
 
-- **Tại sao SequencedLlmClient chứ không dùng MockLlmClient (hash-based)?**
-  Hash trong `MockLlmClient.ComputeHash` phụ thuộc exact prompt content. CodingAgent prompt include `RequirementSpec` JSON-serialized → nếu RequirementAgent output thay đổi (kể cả whitespace), hash CodingAgent thay đổi → fixture brittle. Sequenced client trade off determinism (canned per call) lấy stability cho E2E test.
+- **Why SequencedLlmClient instead of MockLlmClient (hash-based)?**
+  The hash in `MockLlmClient.ComputeHash` depends on the exact prompt content. The CodingAgent prompt includes the JSON-serialized `RequirementSpec` → if the RequirementAgent output changes (even whitespace), the CodingAgent hash changes → brittle fixtures. The sequenced client trades off determinism (canned per call) for stability in E2E tests.
 
-- **Tại sao KC5 ngưỡng `PassScore = 0.8` mà không cao hơn?**
-  Mục 2.4.5 luận văn — đủ thực dụng cho prototype, tránh QA loop chạy nhiều iteration với LLM Sonnet 4 (cost). Có thể nâng lên 0.85 nếu pass-rate KC4 > 70%.
+- **Why is the KC5 `PassScore = 0.8` threshold not higher?**
+  Thesis Section 2.4.5 — pragmatic enough for the prototype, avoiding many QA-loop iterations with the Sonnet 4 LLM (cost). It can be raised to 0.85 if the KC4 pass-rate > 70%.
 
-- **Tại sao KC2/3/5 dùng `specFixture` reference?**
-  Tách dataset thành DAG (KC1 → KC2 → KC3 → KC5; KC4 chạy độc lập). Cho phép thay 1 fixture mà không re-generate cả chain. Khi không có fixture, bench skill skip case + báo.
+- **Why do KC2/3/5 use a `specFixture` reference?**
+  To split the dataset into a DAG (KC1 → KC2 → KC3 → KC5; KC4 runs independently). This allows replacing one fixture without re-generating the whole chain. When a fixture is missing, the bench skill skips the case + reports it.
 
-## Tham chiếu luận văn
+## Thesis references
 
-- Mục 2.5 — Kịch bản thực nghiệm KC1-KC5
-- Mục 3.3 — Phương pháp đo (token, cost, latency, pass-rate)
-- Mục 4.2 — Báo cáo kết quả benchmark (sẽ điền sau khi chạy bench thật)
+- Section 2.5 — Experimental scenarios KC1-KC5
+- Section 3.3 — Measurement methodology (token, cost, latency, pass-rate)
+- Section 4.2 — Benchmark results report (to be filled in after running the real bench)
 
-## Phase tiếp theo
+## Next phase
 
 → Phase 6 — Azure deployment (Container Apps + App Insights). Build Docker image, Bicep IaC, GitHub Actions deploy workflow.

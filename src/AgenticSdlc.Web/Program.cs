@@ -1,7 +1,7 @@
 // AgenticSdlc.Web/Program.cs
-// Phase 7 — Host trình diễn realtime (Blazor Server / InteractiveServer).
-// Tái sử dụng nguyên LLM Gateway + 5 agent + PipelineOrchestrator của Infrastructure,
-// chỉ override 2 chỗ: nguồn LLM (cho phép chế độ Demo offline) và cổng phát tiến trình.
+// Phase 7 — Realtime demo host (Blazor Server / InteractiveServer).
+// Reuses Infrastructure's LLM Gateway + 5 agents + PipelineOrchestrator as-is,
+// overriding only 2 things: the LLM source (to allow offline Demo mode) and the progress sink.
 
 using AgenticSdlc.Application.Pipeline;
 using AgenticSdlc.Infrastructure.Agents;
@@ -9,11 +9,15 @@ using AgenticSdlc.Infrastructure.Llm;
 using AgenticSdlc.Infrastructure.Metrics;
 using AgenticSdlc.Infrastructure.Persistence;
 using AgenticSdlc.Infrastructure.Validation;
+using AgenticSdlc.ServiceDefaults;
 using AgenticSdlc.Web.Components;
 using AgenticSdlc.Web.Services;
 using AgenticSdlc.Web.Services.Demo;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Aspire service defaults: OpenTelemetry, health checks, service discovery, HTTP resilience.
+builder.AddServiceDefaults();
 
 builder.Logging.AddSimpleConsole(options =>
 {
@@ -22,38 +26,38 @@ builder.Logging.AddSimpleConsole(options =>
     options.TimestampFormat = "HH:mm:ss.fff ";
 });
 
-// Blazor Server (Interactive Server render mode) — circuit chạy trên SignalR, đẩy UI realtime.
+// Blazor Server (Interactive Server render mode) — the circuit runs over SignalR, pushing UI in realtime.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Lõi pipeline (giống Api): Gateway + validation + metrics + 5 agent + orchestrator.
+// Pipeline core (same as the Api): Gateway + validation + metrics + 5 agents + orchestrator.
 builder.Services.AddLlmGateway(builder.Configuration);
 builder.Services.AddValidation();
 builder.Services.AddInMemoryMetrics();
 builder.Services.AddAgents(builder.Configuration);
 
-// Persistence (Postgres). Không có ConnectionStrings:DefaultConnection → no-op repos (in-memory).
+// Persistence (Postgres). Without ConnectionStrings:DefaultConnection → no-op repos (in-memory).
 builder.Services.AddPersistence(builder.Configuration);
 
-// --- Override cho lớp trình diễn ---
+// --- Overrides for the presentation layer ---
 
-// 1) Nguồn LLM nhận biết chế độ Demo: UseDemo ⇒ trả JSON canned (chạy offline, có Quality Loop);
-//    ngược lại ⇒ uỷ quyền cho LlmClientFactory thật (Claude / Azure OpenAI theo appsettings).
+// 1) Demo-aware LLM source: UseDemo ⇒ returns canned JSON (runs offline, with the Quality Loop);
+//    otherwise ⇒ delegates to the real LlmClientFactory (Claude / Azure OpenAI per appsettings).
 builder.Services.AddSingleton<LlmClientFactory>();
 builder.Services.AddScoped<DemoRunContext>();
 builder.Services.AddScoped<DemoLlmClient>();
 builder.Services.AddScoped<ILlmClientFactory, DemoAwareLlmClientFactory>();
 
-// 2) Cổng phát tiến trình theo từng circuit — orchestrator báo, component lắng nghe rồi re-render.
+// 2) Per-circuit progress sink — the orchestrator reports, the component listens then re-renders.
 builder.Services.AddScoped<CircuitPipelineProgress>();
 builder.Services.AddScoped<IPipelineProgressSink>(sp => sp.GetRequiredService<CircuitPipelineProgress>());
 
-// 3) Kho orchestration (đồ thị editor kéo-thả) — singleton, seed + lưu JSON.
+// 3) Orchestration store (drag-and-drop editor graphs) — singleton, seeds + saves JSON.
 builder.Services.AddSingleton<AgenticSdlc.Web.Orchestrations.OrchestrationStore>();
 
 var app = builder.Build();
 
-// Apply EF migration lúc startup (no-op nếu chưa cấu hình DB).
+// Apply the EF migration at startup (no-op if the DB is not configured).
 await app.Services.InitializePersistenceAsync();
 
 if (!app.Environment.IsDevelopment())
@@ -61,12 +65,14 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
 
-app.UseStaticFiles();
 app.UseAntiforgery();
 
-// Liveness/readiness probe cho Container Apps.
+// Liveness/readiness probe for Container Apps.
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", utc = DateTime.UtcNow }));
 
+// .NET 9/10 static asset delivery — serves wwwroot + _framework/blazor.web.js in
+// published/container mode (UseStaticFiles alone 404s the framework script when published).
+app.MapStaticAssets();
 app.MapRazorComponents<App>()
    .AddInteractiveServerRenderMode();
 

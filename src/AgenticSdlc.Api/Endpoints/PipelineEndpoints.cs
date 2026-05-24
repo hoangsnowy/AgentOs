@@ -1,5 +1,5 @@
 // AgenticSdlc.Api/Endpoints/PipelineEndpoints.cs
-// Phase 4 — Minimal API endpoints cho 5 agent + pipeline.
+// Phase 4 — Minimal API endpoints for the 5 agents + pipeline.
 
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,10 +13,10 @@ using AgenticSdlc.Domain.Testing;
 
 namespace AgenticSdlc.Api.Endpoints;
 
-/// <summary>Mapping endpoint cho 4 specialist + pipeline (KC1-KC4).</summary>
+/// <summary>Maps endpoints for the 4 specialists + pipeline (KC1-KC4).</summary>
 public static class PipelineEndpoints
 {
-    /// <summary>Map endpoint vào <paramref name="app"/>.</summary>
+    /// <summary>Maps endpoints onto <paramref name="app"/>.</summary>
     public static Microsoft.AspNetCore.Builder.WebApplication MapPipelineEndpoints(this Microsoft.AspNetCore.Builder.WebApplication app)
     {
         System.ArgumentNullException.ThrowIfNull(app);
@@ -27,7 +27,7 @@ public static class PipelineEndpoints
             return Microsoft.AspNetCore.Http.Results.Ok(spec);
         })
         .WithName("Requirement")
-        .WithSummary("KC1 — Phân tích user story → structured requirement spec")
+        .WithSummary("KC1 — Analyze user story → structured requirement spec")
         .WithTags("Agents");
 
         app.MapPost("/code", async (CodeRequest body, ICodingAgent agent, CancellationToken ct) =>
@@ -36,7 +36,7 @@ public static class PipelineEndpoints
             return Microsoft.AspNetCore.Http.Results.Ok(artifact);
         })
         .WithName("Code")
-        .WithSummary("KC2 — Sinh source code C# Clean Architecture từ spec")
+        .WithSummary("KC2 — Generate C# Clean Architecture source code from the spec")
         .WithTags("Agents");
 
         app.MapPost("/test", async (TestRequest body, ITestingAgent agent, CancellationToken ct) =>
@@ -45,7 +45,7 @@ public static class PipelineEndpoints
             return Microsoft.AspNetCore.Http.Results.Ok(artifact);
         })
         .WithName("Test")
-        .WithSummary("KC3 — Sinh xUnit test (happy/edge/error)")
+        .WithSummary("KC3 — Generate xUnit tests (happy/edge/error)")
         .WithTags("Agents");
 
         app.MapPost("/qa", async (QaRequest body, IQaAgent agent, CancellationToken ct) =>
@@ -54,7 +54,7 @@ public static class PipelineEndpoints
             return Microsoft.AspNetCore.Http.Results.Ok(report);
         })
         .WithName("Qa")
-        .WithSummary("KC5 — Đánh giá nhất quán requirement-code-test")
+        .WithSummary("KC5 — Assess requirement-code-test consistency")
         .WithTags("Agents");
 
         app.MapPost("/pipeline", async (UserStory body, IOrchestratorAgent orchestrator, CancellationToken ct) =>
@@ -64,7 +64,7 @@ public static class PipelineEndpoints
             return Microsoft.AspNetCore.Http.Results.Json(result, statusCode: statusCode);
         })
         .WithName("Pipeline")
-        .WithSummary("KC4 — Pipeline end-to-end với QA loop (≤ NMax iteration)")
+        .WithSummary("KC4 — End-to-end pipeline with QA loop (≤ NMax iterations)")
         .WithTags("Agents");
 
         app.MapGet("/runs", async (IPipelineRunRepository repo, CancellationToken ct) =>
@@ -73,7 +73,7 @@ public static class PipelineEndpoints
             return Microsoft.AspNetCore.Http.Results.Ok(runs);
         })
         .WithName("Runs")
-        .WithSummary("Lịch sử pipeline run gần nhất (summary)")
+        .WithSummary("Most recent pipeline run history (summary)")
         .WithTags("History");
 
         app.MapGet("/runs/{id:guid}", async (Guid id, IPipelineRunRepository repo, CancellationToken ct) =>
@@ -84,18 +84,18 @@ public static class PipelineEndpoints
                 : Microsoft.AspNetCore.Http.Results.Ok(run);
         })
         .WithName("RunById")
-        .WithSummary("Chi tiết 1 pipeline run (full artifact + metrics)")
+        .WithSummary("Details of a single pipeline run (full artifact + metrics)")
         .WithTags("History");
 
         return app;
     }
 }
 
-/// <summary>Body cho <c>POST /code</c>.</summary>
+/// <summary>Body for <c>POST /code</c>.</summary>
 public sealed record CodeRequest(RequirementSpec Spec, QaReport? PreviousFeedback = null);
 
-/// <summary>Body cho <c>POST /test</c>.</summary>
+/// <summary>Body for <c>POST /test</c>.</summary>
 public sealed record TestRequest(RequirementSpec Spec, CodeArtifact Code, QaReport? PreviousFeedback = null);
 
-/// <summary>Body cho <c>POST /qa</c>.</summary>
+/// <summary>Body for <c>POST /qa</c>.</summary>
 public sealed record QaRequest(RequirementSpec Spec, CodeArtifact Code, TestArtifact Tests);

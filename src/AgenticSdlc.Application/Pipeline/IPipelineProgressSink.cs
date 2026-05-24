@@ -1,6 +1,6 @@
 // AgenticSdlc.Application/Pipeline/IPipelineProgressSink.cs
-// Phase 7 — Cổng phát tiến trình. Orchestrator depend on abstraction này; impl
-// thật do lớp trình diễn (Blazor) cung cấp, hoặc NullPipelineProgressSink (no-op).
+// Phase 7 — Progress-emission port. The orchestrator depends on this abstraction; the
+// real impl is provided by the presentation layer (Blazor), or NullPipelineProgressSink (no-op).
 
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,14 +9,14 @@ using AgenticSdlc.Domain.Pipeline;
 namespace AgenticSdlc.Application.Pipeline;
 
 /// <summary>
-/// Nơi nhận <see cref="PipelineProgressEvent"/> mà <c>PipelineOrchestrator</c> phát ra.
-/// Tách biệt orchestration khỏi transport hiển thị: API/test dùng bản no-op,
-/// Blazor dùng bản đẩy sự kiện xuống circuit để render realtime.
+/// The receiver for <see cref="PipelineProgressEvent"/> emitted by the <c>PipelineOrchestrator</c>.
+/// Decouples orchestration from the display transport: the API/tests use a no-op version,
+/// Blazor uses a version that pushes events down to the circuit for real-time rendering.
 /// </summary>
 public interface IPipelineProgressSink
 {
-    /// <summary>Báo một mốc tiến trình. Impl phải không ném lỗi làm gãy pipeline.</summary>
-    /// <param name="progress">Sự kiện tiến trình.</param>
-    /// <param name="cancellationToken">Token huỷ.</param>
+    /// <summary>Reports a progress milestone. The impl must not throw and break the pipeline.</summary>
+    /// <param name="progress">The progress event.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     ValueTask ReportAsync(PipelineProgressEvent progress, CancellationToken cancellationToken = default);
 }

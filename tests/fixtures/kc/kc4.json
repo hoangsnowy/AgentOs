@@ -2,7 +2,7 @@
   {
     "id": "KC4-001",
     "input": {
-      "description": "Hệ thống quản lý sản phẩm: admin tạo/xem/sửa/xoá; người dùng tra cứu theo danh mục.",
+      "description": "Product management system: admin creates/views/edits/deletes; users browse by category.",
       "nMax": 3
     },
     "expected": {
@@ -14,7 +14,7 @@
   {
     "id": "KC4-002",
     "input": {
-      "description": "Hệ thống đặt phòng khách sạn với thanh toán + phê duyệt quản lý.",
+      "description": "Hotel booking system with payment + management approval.",
       "nMax": 3
     },
     "expected": {

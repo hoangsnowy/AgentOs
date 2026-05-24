@@ -1,5 +1,5 @@
 // AgenticSdlc.Application/Agents/ITestingAgent.cs
-// Phase 3 — Contract cho Testing Agent.
+// Phase 3 — Contract for the Testing Agent.
 
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,11 +11,11 @@ using AgenticSdlc.Domain.Testing;
 namespace AgenticSdlc.Application.Agents;
 
 /// <summary>
-/// Sinh xUnit test (happy / edge / error) từ <see cref="RequirementSpec"/> + <see cref="CodeArtifact"/>.
+/// Generates xUnit tests (happy / edge / error) from a <see cref="RequirementSpec"/> + <see cref="CodeArtifact"/>.
 /// </summary>
 public interface ITestingAgent
 {
-    /// <summary>Chạy agent.</summary>
+    /// <summary>Runs the agent.</summary>
     Task<TestArtifact> RunAsync(
         RequirementSpec spec,
         CodeArtifact code,

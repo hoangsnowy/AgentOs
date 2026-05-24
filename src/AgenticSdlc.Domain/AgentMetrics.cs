@@ -1,17 +1,17 @@
 // AgenticSdlc.Domain/AgentMetrics.cs
-// Phase 3 — Common metrics đính kèm mọi kết quả tác tử (cost, token, latency).
+// Phase 3 — Common metrics attached to every agent result (cost, token, latency).
 
 namespace AgenticSdlc.Domain;
 
 /// <summary>
-/// Metric chung mọi agent result embed — phục vụ benchmark KC1-KC5 và cost-report.
+/// Common metric embedded in every agent result — used for KC1-KC5 benchmarks and cost reporting.
 /// </summary>
-/// <param name="Provider">Tên provider đã gọi (Claude / AzureOpenAI / Mock).</param>
-/// <param name="Model">Model alias đã dùng.</param>
-/// <param name="InputTokens">Token input đã tiêu thụ.</param>
-/// <param name="OutputTokens">Token output đã sinh.</param>
-/// <param name="CostUsd">Cost ước tính USD (CostCalculator).</param>
-/// <param name="Latency">Thời gian end-to-end của agent (gồm cả LLM call + parse + retry).</param>
+/// <param name="Provider">Name of the provider that was called (Claude / AzureOpenAI / Mock).</param>
+/// <param name="Model">Model alias that was used.</param>
+/// <param name="InputTokens">Input tokens consumed.</param>
+/// <param name="OutputTokens">Output tokens generated.</param>
+/// <param name="CostUsd">Estimated cost in USD (CostCalculator).</param>
+/// <param name="Latency">End-to-end agent time (including LLM call + parse + retry).</param>
 public sealed record AgentMetrics(
     string Provider,
     string Model,
@@ -20,11 +20,11 @@ public sealed record AgentMetrics(
     decimal CostUsd,
     System.TimeSpan Latency)
 {
-    /// <summary>Empty metrics — dùng cho trường hợp test hoặc khởi tạo placeholder.</summary>
+    /// <summary>Empty metrics — used for test scenarios or placeholder initialization.</summary>
     public static AgentMetrics Empty { get; } =
         new(Provider: "None", Model: "None", InputTokens: 0, OutputTokens: 0, CostUsd: 0m, Latency: System.TimeSpan.Zero);
 
-    /// <summary>Tổng 2 metric (cộng dồn cho pipeline result aggregate).</summary>
+    /// <summary>Sum of two metrics (accumulated for the pipeline result aggregate).</summary>
     public AgentMetrics Add(AgentMetrics other)
     {
         System.ArgumentNullException.ThrowIfNull(other);

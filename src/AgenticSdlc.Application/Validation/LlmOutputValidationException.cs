@@ -1,5 +1,5 @@
 // AgenticSdlc.Application/Validation/LlmOutputValidationException.cs
-// Sprint 3 — exception khi LLM output JSON không khớp JSON Schema.
+// Sprint 3 — exception thrown when LLM output JSON does not match the JSON Schema.
 
 using System;
 using System.Collections.Generic;
@@ -7,16 +7,16 @@ using AgenticSdlc.Domain.Llm;
 
 namespace AgenticSdlc.Application.Validation;
 
-/// <summary>Output JSON của LLM không khớp JSON Schema.</summary>
+/// <summary>The LLM's output JSON does not match the JSON Schema.</summary>
 public sealed class LlmOutputValidationException : LlmException
 {
-    /// <summary>Danh sách lỗi: mỗi item = "&lt;property path&gt;: &lt;reason&gt;".</summary>
+    /// <summary>List of errors: each item = "&lt;property path&gt;: &lt;reason&gt;".</summary>
     public IReadOnlyList<string> Errors { get; }
 
-    /// <summary>Schema URI bị vi phạm.</summary>
+    /// <summary>The violated schema URI.</summary>
     public string SchemaUri { get; }
 
-    /// <summary>Khởi tạo.</summary>
+    /// <summary>Initializes the exception.</summary>
     public LlmOutputValidationException(string agentName, string schemaUri, IReadOnlyList<string> errors)
         : base(BuildMessage(agentName, schemaUri, errors), agentName)
     {

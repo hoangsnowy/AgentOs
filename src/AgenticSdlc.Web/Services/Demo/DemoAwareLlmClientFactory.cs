@@ -1,8 +1,8 @@
 // AgenticSdlc.Web/Services/Demo/DemoAwareLlmClientFactory.cs
-// Phase 7 — Factory bọc ngoài LlmClientFactory thật. Nếu circuit đang ở chế độ Demo
-// (DemoRunContext.UseDemo) thì trả DemoLlmClient; ngược lại uỷ quyền cho factory gốc
-// để dùng Claude / Azure OpenAI theo cấu hình từng agent. Giữ nguyên nguyên tắc
-// Platform-Agnostic của luận văn (đổi nguồn không sửa agent).
+// Phase 7 — Factory that wraps the real LlmClientFactory. If the circuit is in Demo mode
+// (DemoRunContext.UseDemo) it returns DemoLlmClient; otherwise it delegates to the original factory
+// to use Claude / Azure OpenAI per each agent's configuration. Preserves the thesis's
+// Platform-Agnostic principle (swap the source without changing agents).
 
 using System;
 using AgenticSdlc.Domain.Llm;
@@ -10,14 +10,14 @@ using AgenticSdlc.Infrastructure.Llm;
 
 namespace AgenticSdlc.Web.Services.Demo;
 
-/// <summary>Factory nhận biết chế độ Demo, override <see cref="ILlmClientFactory"/> mặc định.</summary>
+/// <summary>Demo-aware factory that overrides the default <see cref="ILlmClientFactory"/>.</summary>
 public sealed class DemoAwareLlmClientFactory : ILlmClientFactory
 {
     private readonly DemoRunContext _context;
     private readonly DemoLlmClient _demo;
     private readonly LlmClientFactory _inner;
 
-    /// <summary>Khởi tạo với ngữ cảnh circuit, client demo, và factory thật để uỷ quyền.</summary>
+    /// <summary>Initialize with the circuit context, the demo client, and the real factory to delegate to.</summary>
     public DemoAwareLlmClientFactory(DemoRunContext context, DemoLlmClient demo, LlmClientFactory inner)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));

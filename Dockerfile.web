@@ -1,13 +1,13 @@
-# Multi-stage Dockerfile cho AgenticSdlc.Web (Blazor Server — Agent Studio UI).
+# Multi-stage Dockerfile for AgenticSdlc.Web (Blazor Server — Agent Studio UI).
 # Build: docker build -f Dockerfile.web -t agenticsdlc-web:dev .
-# Engine (5 agent + gateway) chạy in-process qua reference Infrastructure.
+# The engine (5 agents + gateway) runs in-process via the Infrastructure reference.
 
 # ---- Stage 1: build ----
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy csproj + restore (cache layer) — chỉ graph của Web: Web → Infrastructure → Application → Domain.
-COPY global.json Directory.Build.props ./
+# Copy csproj + restore (cache layer) — only the Web graph: Web → Infrastructure → Application → Domain.
+COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY AgenticSdlc.sln ./
 COPY src/AgenticSdlc.Domain/AgenticSdlc.Domain.csproj            src/AgenticSdlc.Domain/
 COPY src/AgenticSdlc.Application/AgenticSdlc.Application.csproj  src/AgenticSdlc.Application/
@@ -20,14 +20,13 @@ COPY . .
 RUN dotnet publish src/AgenticSdlc.Web/AgenticSdlc.Web.csproj \
     -c Release \
     -o /app/publish \
-    --no-restore \
     /p:UseAppHost=false
 
 # ---- Stage 2: runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Base image aspnet:10.0 đã có sẵn non-root user 'app' (uid 1654).
+# The aspnet:10.0 base image already includes a non-root user 'app' (uid 1654).
 COPY --from=build --chown=app:app /app/publish .
 USER app
 

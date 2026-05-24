@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Metrics/DependencyInjection.cs
-// Sprint 4 — DI cho IMetricsCollector.
+// Sprint 4 — DI for IMetricsCollector.
 
 using System;
 using AgenticSdlc.Application.Metrics;
@@ -7,10 +7,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AgenticSdlc.Infrastructure.Metrics;
 
-/// <summary>DI extension cho metrics layer.</summary>
+/// <summary>DI extension for the metrics layer.</summary>
 public static class MetricsServiceCollectionExtensions
 {
-    /// <summary>Đăng ký <see cref="InMemoryMetricsCollector"/> singleton.</summary>
+    /// <summary>Registers an <see cref="InMemoryMetricsCollector"/> singleton.</summary>
     public static IServiceCollection AddInMemoryMetrics(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -19,7 +19,7 @@ public static class MetricsServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>Đăng ký <see cref="CsvMetricsCollector"/> singleton với path cấu hình.</summary>
+    /// <summary>Registers a <see cref="CsvMetricsCollector"/> singleton with the configured path.</summary>
     public static IServiceCollection AddCsvMetrics(this IServiceCollection services, string filePath)
     {
         ArgumentNullException.ThrowIfNull(services);

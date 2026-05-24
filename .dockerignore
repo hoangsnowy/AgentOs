@@ -1,4 +1,4 @@
-# .dockerignore — giảm context build, tránh leak local artifacts.
+# .dockerignore — shrink the build context, avoid leaking local artifacts.
 
 **/bin/
 **/obj/
@@ -16,7 +16,7 @@
 **/Thumbs.db
 **/.DS_Store
 
-# Secret files — KHÔNG bao giờ vào image
+# Secret files — must NEVER go into the image
 **/appsettings.Development.json
 **/appsettings.Local.json
 **/secrets.json
@@ -26,9 +26,9 @@
 **/*.key
 **/*.pem
 
-# Doc / IaC không cần trong image runtime
+# Doc / IaC not needed in the runtime image
 docs/
-# nhưng docs/schemas/*.json embed vào Infrastructure.dll lúc build → phải giữ
+# but docs/schemas/*.json are embedded into Infrastructure.dll at build time → must keep
 !docs/schemas/
 !docs/schemas/**
 infra/

@@ -1,15 +1,15 @@
 // AgenticSdlc.Application/Metrics/RunMetricFactory.cs
-// Sprint 4 — build RunMetric từ LlmResponse + ambient MetricsContext.
+// Sprint 4 — builds RunMetric from LlmResponse + ambient MetricsContext.
 
 using System;
 using AgenticSdlc.Domain.Llm;
 
 namespace AgenticSdlc.Application.Metrics;
 
-/// <summary>Helper build <see cref="RunMetric"/> từ <see cref="LlmResponse"/> + ambient <see cref="MetricsContext"/>.</summary>
+/// <summary>Helper that builds a <see cref="RunMetric"/> from an <see cref="LlmResponse"/> + ambient <see cref="MetricsContext"/>.</summary>
 public static class RunMetricFactory
 {
-    /// <summary>Build record (dùng <see cref="MetricsContext.Current"/> nếu set, fallback "ad-hoc").</summary>
+    /// <summary>Builds the record (uses <see cref="MetricsContext.Current"/> if set, falling back to "ad-hoc").</summary>
     public static RunMetric From(LlmResponse response, string agentName, bool success, string? errorMessage)
     {
         ArgumentNullException.ThrowIfNull(response);

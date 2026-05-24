@@ -1,5 +1,5 @@
 // AgenticSdlc.Application/Prompts/QaPrompt.cs
-// Sprint 3 — tách prompt khỏi QaAgent. Version v1.
+// Sprint 3 — extracted the prompt from QaAgent. Version v1.
 
 using System.Linq;
 using System.Text;
@@ -10,7 +10,7 @@ using AgenticSdlc.Domain.Testing;
 
 namespace AgenticSdlc.Application.Prompts;
 
-/// <summary>System + User template cho QA Agent (v1).</summary>
+/// <summary>System + User template for the QA Agent (v1).</summary>
 public static class QaPrompt
 {
     /// <summary>Prompt version.</summary>
@@ -18,10 +18,10 @@ public static class QaPrompt
 
     /// <summary>System prompt.</summary>
     public const string System = """
-        Bạn là QA Agent trong hệ thống Agentic SDLC.
-        Đánh giá nhất quán giữa 3 artefact: RequirementSpec, CodeArtifact, TestArtifact.
+        You are the QA Agent in the Agentic SDLC system.
+        Evaluate consistency across the 3 artifacts: RequirementSpec, CodeArtifact, TestArtifact.
 
-        Trả về CHỈ JSON theo schema:
+        Return ONLY JSON following the schema:
         {
           "score": 0.0-1.0,
           "isConsistent": true|false,
@@ -30,23 +30,23 @@ public static class QaPrompt
             {
               "severity": "Critical|Major|Minor",
               "category": "RequirementCoverage|CodeQuality|TestCoverage|Consistency",
-              "description": "Tiếng Việt, ngắn gọn",
-              "location": "file path hoặc requirement id (tuỳ chọn)"
+              "description": "English, concise",
+              "location": "file path or requirement id (optional)"
             }
           ],
-          "recommendations": ["Khuyến nghị cho vòng regenerate kế tiếp"]
+          "recommendations": ["Recommendation for the next regeneration iteration"]
         }
 
-        Quy tắc chấm điểm:
+        Scoring rules:
         - score = 1.0 - (#Critical × 0.3 + #Major × 0.1 + #Minor × 0.03), clamp [0, 1].
         - isConsistent = (score ≥ 0.8) AND (#Critical == 0).
         - iterationNeeded = NOT isConsistent.
-        - Mỗi entity trong spec PHẢI có code class tương ứng (kiểm tra theo tên).
-        - Mỗi endpoint trong spec PHẢI có code map ROUTE tương ứng.
-        - Mỗi acceptanceCriteria PHẢI được phản ánh trong ≥ 1 test.
+        - Every entity in the spec MUST have a corresponding code class (check by name).
+        - Every endpoint in the spec MUST have a corresponding code ROUTE mapping.
+        - Every acceptanceCriteria MUST be reflected in ≥ 1 test.
         """;
 
-    /// <summary>Render user prompt từ spec + code + tests (file excerpt rút gọn 300 chars).</summary>
+    /// <summary>Renders the user prompt from spec + code + tests (file excerpt trimmed to 300 chars).</summary>
     public static string RenderUser(RequirementSpec spec, CodeArtifact code, TestArtifact tests, int excerptChars = 300)
     {
         global::System.ArgumentNullException.ThrowIfNull(spec);
@@ -72,7 +72,7 @@ public static class QaPrompt
         }, PromptJson.Default));
 
         sb.AppendLine();
-        sb.AppendLine("Sinh QaReport JSON.");
+        sb.AppendLine("Generate the QaReport JSON.");
         return sb.ToString();
     }
 

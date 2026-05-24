@@ -1,4 +1,4 @@
-// EF Core impl: lưu PipelineResult (jsonb) + RunMetric rows, đọc lại + list summary.
+// EF Core impl: saves PipelineResult (jsonb) + RunMetric rows, reads back + lists summaries.
 using System.Text.Json;
 using AgenticSdlc.Application.Metrics;
 using AgenticSdlc.Application.Persistence;

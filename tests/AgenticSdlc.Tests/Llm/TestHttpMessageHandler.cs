@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Llm/TestHttpMessageHandler.cs
-// Sprint 1 — Helper queue-based HttpMessageHandler dùng test ClaudeClient/AzureOpenAiClient.
+// Sprint 1 — Queue-based HttpMessageHandler helper used to test ClaudeClient/AzureOpenAiClient.
 
 using System;
 using System.Collections.Concurrent;
@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 namespace AgenticSdlc.Tests.Llm;
 
 /// <summary>
-/// Handler trả response theo thứ tự queue. Mỗi lần SendAsync được gọi sẽ dequeue 1 entry.
-/// Hỗ trợ exception (throw) hoặc HttpResponseMessage (return).
+/// A handler that returns responses in queue order. Each SendAsync call dequeues one entry.
+/// Supports an exception (throw) or an HttpResponseMessage (return).
 /// </summary>
 internal sealed class TestHttpMessageHandler : HttpMessageHandler
 {

@@ -6,7 +6,7 @@ using AgenticSdlc.Domain.Llm;
 
 namespace AgenticSdlc.Infrastructure.Agents;
 
-/// <summary>Helper map LlmResponse sang AgentMetrics (1 dòng, tránh trùng lặp ở mọi agent).</summary>
+/// <summary>Helper that maps LlmResponse to AgentMetrics (one line, avoids duplication across every agent).</summary>
 internal static class MetricsMapper
 {
     public static AgentMetrics From(LlmResponse response)

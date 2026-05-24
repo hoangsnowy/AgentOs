@@ -1,4 +1,4 @@
-// EF Core impl cho Agent Studio orchestration CRUD.
+// EF Core impl for Agent Studio orchestration CRUD.
 using AgenticSdlc.Application.Persistence;
 using AgenticSdlc.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;

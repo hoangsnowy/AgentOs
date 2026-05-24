@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+# azd config — deploys the Aspire app model (API + Web + managed Postgres) to Azure Container Apps.
+# Provision + deploy:  azd up
+# CI setup:            azd pipeline config   (wires OIDC + a GitHub Actions workflow)
+name: agentic-sdlc-net
+
+services:
+  app:
+    language: dotnet
+    project: ./src/AgenticSdlc.AppHost/AgenticSdlc.AppHost.csproj
+    host: containerapp

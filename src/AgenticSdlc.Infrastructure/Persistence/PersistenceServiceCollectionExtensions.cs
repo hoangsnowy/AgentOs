@@ -1,5 +1,5 @@
-// DI cho persistence layer. Có connection string → EF Core + Postgres repos.
-// Không có → null-object repos (app chạy stateless, hợp CI/local không DB).
+// DI for the persistence layer. With a connection string → EF Core + Postgres repos.
+// Without one → null-object repos (app runs stateless, suitable for CI/local without a DB).
 using AgenticSdlc.Application.Persistence;
 using AgenticSdlc.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -8,12 +8,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AgenticSdlc.Infrastructure.Persistence;
 
-/// <summary>DI extension cho persistence (EF Core + Postgres).</summary>
+/// <summary>DI extension for persistence (EF Core + Postgres).</summary>
 public static class PersistenceServiceCollectionExtensions
 {
     /// <summary>
-    /// Đăng ký DbContext + repository. Nếu <c>ConnectionStrings:DefaultConnection</c> trống
-    /// → dùng no-op repos để app vẫn boot được không cần DB.
+    /// Registers the DbContext + repositories. If <c>ConnectionStrings:DefaultConnection</c> is empty
+    /// → use no-op repos so the app can still boot without a DB.
     /// </summary>
     public static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
@@ -35,8 +35,8 @@ public static class PersistenceServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Apply EF migration lúc startup (no-op nếu persistence chưa cấu hình DB).
-    /// Gọi sau khi build app: <c>await app.Services.InitializePersistenceAsync();</c>
+    /// Apply EF migration at startup (no-op if persistence has no DB configured).
+    /// Call after building the app: <c>await app.Services.InitializePersistenceAsync();</c>
     /// </summary>
     public static async Task InitializePersistenceAsync(this IServiceProvider services, CancellationToken ct = default)
     {

@@ -1,136 +1,136 @@
 // AgenticSdlc.Web/Orchestrations/OrchestrationModels.cs
-// Phase 7b — Mô hình đồ thị orchestration cho editor kéo-thả (UI-layer, không thuộc Domain lõi).
-// Một orchestration = tập node (step) + edge (route) trên canvas. Editor cho phép dựng đồ thị
-// bất kỳ; "Run" sẽ thông dịch đồ thị (xem OrchestrationRunner).
+// Phase 7b — Orchestration graph model for the drag-and-drop editor (UI layer, not part of the core Domain).
+// An orchestration = a set of nodes (steps) + edges (routes) on the canvas. The editor allows building any
+// graph; "Run" interprets the graph (see OrchestrationRunner).
 
 using System.Collections.Generic;
 
 namespace AgenticSdlc.Web.Orchestrations;
 
-/// <summary>Loại step trong orchestration (khớp palette "Add step" kiểu Synapse).</summary>
+/// <summary>Step type in an orchestration (matches the Synapse-style "Add step" palette).</summary>
 public enum StepType
 {
-    /// <summary>Gọi LLM thô với prompt tự do.</summary>
+    /// <summary>Raw LLM call with a free-form prompt.</summary>
     Llm,
 
-    /// <summary>Tác tử chuyên biệt (Requirement / Coding / Testing / QA / Orchestrator).</summary>
+    /// <summary>Specialized agent (Requirement / Coding / Testing / QA / Orchestrator).</summary>
     Agent,
 
-    /// <summary>Gọi tool/hàm ngoài.</summary>
+    /// <summary>Call an external tool/function.</summary>
     Tool,
 
-    /// <summary>Đánh giá output rồi rẽ nhánh theo route (vd: pass / fail).</summary>
+    /// <summary>Evaluate the output then branch by route (e.g. pass / fail).</summary>
     Evaluator,
 
-    /// <summary>Chạy nhiều nhánh song song.</summary>
+    /// <summary>Run multiple branches in parallel.</summary>
     Parallel,
 
-    /// <summary>Gộp kết quả nhiều nhánh.</summary>
+    /// <summary>Merge the results of multiple branches.</summary>
     Merge,
 
-    /// <summary>Lặp một nhánh tới điều kiện dừng.</summary>
+    /// <summary>Loop a branch until a stop condition.</summary>
     Loop,
 
-    /// <summary>Chốt chặn người (human-in-the-loop).</summary>
+    /// <summary>Human checkpoint (human-in-the-loop).</summary>
     Human,
 
-    /// <summary>Biến đổi dữ liệu (map/format).</summary>
+    /// <summary>Transform data (map/format).</summary>
     Transform,
 
-    /// <summary>Trích JSON từ text.</summary>
+    /// <summary>Extract JSON from text.</summary>
     ExtractJson,
 
-    /// <summary>Rẽ nhánh nhị phân theo điều kiện.</summary>
+    /// <summary>Binary branch by condition.</summary>
     IfElse,
 
-    /// <summary>Rẽ nhiều nhánh theo giá trị.</summary>
+    /// <summary>Branch into multiple paths by value.</summary>
     Switch,
 
-    /// <summary>In/log giá trị.</summary>
+    /// <summary>Print/log a value.</summary>
     Print,
 
-    /// <summary>Kết thúc orchestration.</summary>
+    /// <summary>End the orchestration.</summary>
     End,
 }
 
-/// <summary>Nhóm hiển thị (quyết định màu card). Suy ra từ <see cref="StepType"/>.</summary>
+/// <summary>Display group (decides the card color). Derived from <see cref="StepType"/>.</summary>
 public enum StepCategory
 {
-    /// <summary>Tác tử — teal.</summary>
+    /// <summary>Agent — teal.</summary>
     Agent,
 
-    /// <summary>Đánh giá/rẽ nhánh — tím.</summary>
+    /// <summary>Evaluate/branch — purple.</summary>
     Evaluator,
 
-    /// <summary>Người — đỏ/maroon.</summary>
+    /// <summary>Human — red/maroon.</summary>
     Human,
 
-    /// <summary>LLM thô — xanh dương.</summary>
+    /// <summary>Raw LLM — blue.</summary>
     Llm,
 
-    /// <summary>Logic luồng (Loop/Merge/Parallel/Transform/ExtractJson) — xám.</summary>
+    /// <summary>Flow logic (Loop/Merge/Parallel/Transform/ExtractJson) — gray.</summary>
     Logic,
 
-    /// <summary>Kết thúc — xám đậm.</summary>
+    /// <summary>End — dark gray.</summary>
     Terminal,
 }
 
-/// <summary>Trạng thái runtime của một node khi chạy (để tô màu realtime).</summary>
+/// <summary>Runtime state of a node while running (for realtime coloring).</summary>
 public enum NodeRunState
 {
-    /// <summary>Chưa chạy.</summary>
+    /// <summary>Not yet run.</summary>
     Idle,
 
-    /// <summary>Đang chạy.</summary>
+    /// <summary>Running.</summary>
     Running,
 
-    /// <summary>Xong.</summary>
+    /// <summary>Done.</summary>
     Done,
 
-    /// <summary>Lỗi.</summary>
+    /// <summary>Error.</summary>
     Failed,
 }
 
-/// <summary>Một step trên canvas. Vị trí (X,Y) là toạ độ canvas.</summary>
+/// <summary>A step on the canvas. The (X,Y) position is in canvas coordinates.</summary>
 public sealed class GraphNode
 {
-    /// <summary>Id duy nhất trong đồ thị.</summary>
+    /// <summary>Unique id within the graph.</summary>
     public required string Id { get; set; }
 
-    /// <summary>Loại step.</summary>
+    /// <summary>Step type.</summary>
     public StepType Type { get; set; }
 
-    /// <summary>Tên hiển thị trên thanh tiêu đề card.</summary>
+    /// <summary>Display name shown on the card's title bar.</summary>
     public string Title { get; set; } = "Step";
 
-    /// <summary>Toạ độ X trên canvas.</summary>
+    /// <summary>X coordinate on the canvas.</summary>
     public double X { get; set; }
 
-    /// <summary>Toạ độ Y trên canvas.</summary>
+    /// <summary>Y coordinate on the canvas.</summary>
     public double Y { get; set; }
 
-    /// <summary>Vai trò tác tử (chỉ với <see cref="StepType.Agent"/>): Requirement/Coding/Testing/Qa/Orchestrator.</summary>
+    /// <summary>Agent role (only for <see cref="StepType.Agent"/>): Requirement/Coding/Testing/Qa/Orchestrator.</summary>
     public string? AgentRole { get; set; }
 
-    /// <summary>Mô tả / prompt ngắn hiển thị trong thân card.</summary>
+    /// <summary>Short description / prompt shown in the card body.</summary>
     public string Description { get; set; } = string.Empty;
 
-    /// <summary>Khoá state đầu vào (hiển thị "in:").</summary>
+    /// <summary>Input state key (shown as "in:").</summary>
     public string Input { get; set; } = string.Empty;
 
-    /// <summary>Khoá state đầu ra (hiển thị "out:").</summary>
+    /// <summary>Output state key (shown as "out:").</summary>
     public string Output { get; set; } = string.Empty;
 
-    /// <summary>Số lần lặp tối đa (hiển thị "max Nx"). 0 ⇒ ẩn.</summary>
+    /// <summary>Max iterations (shown as "max Nx"). 0 ⇒ hidden.</summary>
     public int MaxIterations { get; set; }
 
-    /// <summary>Các route rẽ nhánh (Evaluator/IfElse/Switch). Hiển thị "N routes: a, b".</summary>
+    /// <summary>Branch routes (Evaluator/IfElse/Switch). Shown as "N routes: a, b".</summary>
     public List<string> Routes { get; set; } = [];
 
-    /// <summary>Node bắt đầu đồ thị (badge START xanh).</summary>
+    /// <summary>The graph's start node (green START badge).</summary>
     public bool IsStart { get; set; }
 
-    /// <summary>Nhóm hiển thị suy ra từ <see cref="Type"/> (+ vai trò).</summary>
+    /// <summary>Display group derived from <see cref="Type"/> (+ role).</summary>
     public StepCategory Category => Type switch
     {
         StepType.Agent => StepCategory.Agent,
@@ -142,43 +142,43 @@ public sealed class GraphNode
     };
 }
 
-/// <summary>Một edge nối 2 node, có nhãn route tuỳ chọn.</summary>
+/// <summary>An edge connecting 2 nodes, with an optional route label.</summary>
 public sealed class GraphEdge
 {
-    /// <summary>Id duy nhất.</summary>
+    /// <summary>Unique id.</summary>
     public required string Id { get; set; }
 
-    /// <summary>Node nguồn.</summary>
+    /// <summary>Source node.</summary>
     public required string SourceId { get; set; }
 
-    /// <summary>Node đích.</summary>
+    /// <summary>Target node.</summary>
     public required string TargetId { get; set; }
 
-    /// <summary>Nhãn route (vd "continue", "pass", "fail", "ask_user"). Rỗng ⇒ không hiện.</summary>
+    /// <summary>Route label (e.g. "continue", "pass", "fail", "ask_user"). Empty ⇒ hidden.</summary>
     public string Label { get; set; } = string.Empty;
 }
 
-/// <summary>Một orchestration: metadata + đồ thị + state schema + guardrails.</summary>
+/// <summary>An orchestration: metadata + graph + state schema + guardrails.</summary>
 public sealed class OrchestrationGraph
 {
-    /// <summary>Id duy nhất.</summary>
+    /// <summary>Unique id.</summary>
     public required string Id { get; set; }
 
-    /// <summary>Tên hiển thị (selector + tiêu đề).</summary>
+    /// <summary>Display name (selector + title).</summary>
     public string Name { get; set; } = "Untitled";
 
-    /// <summary>Mô tả ngắn.</summary>
+    /// <summary>Short description.</summary>
     public string Description { get; set; } = string.Empty;
 
-    /// <summary>Các node.</summary>
+    /// <summary>The nodes.</summary>
     public List<GraphNode> Nodes { get; set; } = [];
 
-    /// <summary>Các edge.</summary>
+    /// <summary>The edges.</summary>
     public List<GraphEdge> Edges { get; set; } = [];
 
-    /// <summary>State schema JSON (tab "State Schema").</summary>
+    /// <summary>State schema JSON ("State Schema" tab).</summary>
     public string StateSchemaJson { get; set; } = "{\n  \"input\": \"string\"\n}";
 
-    /// <summary>Guardrails (tab "Guardrails").</summary>
+    /// <summary>Guardrails ("Guardrails" tab).</summary>
     public List<string> Guardrails { get; set; } = [];
 }

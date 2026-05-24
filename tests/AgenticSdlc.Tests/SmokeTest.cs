@@ -1,5 +1,5 @@
-// Smoke test xác nhận test infrastructure (xUnit v3 + Shouldly + NSubstitute) build được.
-// Sẽ được thay bằng test thật ở Phase 5.
+// Smoke test confirming the test infrastructure (xUnit v3 + Shouldly + NSubstitute) builds.
+// To be replaced by real tests in Phase 5.
 
 using Shouldly;
 using Xunit;

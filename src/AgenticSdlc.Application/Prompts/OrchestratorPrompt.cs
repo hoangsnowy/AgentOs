@@ -1,29 +1,29 @@
 // AgenticSdlc.Application/Prompts/OrchestratorPrompt.cs
-// Sprint 3 — Orchestrator KHÔNG gọi LLM trực tiếp (deterministic state machine).
-// File này lưu policy text dùng cho documentation + nếu sau này muốn cho 1 LLM "meta-orchestrator" hoạt động.
+// Sprint 3 — The orchestrator does NOT call the LLM directly (deterministic state machine).
+// This file holds policy text used for documentation + in case we later want an LLM "meta-orchestrator".
 
 namespace AgenticSdlc.Application.Prompts;
 
-/// <summary>Meta-policy của orchestrator (không gọi LLM hiện tại).</summary>
+/// <summary>Orchestrator meta-policy (does not call the LLM currently).</summary>
 public static class OrchestratorPrompt
 {
     /// <summary>Prompt version.</summary>
     public const string Version = "v1";
 
-    /// <summary>Policy mô tả luồng KC4 (Mục 2.4 luận văn).</summary>
+    /// <summary>Policy describing the KC4 flow (thesis Section 2.4).</summary>
     public const string Policy = """
-        Orchestrator policy (deterministic, không gọi LLM):
+        Orchestrator policy (deterministic, does not call the LLM):
 
         1. RequirementAgent(story) → spec.
-        2. Vòng lặp i = 1..NMax:
+        2. Loop i = 1..NMax:
            a. CodingAgent(spec, qaFeedback[i-1]?) → code.
            b. TestingAgent(spec, code, qaFeedback[i-1]?) → tests.
            c. QaAgent(spec, code, tests) → qaReport.
-           d. Nếu qaReport.isConsistent → trả PipelineResult(Done, iterations=i).
-           e. Nếu i = NMax → trả PipelineResult(MaxIterationReached).
-        3. Nếu bất kỳ agent ném LlmException → trả PipelineResult(Failed) với agent + lỗi.
+           d. If qaReport.isConsistent → return PipelineResult(Done, iterations=i).
+           e. If i = NMax → return PipelineResult(MaxIterationReached).
+        3. If any agent throws LlmException → return PipelineResult(Failed) with the agent + error.
 
-        Bất kỳ exception khác phải propagate (không nuốt).
-        Metric aggregate: tổng InputTokens, OutputTokens, CostUsd, Latency của tất cả agent call.
+        Any other exception must propagate (do not swallow).
+        Metric aggregate: sum of InputTokens, OutputTokens, CostUsd, Latency across all agent calls.
         """;
 }

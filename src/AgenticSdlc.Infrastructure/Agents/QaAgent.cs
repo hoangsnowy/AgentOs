@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Agents/QaAgent.cs
-// Phase 4 — Impl IQaAgent. Đánh giá nhất quán requirement-code-test.
+// Phase 4 — IQaAgent impl. Assesses requirement-code-test consistency.
 
 using System.Collections.Generic;
 using System.Threading;
@@ -19,7 +19,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgenticSdlc.Infrastructure.Agents;
 
-/// <summary>QA — đánh giá nhất quán requirement-code-test. Drive QA loop của orchestrator.</summary>
+/// <summary>QA — assesses requirement-code-test consistency. Drives the orchestrator's QA loop.</summary>
 public sealed class QaAgent : IQaAgent
 {
     private const string AgentName = nameof(QaAgent);
@@ -29,7 +29,7 @@ public sealed class QaAgent : IQaAgent
     private readonly AgentOptions _options;
     private readonly ILogger<QaAgent> _logger;
 
-    /// <summary>Khởi tạo.</summary>
+    /// <summary>Initializes.</summary>
     public QaAgent(
         ILlmClientFactory factory,
         IOptions<AgentsOptions> options,

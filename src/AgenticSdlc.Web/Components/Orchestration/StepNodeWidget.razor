@@ -1,4 +1,4 @@
-@* Phase 7b — Widget render 1 node kiểu Synapse: card màu theo loại, in/out, routes, max Nx, 4 port. *@
+@* Phase 7b — Widget that renders a single Synapse-style node: card colored by type, in/out, routes, max Nx, 4 ports. *@
 @using AgenticSdlc.Web.Orchestrations
 @using Blazor.Diagrams.Core.Models
 @using Blazor.Diagrams.Components.Renderers
@@ -11,7 +11,7 @@
         {
             <span class="sn-start">START</span>
         }
-        <button class="sn-edit" @onclick="@(() => Node.RequestEdit?.Invoke())" @onclick:stopPropagation="true" title="Sửa">✎</button>
+        <button class="sn-edit" @onclick="@(() => Node.RequestEdit?.Invoke())" @onclick:stopPropagation="true" title="Edit">✎</button>
     </div>
 
     <div class="sn-body">
@@ -49,7 +49,7 @@
 </div>
 
 @code {
-    /// <summary>Node được render (Z.Blazor.Diagrams inject qua RegisterComponent).</summary>
+    /// <summary>The node being rendered (Z.Blazor.Diagrams injects it via RegisterComponent).</summary>
     [Parameter] public StepNodeModel Node { get; set; } = null!;
 
     private GraphNode Data => Node.Data;

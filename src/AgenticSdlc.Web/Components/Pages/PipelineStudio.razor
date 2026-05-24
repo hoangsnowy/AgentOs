@@ -10,59 +10,59 @@
 
 <div class="studio-grid">
 
-    <!-- ============ CỘT TRÁI: ĐIỀU KHIỂN ============ -->
+    <!-- ============ LEFT COLUMN: CONTROLS ============ -->
     <div>
         <div class="card">
-            <h2>Đầu vào</h2>
+            <h2>Input</h2>
 
             <label class="field">
                 <span>User story</span>
-                <textarea @bind="_description" placeholder="VD: Là quản trị viên, tôi muốn quản lý sản phẩm trong danh mục với SKU duy nhất để tránh trùng lặp."></textarea>
+                <textarea @bind="_description" placeholder="E.g.: As an administrator, I want to manage products in the catalog with a unique SKU to avoid duplicates."></textarea>
             </label>
 
             <label class="field">
-                <span>NMax (số vòng QA tối đa)</span>
+                <span>NMax (max QA iterations)</span>
                 <input type="number" min="1" max="5" @bind="_nmax" />
             </label>
 
             <label class="toggle">
                 <input type="checkbox" @bind="_useDemo" />
-                Chạy chế độ Demo (offline, không cần API key)
+                Run in Demo mode (offline, no API key required)
             </label>
 
             <button class="run" @onclick="RunAsync" disabled="@(_running || string.IsNullOrWhiteSpace(_description))">
-                @(_running ? "Đang chạy pipeline…" : "▶ Chạy pipeline")
+                @(_running ? "Running pipeline…" : "▶ Run pipeline")
             </button>
             @if (_running)
             {
-                <button class="ghost" @onclick="Cancel">Huỷ</button>
+                <button class="ghost" @onclick="Cancel">Cancel</button>
             }
 
             @if (!_useDemo)
             {
-                <p class="hint">Chế độ "Theo cấu hình" gọi Claude / Azure OpenAI thật — cần điền API key trong <code>appsettings</code> (user-secrets).</p>
+                <p class="hint">"Configured" mode calls the real Claude / Azure OpenAI — you must set the API key in <code>appsettings</code> (user-secrets).</p>
             }
             else
             {
-                <p class="hint">Chế độ Demo dùng dữ liệu mẫu, chạy offline và mô phỏng QA fail vòng đầu → pass vòng sau để minh hoạ Quality Loop.</p>
+                <p class="hint">Demo mode uses sample data, runs offline, and simulates QA failing the first round → passing the next to illustrate the Quality Loop.</p>
             }
         </div>
 
         <div class="card">
-            <h2>Chỉ số tổng (realtime)</h2>
+            <h2>Aggregate metrics (realtime)</h2>
             <div class="metrics">
                 <div class="metric"><div class="v">@(_tokIn + _tokOut)</div><div class="k">Tokens (@_tokIn↑ / @_tokOut↓)</div></div>
-                <div class="metric"><div class="v">$@_cost.ToString("0.0000")</div><div class="k">Chi phí ước tính</div></div>
-                <div class="metric"><div class="v">@((_latencyMs / 1000.0).ToString("0.0"))s</div><div class="k">Tổng độ trễ</div></div>
-                <div class="metric"><div class="v">@_qaRounds.Count</div><div class="k">Vòng QA</div></div>
+                <div class="metric"><div class="v">$@_cost.ToString("0.0000")</div><div class="k">Estimated cost</div></div>
+                <div class="metric"><div class="v">@((_latencyMs / 1000.0).ToString("0.0"))s</div><div class="k">Total latency</div></div>
+                <div class="metric"><div class="v">@_qaRounds.Count</div><div class="k">QA rounds</div></div>
             </div>
         </div>
     </div>
 
-    <!-- ============ CỘT PHẢI: TIẾN TRÌNH + KẾT QUẢ ============ -->
+    <!-- ============ RIGHT COLUMN: PROGRESS + RESULTS ============ -->
     <div>
         <div class="card">
-            <h2>Tiến trình tác tử</h2>
+            <h2>Agent progress</h2>
             <div class="timeline">
                 @foreach (var stage in _order)
                 {
@@ -75,7 +75,7 @@
                                 @if ((stage == PipelineStage.Coding || stage == PipelineStage.Testing || stage == PipelineStage.Qa)
                                      && row.State != StageState.Idle && _currentIteration > 0)
                                 {
-                                    <span class="badge info">vòng @_currentIteration</span>
+                                    <span class="badge info">round @_currentIteration</span>
                                 }
                             </div>
                             <div class="sub">@(string.IsNullOrEmpty(row.Sub) ? _subtitle[stage] : row.Sub)</div>
@@ -91,16 +91,16 @@
                     @foreach (var r in _qaRounds)
                     {
                         <div class="qa-round">
-                            <span>Vòng @r.Iteration</span>
+                            <span>Round @r.Iteration</span>
                             <span class="score">@r.Score.ToString("0.00")</span>
                             <span class="score-bar"><i style="width:@((int)(r.Score * 100))%"></i></span>
                             @if (r.Consistent)
                             {
-                                <span class="badge ok">pass · thoát loop</span>
+                                <span class="badge ok">pass · exit loop</span>
                             }
                             else
                             {
-                                <span class="badge warn">chưa đạt · lặp lại</span>
+                                <span class="badge warn">not met · repeat</span>
                             }
                         </div>
                     }
@@ -109,24 +109,24 @@
 
             @if (_error is not null)
             {
-                <p style="margin-top:14px"><span class="badge err">Lỗi</span> <span class="muted">@_error</span></p>
+                <p style="margin-top:14px"><span class="badge err">Error</span> <span class="muted">@_error</span></p>
             }
             else if (_result is not null)
             {
                 <p style="margin-top:14px">
                     @if (_finalStatus == PipelineStatus.Done)
                     {
-                        <span class="badge ok">Hoàn tất</span>
+                        <span class="badge ok">Complete</span>
                     }
                     else if (_finalStatus == PipelineStatus.MaxIterationReached)
                     {
-                        <span class="badge warn">Chạm giới hạn vòng lặp</span>
+                        <span class="badge warn">Iteration limit reached</span>
                     }
                     else
                     {
-                        <span class="badge err">Thất bại</span>
+                        <span class="badge err">Failed</span>
                     }
-                    <span class="muted"> @_result.IterationCount vòng QA · @_result.Code?.Files.Count file mã · @_result.Tests?.TotalCount test</span>
+                    <span class="muted"> @_result.IterationCount QA rounds · @_result.Code?.Files.Count code files · @_result.Tests?.TotalCount tests</span>
                 </p>
             }
         </div>
@@ -134,10 +134,10 @@
         @if (_result is not null && _finalStatus != PipelineStatus.Failed)
         {
             <div class="card">
-                <h2>Sản phẩm sinh ra</h2>
+                <h2>Generated artifacts</h2>
                 <div class="tabs">
-                    <div class="tab @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Yêu cầu</div>
-                    <div class="tab @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Mã nguồn</div>
+                    <div class="tab @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Requirements</div>
+                    <div class="tab @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Source code</div>
                     <div class="tab @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">Test</div>
                     <div class="tab @(_tab == 3 ? "active" : "")" @onclick="() => _tab = 3">QA</div>
                 </div>
@@ -147,13 +147,13 @@
                     var s = _result.Spec;
                     <h3>@s.Title</h3>
                     <p class="muted">@s.Summary</p>
-                    <p class="file-name">Yêu cầu chức năng</p>
+                    <p class="file-name">Functional requirements</p>
                     <ul class="clean">@foreach (var f in s.FunctionalRequirements){<li>@f</li>}</ul>
-                    <p class="file-name">Thực thể (Entity)</p>
+                    <p class="file-name">Entities</p>
                     <ul class="clean">@foreach (var e in s.Entities){<li><strong>@e.Name</strong>: @string.Join(", ", e.Fields)</li>}</ul>
-                    <p class="file-name">Endpoint</p>
+                    <p class="file-name">Endpoints</p>
                     <ul class="clean">@foreach (var ep in s.Endpoints){<li><code>@ep.Method @ep.Path</code> — @ep.Purpose</li>}</ul>
-                    <p class="file-name">Tiêu chí chấp nhận</p>
+                    <p class="file-name">Acceptance criteria</p>
                     <ul class="clean">@foreach (var a in s.AcceptanceCriteria){<li>@a</li>}</ul>
                 }
                 else if (_tab == 1)
@@ -184,8 +184,8 @@
                     {
                         var q = _result.QaHistory[i];
                         <p class="file-name">
-                            Vòng @(i + 1) — điểm @q.Score.ToString("0.00")
-                            @if (q.IsConsistent){<span class="badge ok">nhất quán</span>}else{<span class="badge warn">cần lặp</span>}
+                            Round @(i + 1) — score @q.Score.ToString("0.00")
+                            @if (q.IsConsistent){<span class="badge ok">consistent</span>}else{<span class="badge warn">needs iteration</span>}
                         </p>
                         @foreach (var issue in q.Issues)
                         {
@@ -208,7 +208,7 @@
             <div class="card">
                 <div class="empty-state">
                     <div class="big">◇</div>
-                    <p>Nhập user story rồi bấm <strong>Chạy pipeline</strong> để xem 5 tác tử phối hợp theo thời gian thực.</p>
+                    <p>Enter a user story then click <strong>Run pipeline</strong> to watch the 5 agents collaborate in real time.</p>
                 </div>
             </div>
         }
@@ -216,12 +216,12 @@
 </div>
 
 @code {
-    // ---- Đầu vào ----
-    private string _description = "Là quản trị viên, tôi muốn quản lý sản phẩm trong danh mục với SKU duy nhất để tránh trùng lặp.";
+    // ---- Input ----
+    private string _description = "As an administrator, I want to manage products in the catalog with a unique SKU to avoid duplicates.";
     private int _nmax = 3;
     private bool _useDemo = true;
 
-    // ---- Trạng thái chạy ----
+    // ---- Run state ----
     private bool _running;
     private string? _error;
     private int _currentIteration;
@@ -230,7 +230,7 @@
     private PipelineStatus _finalStatus;
     private CancellationTokenSource? _cts;
 
-    // ---- Chỉ số cộng dồn ----
+    // ---- Cumulative metrics ----
     private long _tokIn;
     private long _tokOut;
     private decimal _cost;
@@ -257,13 +257,13 @@
     private readonly Dictionary<PipelineStage, string> _title = new()
     {
         [PipelineStage.Requirement] = "Requirement Agent", [PipelineStage.Coding] = "Coding Agent",
-        [PipelineStage.Testing] = "Testing Agent", [PipelineStage.Qa] = "QA Agent", [PipelineStage.Aggregate] = "Tổng hợp",
+        [PipelineStage.Testing] = "Testing Agent", [PipelineStage.Qa] = "QA Agent", [PipelineStage.Aggregate] = "Aggregate",
     };
     private readonly Dictionary<PipelineStage, string> _subtitle = new()
     {
-        [PipelineStage.Requirement] = "KC1 · Phân tích user story", [PipelineStage.Coding] = "KC2 · Sinh mã C#",
-        [PipelineStage.Testing] = "KC3 · Sinh xUnit test", [PipelineStage.Qa] = "KC5 · Đánh giá nhất quán",
-        [PipelineStage.Aggregate] = "Chốt kết quả + tổng chi phí",
+        [PipelineStage.Requirement] = "KC1 · Analyze user story", [PipelineStage.Coding] = "KC2 · Generate C# code",
+        [PipelineStage.Testing] = "KC3 · Generate xUnit tests", [PipelineStage.Qa] = "KC5 · Evaluate consistency",
+        [PipelineStage.Aggregate] = "Finalize result + total cost",
     };
 
     protected override void OnInitialized()
@@ -288,18 +288,18 @@
 
         try
         {
-            var story = new UserStory(_description, _nmax, "vi-VN");
+            var story = new UserStory(_description, _nmax, "en-US");
             var orchestrator = Sp.GetRequiredService<IOrchestratorAgent>();
             _result = await orchestrator.RunAsync(story, _cts.Token);
             _finalStatus = _result.Status;
             if (_finalStatus == PipelineStatus.Failed && _error is null)
             {
-                _error = "Pipeline thất bại — xem log server để biết chi tiết.";
+                _error = "Pipeline failed — see the server log for details.";
             }
         }
         catch (OperationCanceledException)
         {
-            _error = "Đã huỷ lần chạy.";
+            _error = "Run cancelled.";
         }
         catch (Exception ex)
         {

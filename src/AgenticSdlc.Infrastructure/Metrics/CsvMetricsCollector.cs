@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Metrics/CsvMetricsCollector.cs
-// Sprint 4 — append-only CSV sink. Header tự tạo lúc file mới. Thread-safe qua lock.
+// Sprint 4 — append-only CSV sink. Header auto-created for a new file. Thread-safe via a lock.
 
 using System;
 using System.Collections.Generic;
@@ -11,10 +11,10 @@ using AgenticSdlc.Application.Metrics;
 
 namespace AgenticSdlc.Infrastructure.Metrics;
 
-/// <summary>Sink RunMetric ra CSV file (append-only).</summary>
+/// <summary>Sinks RunMetric to a CSV file (append-only).</summary>
 public sealed class CsvMetricsCollector : IMetricsCollector
 {
-    /// <summary>Header column order (khớp <see cref="ToRow"/>).</summary>
+    /// <summary>Header column order (matches <see cref="ToRow"/>).</summary>
     public const string Header =
         "timestamp,runId,kcId,iteration,agentName,model,provider,tokensIn,tokensOut,latencyMs,costUsd,success,errorMessage";
 
@@ -22,7 +22,7 @@ public sealed class CsvMetricsCollector : IMetricsCollector
     private readonly string _filePath;
     private readonly List<RunMetric> _buffer = [];
 
-    /// <summary>Khởi tạo với đường dẫn CSV (tạo thư mục cha nếu chưa có).</summary>
+    /// <summary>Initializes with a CSV path (creates the parent directory if it does not exist).</summary>
     public CsvMetricsCollector(string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
@@ -34,7 +34,7 @@ public sealed class CsvMetricsCollector : IMetricsCollector
         }
     }
 
-    /// <summary>Path tới CSV file.</summary>
+    /// <summary>Path to the CSV file.</summary>
     public string FilePath => _filePath;
 
     /// <inheritdoc />
@@ -63,7 +63,7 @@ public sealed class CsvMetricsCollector : IMetricsCollector
         }
     }
 
-    /// <summary>Format 1 dòng CSV (escape ", , \n trong errorMessage).</summary>
+    /// <summary>Formats a single CSV row (escapes ", , \n inside errorMessage).</summary>
     public static string ToRow(RunMetric m)
     {
         var inv = CultureInfo.InvariantCulture;

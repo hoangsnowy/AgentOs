@@ -1,6 +1,6 @@
 // AgenticSdlc.Web/Services/CircuitPipelineProgress.cs
-// Phase 7 — Cổng phát tiến trình theo từng circuit Blazor. Orchestrator (resolve trong
-// cùng scope circuit) báo sự kiện vào đây; trang Studio đăng ký Listener để re-render realtime.
+// Phase 7 — Per-Blazor-circuit progress sink. The orchestrator (resolved in the same
+// circuit scope) reports events here; the Studio page registers a Listener to re-render in realtime.
 
 using System;
 using System.Threading;
@@ -11,13 +11,13 @@ using AgenticSdlc.Domain.Pipeline;
 namespace AgenticSdlc.Web.Services;
 
 /// <summary>
-/// Impl <see cref="IPipelineProgressSink"/> theo scope circuit. Không tự đụng tới UI —
-/// chỉ chuyển tiếp sự kiện cho <see cref="Listener"/> mà component cài đặt (component chịu
-/// trách nhiệm gọi <c>InvokeAsync(StateHasChanged)</c> để render đúng luồng đồng bộ của Blazor).
+/// A circuit-scoped <see cref="IPipelineProgressSink"/> implementation. It never touches the UI itself —
+/// it only forwards events to the <see cref="Listener"/> the component installs (the component is
+/// responsible for calling <c>InvokeAsync(StateHasChanged)</c> to render on Blazor's synchronization context).
 /// </summary>
 public sealed class CircuitPipelineProgress : IPipelineProgressSink
 {
-    /// <summary>Callback do component đăng ký. <c>null</c> ⇒ bỏ qua (không có ai nghe).</summary>
+    /// <summary>Callback registered by the component. <c>null</c> ⇒ ignored (no listener).</summary>
     public Func<PipelineProgressEvent, Task>? Listener { get; set; }
 
     /// <inheritdoc />

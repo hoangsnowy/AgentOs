@@ -1,44 +1,44 @@
 // AgenticSdlc.Application/Prompts/RequirementPrompt.cs
-// Sprint 3 — tách prompt khỏi RequirementAgent. Version v1.
+// Sprint 3 — extracted the prompt from RequirementAgent. Version v1.
 
 using AgenticSdlc.Domain.Pipeline;
 
 namespace AgenticSdlc.Application.Prompts;
 
-/// <summary>System + User template cho Requirement Agent (v1).</summary>
+/// <summary>System + User template for the Requirement Agent (v1).</summary>
 public static class RequirementPrompt
 {
-    /// <summary>Prompt version. Bump khi sửa <see cref="System"/> hoặc <see cref="RenderUser"/>.</summary>
+    /// <summary>Prompt version. Bump when editing <see cref="System"/> or <see cref="RenderUser"/>.</summary>
     public const string Version = "v1";
 
     /// <summary>System prompt.</summary>
     public const string System = """
-        Bạn là Requirement Agent trong hệ thống Agentic SDLC.
-        Nhiệm vụ: phân tích 1 user story tiếng Việt và trả về 1 specification JSON.
+        You are the Requirement Agent in the Agentic SDLC system.
+        Task: analyze a user story and return a specification as JSON.
 
-        Trả về CHỈ JSON (không markdown fence, không prose) theo schema:
+        Return ONLY JSON (no markdown fence, no prose) following the schema:
         {
-          "title": "Tiêu đề ngắn (≤ 80 ký tự)",
-          "summary": "1-2 câu tóm tắt",
-          "stakeholders": ["chuỗi"],
-          "functionalRequirements": ["chuỗi"],
-          "nonFunctionalRequirements": ["chuỗi"],
+          "title": "Short title (≤ 80 characters)",
+          "summary": "1-2 sentence summary",
+          "stakeholders": ["string"],
+          "functionalRequirements": ["string"],
+          "nonFunctionalRequirements": ["string"],
           "entities": [
-            { "name": "PascalCase", "fields": ["fieldName: Type"], "notes": "tuỳ chọn" }
+            { "name": "PascalCase", "fields": ["fieldName: Type"], "notes": "optional" }
           ],
           "endpoints": [
-            { "method": "GET|POST|PUT|DELETE|PATCH", "path": "/route", "purpose": "mô tả", "authRequired": false }
+            { "method": "GET|POST|PUT|DELETE|PATCH", "path": "/route", "purpose": "description", "authRequired": false }
           ],
-          "acceptanceCriteria": ["chuỗi"]
+          "acceptanceCriteria": ["string"]
         }
 
-        Quy tắc:
-        - PHẢI có ≥ 1 entity, ≥ 1 endpoint, ≥ 3 acceptance criteria.
-        - Tiếng Việt cho mọi field text trừ name của entity (PascalCase tiếng Anh) và HTTP method.
-        - KHÔNG include comment, KHÔNG có trailing comma.
+        Rules:
+        - MUST have ≥ 1 entity, ≥ 1 endpoint, ≥ 3 acceptance criteria.
+        - Use English for all field text except the entity name (English PascalCase) and the HTTP method.
+        - Do NOT include comments, do NOT use a trailing comma.
         """;
 
-    /// <summary>Render user prompt từ user story.</summary>
+    /// <summary>Renders the user prompt from the user story.</summary>
     public static string RenderUser(UserStory story)
     {
         global::System.ArgumentNullException.ThrowIfNull(story);
@@ -46,7 +46,7 @@ public static class RequirementPrompt
             User story (locale {story.Locale}):
             {story.Description}
 
-            Sinh requirement specification dưới dạng JSON đúng schema.
+            Generate the requirement specification as JSON that matches the schema.
             """;
     }
 }

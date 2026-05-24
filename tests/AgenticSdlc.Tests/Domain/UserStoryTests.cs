@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Domain/UserStoryTests.cs
-// Phase 3 — Validate logic của UserStory record.
+// Phase 3 — Validate the UserStory record's logic.
 
 using System;
 using AgenticSdlc.Domain.Pipeline;
@@ -13,7 +13,7 @@ public class UserStoryTests
     [Fact]
     public void Validate_ValidStory_DoesNotThrow()
     {
-        var story = new UserStory("Hệ thống quản lý sản phẩm.", NMax: 3, Locale: "vi-VN");
+        var story = new UserStory("Product management system.", NMax: 3, Locale: "vi-VN");
         Should.NotThrow(() => story.Validate());
     }
 

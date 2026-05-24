@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Pipeline/SequencedLlmClient.cs
-// Phase 5 — Test ILlmClient trả response theo thứ tự gọi (1 canned response / call).
+// Phase 5 — A test ILlmClient that returns responses in call order (1 canned response / call).
 
 using System;
 using System.Collections.Generic;
@@ -10,9 +10,9 @@ using AgenticSdlc.Domain.Llm;
 namespace AgenticSdlc.Tests.Pipeline;
 
 /// <summary>
-/// ILlmClient cho integration test: nhận 1 queue (model, content) khi khởi tạo, trả
-/// response theo thứ tự gọi. Khác MockLlmClient (hash-based) — đơn giản hoá test E2E
-/// nơi hash-driven fixture brittle.
+/// An ILlmClient for integration tests: takes a queue of (model, content) at construction and returns
+/// responses in call order. Unlike MockLlmClient (hash-based) — it simplifies E2E tests
+/// where hash-driven fixtures are brittle.
 /// </summary>
 public sealed class SequencedLlmClient : ILlmClient
 {
@@ -54,7 +54,7 @@ public sealed class SequencedLlmClient : ILlmClient
     }
 }
 
-/// <summary>1 canned response.</summary>
+/// <summary>A single canned response.</summary>
 public sealed record CannedResponse(
     string Content,
     int InputTokens = 100,

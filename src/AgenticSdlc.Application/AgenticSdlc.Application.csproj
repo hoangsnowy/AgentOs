@@ -10,10 +10,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
-    <!-- Validation: dùng native System.ComponentModel.DataAnnotations
-         (đã có trong .NET 10 framework) + IValidatableObject cho cross-field rules.
-         Không cần FluentValidation. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- Validation: use native System.ComponentModel.DataAnnotations
+         (already in the .NET 10 framework) + IValidatableObject for cross-field rules.
+         FluentValidation is not needed. -->
   </ItemGroup>
 
 </Project>

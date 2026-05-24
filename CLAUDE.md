@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Reference prototype cho luận văn thạc sĩ "Multi-Agent AI cho SDLC" (HUBT, 2026). Kiến trúc **Leader-Specialists-Quality Loop** với 5 agent: Orchestrator, Requirement, Coding, Testing, QA. Hybrid LLM (Anthropic Claude + Azure OpenAI), gán model qua `appsettings.json`. Đầy đủ context + roadmap trong [README.md](README.md). Mô tả từng phase, setup local, secret, GitHub Actions xem [docs/SETUP.md](docs/SETUP.md).
+Reference prototype for the Master's thesis "Multi-Agent AI for SDLC" (HUBT, 2026). The **Leader-Specialists-Quality Loop** architecture with 5 agents: Orchestrator, Requirement, Coding, Testing, QA. Hybrid LLM (Anthropic Claude + Azure OpenAI), with models assigned via `appsettings.json`. Full context + roadmap in [README.md](README.md). For a description of each phase, local setup, secrets, and GitHub Actions, see [docs/SETUP.md](docs/SETUP.md).
 
 ## Commands
 
 ```bash
-# Build / test (sln-rooted, từ D:\LuanVan\prototype)
+# Build / test (sln-rooted, from D:\LuanVan\prototype)
 dotnet restore AgenticSdlc.sln
 dotnet build   AgenticSdlc.sln --configuration Release
 dotnet test    AgenticSdlc.sln --configuration Release
@@ -18,56 +18,73 @@ dotnet test    AgenticSdlc.sln --configuration Release
 dotnet test --filter "FullyQualifiedName~ClaudeClientTests"
 dotnet test --filter "FullyQualifiedName=AgenticSdlc.Tests.Llm.LlmRequestTests.Validate_AllFieldsValid_DoesNotThrow"
 
-# Run API local — Scalar UI tại http://localhost:5080/scalar/v1
+# Run the API locally — Scalar UI at http://localhost:5080/scalar/v1
 dotnet run --project src/AgenticSdlc.Api
 
-# Secret local (KHÔNG commit). UserSecretsId = "agentic-sdlc-net-prototype"
+# Local secrets (DO NOT commit). UserSecretsId = "agentic-sdlc-net-prototype"
 cd src/AgenticSdlc.Api
 dotnet user-secrets set "Llm:Anthropic:ApiKey"  "sk-ant-..."
 dotnet user-secrets set "Llm:AzureOpenAI:ApiKey" "..."
+
+# Run the Web (Blazor "Agent Studio") locally
+dotnet run --project src/AgenticSdlc.Web
+
+# Local Postgres (optional persistence) + connection string
+docker compose up -d
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=agentic_sdlc;Username=postgres;Password=postgres"
+
+# Generate a new EF migration (Infrastructure is its own startup project for this)
+dotnet ef migrations add <Name> --project src/AgenticSdlc.Infrastructure --startup-project src/AgenticSdlc.Infrastructure --output-dir Persistence/Migrations
 ```
 
-CI: `.github/workflows/ci.yml` chạy `restore → build Release → test` trên Ubuntu, push `main`/`develop` hoặc PR `main`.
+CI: `.github/workflows/ci.yml` runs `restore → build Release → test` on Ubuntu, on push to `main`/`develop` or PR to `main`.
 
 ## Architecture
 
-Clean Architecture, 4 layer + tests. Dependency chiều: **Api → Infrastructure → Application → Domain** (chiều ngược chặn bởi project reference).
+Clean Architecture (Domain → Application → Infrastructure) with two hosts (Api, Web). Dependency direction: **Api/Web → Infrastructure → Application → Domain** (the reverse direction is blocked by project references).
 
-| Project | Vai trò |
+| Project | Role |
 |---|---|
-| `AgenticSdlc.Domain` | DTO trung lập provider (`LlmRequest`, `LlmResponse`, `LlmOptions`), interface (`ILlmClient`), exception. Không reference framework nào ngoài .NET BCL. |
-| `AgenticSdlc.Application` | Interface tác tử (`IRequirementAgent`, ...) — sẽ thêm Phase 3. Chỉ reference `Microsoft.Extensions.Logging.Abstractions`. |
-| `AgenticSdlc.Infrastructure` | Impl `ILlmClient` (3 client), agent impl, DI extension. Reference `Azure.AI.OpenAI`, `Microsoft.Extensions.Http.Resilience`. |
-| `AgenticSdlc.Api` | ASP.NET Core minimal API + Scalar UI. Composition root duy nhất. |
+| `AgenticSdlc.Domain` | Provider-neutral DTOs (`LlmRequest`, `LlmResponse`, `LlmOptions`), pipeline artifacts (`RequirementSpec`, `CodeArtifact`, `TestArtifact`, `QaReport`, `PipelineResult`), interfaces (`ILlmClient`), exceptions. References no framework other than the .NET BCL. |
+| `AgenticSdlc.Application` | Agent interfaces (`IRequirementAgent` … `IOrchestratorAgent`), prompts, metrics (`IMetricsCollector`), persistence repository interfaces (`IPipelineRunRepository`, `IOrchestrationRepository`). References only `Microsoft.Extensions.Logging.Abstractions`. |
+| `AgenticSdlc.Infrastructure` | `ILlmClient` implementations (3 clients), 5 agent + orchestrator implementations, EF Core/Postgres persistence, DI extensions. References `Azure.AI.OpenAI`, `Microsoft.Extensions.Http.Resilience`, `Npgsql.EntityFrameworkCore.PostgreSQL`. |
+| `AgenticSdlc.Api` | ASP.NET Core minimal API (REST endpoints + Scalar UI). A composition root. |
+| `AgenticSdlc.Web` | Blazor Server "Agent Studio" UI (realtime pipeline + orchestration editor). Runs the engine in-process; deployed as a second Container App. A composition root. |
 
 ### LLM Gateway (critical pattern)
 
-5 agent **không gọi trực tiếp SDK của hãng** — tất cả depend on `ILlmClient` (Domain). `LlmClientFactory` chọn provider theo cấu hình `Agents:<Name>:Provider`. Có 3 impl:
+The 5 agents **do not call vendor SDKs directly** — they all depend on `ILlmClient` (Domain). `LlmClientFactory` selects the provider based on the `Agents:<Name>:Provider` configuration. There are 3 implementations:
 
-- **`ClaudeClient`** — raw `HttpClient` gọi `POST /v1/messages` Anthropic. Header `x-api-key` + `anthropic-version`. Không dùng SDK của Anthropic.
-- **`AzureOpenAiClient`** — raw `HttpClient` gọi `openai/deployments/{model}/chat/completions?api-version=...`. Mặc dù `Azure.AI.OpenAI` package có reference (kế thừa cho `Azure.Identity`), client thực tế viết tay để giữ shape control.
-- **`MockLlmClient`** — SHA-256 hash `(model + system + user)` → tra `tests/fixtures/llm/<hash>.json`. Cho test offline / CI không có API key / demo deterministic. Miss → trả `"stub-response"`.
+- **`ClaudeClient`** — a raw `HttpClient` calling Anthropic's `POST /v1/messages`. Headers `x-api-key` + `anthropic-version`. Does not use the Anthropic SDK.
+- **`AzureOpenAiClient`** — a raw `HttpClient` calling `openai/deployments/{model}/chat/completions?api-version=...`. Although the `Azure.AI.OpenAI` package is referenced (inherited for `Azure.Identity`), the client itself is hand-written to retain shape control.
+- **`MockLlmClient`** — SHA-256 hash of `(model + system + user)` → looks up `tests/fixtures/llm/<hash>.json`. For offline tests / CI without an API key / deterministic demos. On a miss → returns `"stub-response"`.
 
-Retry: `RetryPolicy.ExecuteAsync` (exponential 1s/2s/4s, retry 429+5xx+timeout). Không dùng Polly để giữ dependency tối thiểu Sprint 1; chuyển sang `Microsoft.Extensions.Http.Resilience` nếu cần. Client tự ném `TransientHttpException` (internal marker) khi gặp status retry-able, `LlmException` cho non-retriable / malformed.
+Retry: `RetryPolicy.ExecuteAsync` (exponential 1s/2s/4s, retries 429+5xx+timeout). Polly is not used in order to keep dependencies minimal in Sprint 1; switch to `Microsoft.Extensions.Http.Resilience` if needed. The client throws `TransientHttpException` (an internal marker) on retry-able statuses, and `LlmException` for non-retriable / malformed cases.
 
-Cost: `CostCalculator.Calculate(model, in, out)` lookup pricing hardcode (Sonnet 4 / Haiku 4.5 / GPT-4.1 / GPT-4o-mini, USD per 1M token, Q2/2026 snapshot). Match `StartsWith` case-insensitive — cho phép suffix kiểu `claude-sonnet-4-20250514`. Model không match → trả `0m`.
+Cost: `CostCalculator.Calculate(model, in, out)` looks up hardcoded pricing (Sonnet 4 / Haiku 4.5 / GPT-4.1 / GPT-4o-mini, USD per 1M tokens, Q2/2026 snapshot). Matches with a case-insensitive `StartsWith` — allowing suffixes like `claude-sonnet-4-20250514`. A model with no match → returns `0m`.
 
-DI: `services.AddLlmGateway(configuration)` (Infrastructure) register named `HttpClient` qua `IHttpClientFactory`, options binding `LlmOptions` từ section `"Llm"`, factory + concrete clients. Default `ILlmClient` resolve qua `ILlmClientFactory.CreateDefault()`.
+DI: `services.AddLlmGateway(configuration)` (Infrastructure) registers a named `HttpClient` via `IHttpClientFactory`, binds `LlmOptions` from the `"Llm"` section, and registers the factory + concrete clients. The default `ILlmClient` is resolved via `ILlmClientFactory.CreateDefault()`.
+
+### Persistence (optional)
+
+`services.AddPersistence(configuration)` (Infrastructure) registers an EF Core `AgenticSdlcDbContext` (Postgres/Npgsql) + repositories **when `ConnectionStrings:DefaultConnection` is set**; otherwise it registers no-op repos so the app still boots stateless (CI / local without a DB). Three tables: `pipeline_runs` (artifact as `jsonb`), `run_metrics` (one row per LLM call — SQL-friendly for Chapter 4), `orchestrations` (Agent Studio state). `PersistingOrchestratorAgent` decorates `IOrchestratorAgent` to save each run + per-call metrics best-effort (a DB error never corrupts a successful run). `await app.Services.InitializePersistenceAsync()` applies EF migrations at startup. Local Postgres: `docker compose up -d`. Azure: bicep `deployPostgres=true` (default off — avoids cost).
 
 ## Conventions
 
-**.NET 10 / C# 14**, pin `10.0.100` qua `global.json`. `Directory.Build.props` set `TreatWarningsAsErrors=true`, `Nullable=enable`, `AnalysisLevel=latest-recommended`, `InvariantGlobalization=true` (Api override `false`).
+**.NET 10 / C# 14**, pinned to `10.0.100` via `global.json`. `Directory.Build.props` sets `TreatWarningsAsErrors=true`, `Nullable=enable`, `AnalysisLevel=latest-recommended`, `InvariantGlobalization=true` (Api overrides to `false`).
 
-**Analyzer suppress** (xem `Directory.Build.props`): `CA1848` + `CA1873` toàn solution (LoggerMessage delegates) — phải gỡ sau Sprint 5. Test project thêm `CA1707` (underscore trong test name), `CA1816`, `CA1859`, `xUnit1051`.
+**Analyzer suppressions** (see `Directory.Build.props`): `CA1848` + `CA1873` across the whole solution (LoggerMessage delegates) — must be removed after Sprint 5. The test project additionally suppresses `CA1707` (underscores in test names), `CA1816`, `CA1859`, `xUnit1051`. Persistence-related: `Infrastructure.csproj` suppresses two `NU1903` advisories for `System.Security.Cryptography.Xml` (a build-time-only transitive of `Microsoft.EntityFrameworkCore.Design`, not shipped at runtime, no patch yet) and exposes internals via `InternalsVisibleTo("AgenticSdlc.Tests")`; `.editorconfig` marks `**/Migrations/*.cs` as `generated_code` (EF migrations use block-scoped namespaces).
 
-**Test stack**: xUnit **v3** (`xunit.v3` 1.1.0), Shouldly (KHÔNG dùng FluentAssertions vì v8 đã commercial), NSubstitute. Naming: `MethodName_StateUnderTest_ExpectedBehavior`. `TestHttpMessageHandler.cs` là helper stub `HttpClient` cho client test.
+**Test stack**: xUnit **v3** (`xunit.v3` 1.1.0), Shouldly (NOT FluentAssertions, since v8 went commercial), NSubstitute. Naming: `MethodName_StateUnderTest_ExpectedBehavior`. `TestHttpMessageHandler.cs` is a helper that stubs `HttpClient` for client tests.
 
-**Fixture LLM**: file JSON ở `tests/fixtures/llm/<8-char-hex-hash>.json`, shape `{ "content", "inputTokens", "outputTokens" }` (camelCase). Hash sinh bởi `MockLlmClient.ComputeHash(request)` — 8 byte đầu của SHA-256(`model\n---\nsystem\n---\nuser`).
+**LLM fixtures**: JSON files at `tests/fixtures/llm/<8-char-hex-hash>.json`, with shape `{ "content", "inputTokens", "outputTokens" }` (camelCase). The hash is generated by `MockLlmClient.ComputeHash(request)` — the first 8 bytes of SHA-256(`model\n---\nsystem\n---\nuser`).
 
-**Commit**: Conventional Commits tiếng Việt OK (vd `feat(llm):`, `chore: phase N`). Co-author Claude khi pair-coded. CI bắt fail nếu build/test fail Release.
+**Commits**: Conventional Commits in English (e.g. `feat(llm):`, `fix(infra):`, `chore: phase N`). Co-author Claude when pair-coded. CI fails if the Release build/test fails.
 
-**PR**: template `.github/PULL_REQUEST_TEMPLATE.md` có ô "Tham chiếu đề án" — luôn link tới Mục/Bảng luận văn nếu liên quan.
+**Language**: code, comments, docs, and LLM prompts/output are English (the repo was standardized from Vietnamese). The agent system prompts (`Application/Prompts/*.cs`) open with `"You are the <X> Agent …"` — this opening line is a routing key matched by `DemoLlmClient` + `OrchestrationStudio`; keep all three in sync if reworded.
+
+**PR**: the `.github/PULL_REQUEST_TEMPLATE.md` template has a "Thesis references" field — always link to the relevant thesis Section/Table if applicable.
 
 ## Phase status
 
-Roadmap chính trong [README.md](README.md) section "Lộ trình". Khi tick checkbox, commit riêng (`docs: tick Phase N done`). Mỗi phase nên có doc `docs/PHASE_<N>.md` riêng (Phase 1 chưa có, Phase 2 đang chuẩn bị).
+The main roadmap is in the [README.md](README.md) "Roadmap" section. When ticking a checkbox, commit separately (`docs: tick Phase N done`). Each phase should have its own `docs/PHASE_<N>.md` doc (Phase 1 does not have one yet, Phase 2 is being prepared).

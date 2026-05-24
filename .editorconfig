@@ -1,5 +1,5 @@
 # EditorConfig — agentic-sdlc-net
-# Theo convention .NET 10 / C# 14, áp dụng cho IDE Visual Studio / Rider / VS Code.
+# Follows .NET 10 / C# 14 conventions, applied across Visual Studio / Rider / VS Code.
 
 root = true
 
@@ -54,8 +54,8 @@ dotnet_diagnostic.CS8602.severity = warning
 dotnet_diagnostic.CS8603.severity = warning
 
 # Async
-dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait không bắt buộc cho ASP.NET Core
+dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait is not required for ASP.NET Core
 
-# EF Core migrations — auto-generated, miễn style/analyzer enforcement (block-scoped namespace, v.v.).
+# EF Core migrations — auto-generated, exempt from style/analyzer enforcement (block-scoped namespace, etc.).
 [**/Migrations/*.cs]
 generated_code = true

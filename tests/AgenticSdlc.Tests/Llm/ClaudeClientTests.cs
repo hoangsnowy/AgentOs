@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Llm/ClaudeClientTests.cs
-// Sprint 1 — Unit test ClaudeClient với fake HttpMessageHandler.
+// Sprint 1 — Unit tests for ClaudeClient with a fake HttpMessageHandler.
 
 using System;
 using System.Net;
@@ -84,7 +84,7 @@ public class ClaudeClientTests
     [Fact]
     public async Task SendAsync_500RetryExhausted_ThrowsLlmException()
     {
-        // Arrange — 0 retry (chỉ thử 1 lần), trả 500.
+        // Arrange — 0 retries (single attempt), returns 500.
         var (client, handler) = BuildClient(maxRetries: 0);
         handler.EnqueueResponse(HttpStatusCode.InternalServerError, "boom");
         var req = new LlmRequest("sys", "Hi", "claude-sonnet-4-20250514");
@@ -98,7 +98,7 @@ public class ClaudeClientTests
     [Fact]
     public async Task SendAsync_400NonRetriable_ThrowsImmediately()
     {
-        // Arrange — 400 không retry. Cấu hình MaxRetries cao nhưng vẫn chỉ 1 call.
+        // Arrange — 400 is not retried. Configure a high MaxRetries but still only 1 call.
         var (client, handler) = BuildClient(maxRetries: 5);
         handler.EnqueueResponse(HttpStatusCode.BadRequest, "{\"error\":\"bad request\"}");
         var req = new LlmRequest("sys", "Hi", "claude-sonnet-4-20250514");

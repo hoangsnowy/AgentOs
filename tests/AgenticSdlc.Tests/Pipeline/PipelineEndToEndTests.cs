@@ -1,6 +1,6 @@
 // AgenticSdlc.Tests/Pipeline/PipelineEndToEndTests.cs
-// Phase 5 — End-to-end test cho PipelineOrchestrator dùng SequencedLlmClient.
-// Xác minh KC4 (luồng pipeline 5-agent + QA loop) chạy đúng từ UserStory → PipelineResult.
+// Phase 5 — End-to-end tests for PipelineOrchestrator using SequencedLlmClient.
+// Verifies KC4 (the 5-agent pipeline flow + QA loop) runs correctly from UserStory → PipelineResult.
 
 using System.Threading.Tasks;
 using AgenticSdlc.Application.Agents;
@@ -36,7 +36,7 @@ public class PipelineEndToEndTests
         var sequenced = new SequencedLlmClient(responses);
         var orchestrator = BuildOrchestrator(sequenced);
 
-        var result = await orchestrator.RunAsync(new UserStory("Hệ thống quản lý sản phẩm: admin CRUD, người dùng tra cứu."));
+        var result = await orchestrator.RunAsync(new UserStory("Product management system: admin CRUD, users browse."));
 
         result.Status.ShouldBe(PipelineStatus.Done);
         result.IterationCount.ShouldBe(1);
@@ -117,27 +117,27 @@ internal static class Fixtures
 {
     public const string RequirementJson = """
         {
-          "title": "Quản lý sản phẩm",
-          "summary": "Admin CRUD sản phẩm; người dùng tra cứu theo danh mục.",
-          "stakeholders": ["admin", "khách hàng"],
+          "title": "Product management",
+          "summary": "Admin CRUD products; users browse by category.",
+          "stakeholders": ["admin", "customer"],
           "functionalRequirements": [
-            "Admin tạo/sửa/xoá sản phẩm với SKU duy nhất",
-            "Người dùng tra cứu theo danh mục + từ khoá"
+            "Admin creates/updates/deletes products with a unique SKU",
+            "Users browse by category + keyword"
           ],
-          "nonFunctionalRequirements": ["p95 < 200ms", "Hỗ trợ 1000 RPS"],
+          "nonFunctionalRequirements": ["p95 < 200ms", "Supports 1000 RPS"],
           "entities": [
             { "name": "Product", "fields": ["id: Guid", "sku: string", "name: string", "categoryId: Guid", "price: decimal"], "notes": "SKU unique" },
             { "name": "Category", "fields": ["id: Guid", "name: string"], "notes": null }
           ],
           "endpoints": [
-            { "method": "POST", "path": "/products", "purpose": "Tạo sản phẩm", "authRequired": true },
-            { "method": "GET", "path": "/products/{id}", "purpose": "Xem 1 sản phẩm", "authRequired": false },
-            { "method": "GET", "path": "/products", "purpose": "Tra cứu theo danh mục", "authRequired": false }
+            { "method": "POST", "path": "/products", "purpose": "Create a product", "authRequired": true },
+            { "method": "GET", "path": "/products/{id}", "purpose": "View a single product", "authRequired": false },
+            { "method": "GET", "path": "/products", "purpose": "Browse by category", "authRequired": false }
           ],
           "acceptanceCriteria": [
-            "POST /products yêu cầu auth admin, trả 401 nếu thiếu",
-            "SKU trùng → trả 409 Conflict",
-            "GET /products?categoryId=... trả đúng category"
+            "POST /products requires admin auth, returns 401 if missing",
+            "Duplicate SKU → returns 409 Conflict",
+            "GET /products?categoryId=... returns the correct category"
           ]
         }
         """;
@@ -151,7 +151,7 @@ internal static class Fixtures
             { "path": "src/Domain/Category.cs", "content": "namespace ProductCatalog.Domain;\npublic sealed record Category(Guid Id, string Name);", "language": "csharp" },
             { "path": "src/Api/Program.cs", "content": "var app = WebApplication.CreateBuilder(args).Build();\napp.MapPost(\"/products\", () => {}); app.MapGet(\"/products/{id}\", (Guid id) => {}); app.MapGet(\"/products\", () => {});\napp.Run();", "language": "csharp" }
           ],
-          "notes": "Auth/persistence là stub — Phase 5 sẽ thêm EF Core."
+          "notes": "Auth/persistence are stubs — Phase 5 will add EF Core."
         }
         """;
 
@@ -174,9 +174,9 @@ internal static class Fixtures
           "isConsistent": true,
           "iterationNeeded": false,
           "issues": [
-            { "severity": "Minor", "category": "TestCoverage", "description": "Thiếu test cho NFR p95 latency", "location": "tests/ProductTests.cs" }
+            { "severity": "Minor", "category": "TestCoverage", "description": "Missing test for the NFR p95 latency", "location": "tests/ProductTests.cs" }
           ],
-          "recommendations": ["Thêm test load profile cho p95"]
+          "recommendations": ["Add a load-profile test for p95"]
         }
         """;
 
@@ -186,10 +186,10 @@ internal static class Fixtures
           "isConsistent": false,
           "iterationNeeded": true,
           "issues": [
-            { "severity": "Critical", "category": "RequirementCoverage", "description": "Endpoint POST /products thiếu authorization check", "location": "src/Api/Program.cs" },
-            { "severity": "Major", "category": "TestCoverage", "description": "Chưa có test cho SKU trùng 409", "location": null }
+            { "severity": "Critical", "category": "RequirementCoverage", "description": "The POST /products endpoint is missing an authorization check", "location": "src/Api/Program.cs" },
+            { "severity": "Major", "category": "TestCoverage", "description": "No test yet for the duplicate-SKU 409", "location": null }
           ],
-          "recommendations": ["Thêm middleware auth admin", "Thêm test SKU duplicate"]
+          "recommendations": ["Add admin auth middleware", "Add a duplicate-SKU test"]
         }
         """;
 }

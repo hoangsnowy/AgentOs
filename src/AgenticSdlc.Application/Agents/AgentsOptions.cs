@@ -1,33 +1,33 @@
 // AgenticSdlc.Application/Agents/AgentsOptions.cs
-// Phase 3 — Options binding cho cấu hình per-agent (section "Agents" trong appsettings).
+// Phase 3 — Options binding for per-agent configuration (the "Agents" section in appsettings).
 
 namespace AgenticSdlc.Application.Agents;
 
 /// <summary>
-/// Cấu hình tập hợp 5 agent — bind từ section <c>"Agents"</c>.
+/// Configuration for the set of 5 agents — bound from the <c>"Agents"</c> section.
 /// </summary>
 public sealed class AgentsOptions
 {
-    /// <summary>Section name cho <c>Configuration.GetSection</c>.</summary>
+    /// <summary>Section name for <c>Configuration.GetSection</c>.</summary>
     public const string SectionName = "Agents";
 
-    /// <summary>Cấu hình Orchestrator.</summary>
+    /// <summary>Orchestrator configuration.</summary>
     public AgentOptions Orchestrator { get; set; } = new() { Model = "claude-haiku-4-5", Temperature = 0.3, MaxTokens = 2000 };
 
-    /// <summary>Cấu hình RequirementAgent.</summary>
+    /// <summary>RequirementAgent configuration.</summary>
     public AgentOptions Requirement { get; set; } = new() { Model = "claude-sonnet-4", Temperature = 0.1, MaxTokens = 2000 };
 
-    /// <summary>Cấu hình CodingAgent.</summary>
+    /// <summary>CodingAgent configuration.</summary>
     public AgentOptions Coding { get; set; } = new() { Provider = "AzureOpenAI", Model = "gpt-4.1", Temperature = 0.2, MaxTokens = 4000 };
 
-    /// <summary>Cấu hình TestingAgent.</summary>
+    /// <summary>TestingAgent configuration.</summary>
     public AgentOptions Testing { get; set; } = new() { Provider = "AzureOpenAI", Model = "gpt-4o-mini", Temperature = 0.2, MaxTokens = 3000 };
 
-    /// <summary>Cấu hình QaAgent.</summary>
+    /// <summary>QaAgent configuration.</summary>
     public AgentOptions Qa { get; set; } = new() { Model = "claude-haiku-4-5", Temperature = 0.1, MaxTokens = 1500 };
 }
 
-/// <summary>Cấu hình 1 agent đơn lẻ.</summary>
+/// <summary>Configuration for a single agent.</summary>
 public sealed class AgentOptions
 {
     /// <summary>Provider name: <c>Anthropic</c> / <c>AzureOpenAI</c> / <c>Mock</c>.</summary>

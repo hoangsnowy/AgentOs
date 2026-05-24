@@ -1,5 +1,5 @@
-// Persistence entity cho 1 LLM call (map 1-1 từ Application.Metrics.RunMetric).
-// Quan hệ → bảng run_metrics, query SQL cho cost-report / kc-bench / Bảng 2.6.
+// Persistence entity for a single LLM call (maps 1-1 from Application.Metrics.RunMetric).
+// Relational → run_metrics table, SQL queries for cost-report / kc-bench / Table 2.6.
 namespace AgenticSdlc.Infrastructure.Persistence.Entities;
 
 internal sealed class RunMetricEntity

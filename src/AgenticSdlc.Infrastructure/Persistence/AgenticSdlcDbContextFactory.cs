@@ -1,5 +1,5 @@
-// Design-time factory cho `dotnet ef migrations add`. KHÔNG dùng lúc runtime.
-// Connection string lấy từ env (CI/local) hoặc default localhost cho việc sinh migration.
+// Design-time factory for `dotnet ef migrations add`. NOT used at runtime.
+// The connection string comes from env (CI/local) or defaults to localhost for generating migrations.
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 

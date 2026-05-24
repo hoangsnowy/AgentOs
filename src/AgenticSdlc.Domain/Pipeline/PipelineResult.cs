@@ -1,5 +1,5 @@
 // AgenticSdlc.Domain/Pipeline/PipelineResult.cs
-// Phase 3 — Output của PipelineOrchestrator — bundle toàn bộ artefact + history QA loop.
+// Phase 3 — Output of the PipelineOrchestrator — bundles all final artifacts + the QA loop history.
 
 using System.Collections.Generic;
 using AgenticSdlc.Domain.Code;
@@ -10,15 +10,15 @@ using AgenticSdlc.Domain.Testing;
 namespace AgenticSdlc.Domain.Pipeline;
 
 /// <summary>
-/// Kết quả cuối pipeline 5-tác-tử. Bao gồm artefact cuối + history QA loop.
+/// Final result of the 5-agent pipeline. Includes the final artifacts + the QA loop history.
 /// </summary>
-/// <param name="UserStory">User story đầu vào.</param>
-/// <param name="Spec">Requirement spec đã sinh.</param>
-/// <param name="Code">Code artifact cuối (lần iteration cuối).</param>
-/// <param name="Tests">Test artifact cuối.</param>
-/// <param name="QaHistory">Toàn bộ QA report theo thứ tự iteration (index 0 = lần đầu).</param>
-/// <param name="Status">Trạng thái cuối.</param>
-/// <param name="TotalMetrics">Tổng cost / token / latency của tất cả agent call.</param>
+/// <param name="UserStory">The input user story.</param>
+/// <param name="Spec">The generated requirement spec.</param>
+/// <param name="Code">The final code artifact (from the last iteration).</param>
+/// <param name="Tests">The final test artifact.</param>
+/// <param name="QaHistory">All QA reports in iteration order (index 0 = first iteration).</param>
+/// <param name="Status">Final status.</param>
+/// <param name="TotalMetrics">Total cost / token / latency across all agent calls.</param>
 public sealed record PipelineResult(
     UserStory UserStory,
     RequirementSpec Spec,
@@ -28,17 +28,17 @@ public sealed record PipelineResult(
     PipelineStatus Status,
     AgentMetrics TotalMetrics)
 {
-    /// <summary>Số iteration QA đã chạy (chiều dài <see cref="QaHistory"/>).</summary>
+    /// <summary>Number of QA iterations that ran (length of <see cref="QaHistory"/>).</summary>
     public int IterationCount => QaHistory?.Count ?? 0;
 }
 
-/// <summary>Trạng thái cuối pipeline.</summary>
+/// <summary>Final pipeline status.</summary>
 public enum PipelineStatus
 {
-    /// <summary>QA pass trong giới hạn iteration.</summary>
+    /// <summary>QA passed within the iteration limit.</summary>
     Done,
-    /// <summary>Đã chạm <c>NMax</c> mà QA vẫn fail.</summary>
+    /// <summary>Reached <c>NMax</c> while QA still failed.</summary>
     MaxIterationReached,
-    /// <summary>Lỗi nghiêm trọng (LLM exception, malformed output, ...).</summary>
+    /// <summary>Critical error (LLM exception, malformed output, ...).</summary>
     Failed,
 }

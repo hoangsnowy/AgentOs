@@ -1,24 +1,24 @@
 // AgenticSdlc.Application/Metrics/RunMetric.cs
-// Sprint 4 — 1 record cho 1 LLM call. Sink ra CSV cho Bảng 2.6 luận văn.
+// Sprint 4 — one record per LLM call. Sinks to CSV for thesis Table 2.6.
 
 using System;
 
 namespace AgenticSdlc.Application.Metrics;
 
-/// <summary>1 record cho 1 LLM call trong 1 iteration của 1 KC run.</summary>
-/// <param name="RunId">UUID của 1 pipeline run (cùng RunId → cùng 1 lần chạy pipeline).</param>
-/// <param name="KcId">Mã KC: KC1..KC5, hoặc "ad-hoc" cho call ngoài KC bench.</param>
-/// <param name="Iteration">Số iteration của QA loop (1..NMax), 0 nếu là requirement (chạy 1 lần).</param>
+/// <summary>One record per LLM call within one iteration of one KC run.</summary>
+/// <param name="RunId">UUID of a single pipeline run (same RunId → same pipeline execution).</param>
+/// <param name="KcId">KC code: KC1..KC5, or "ad-hoc" for calls outside the KC bench.</param>
+/// <param name="Iteration">QA loop iteration number (1..NMax), 0 for requirement (runs once).</param>
 /// <param name="AgentName">RequirementAgent / CodingAgent / TestingAgent / QaAgent.</param>
-/// <param name="Model">Model dùng (vd "claude-sonnet-4-5", "gpt-4.1").</param>
+/// <param name="Model">Model used (e.g. "claude-sonnet-4-5", "gpt-4.1").</param>
 /// <param name="Provider">Provider (Claude / AzureOpenAI / Mock).</param>
 /// <param name="TokensIn">Input tokens.</param>
 /// <param name="TokensOut">Output tokens.</param>
-/// <param name="LatencyMs">Tổng wall time của LLM call (ms).</param>
-/// <param name="CostUsd">Cost ước tính (USD).</param>
-/// <param name="Success">True nếu call success (parse + validate OK), false nếu fail.</param>
-/// <param name="ErrorMessage">Lỗi (nếu fail).</param>
-/// <param name="Timestamp">UTC timestamp khi call kết thúc.</param>
+/// <param name="LatencyMs">Total wall time of the LLM call (ms).</param>
+/// <param name="CostUsd">Estimated cost (USD).</param>
+/// <param name="Success">True if the call succeeded (parse + validate OK), false if it failed.</param>
+/// <param name="ErrorMessage">Error (if failed).</param>
+/// <param name="Timestamp">UTC timestamp when the call finished.</param>
 public sealed record RunMetric(
     string RunId,
     string KcId,

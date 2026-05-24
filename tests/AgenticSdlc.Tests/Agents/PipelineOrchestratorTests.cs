@@ -1,5 +1,5 @@
 // AgenticSdlc.Tests/Agents/PipelineOrchestratorTests.cs
-// Phase 4 — Unit test cho PipelineOrchestrator (4 mocked agent).
+// Phase 4 — Unit tests for PipelineOrchestrator (4 mocked agents).
 
 using System.Collections.Generic;
 using System.Threading;
@@ -109,7 +109,7 @@ public class PipelineOrchestratorTests
         var tests = StubTests();
         var qa = StubQa(isConsistent: false);
 
-        // Options cap = 2, story.NMax = 5 → cap thắng.
+        // Options cap = 2, story.NMax = 5 → cap wins.
         var orchestrator = Build(spec, code, tests, qa, optionsMax: 2);
         var result = await orchestrator.RunAsync(new UserStory("story", NMax: 5));
 

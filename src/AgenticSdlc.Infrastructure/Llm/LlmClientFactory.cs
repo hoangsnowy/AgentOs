@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Llm/LlmClientFactory.cs
-// Sprint 1 — Factory resolve ILlmClient theo LlmOptions.Provider.
+// Sprint 1 — Factory that resolves ILlmClient by LlmOptions.Provider.
 
 using System;
 using AgenticSdlc.Domain.Llm;
@@ -9,25 +9,25 @@ using Microsoft.Extensions.Options;
 namespace AgenticSdlc.Infrastructure.Llm;
 
 /// <summary>
-/// Factory chọn impl <see cref="ILlmClient"/> dựa trên <see cref="LlmOptions.Provider"/>.
-/// 3 provider được support: <c>"Claude"</c> (case-insensitive), <c>"AzureOpenAI"</c>, <c>"Mock"</c>.
+/// Factory that selects the <see cref="ILlmClient"/> impl based on <see cref="LlmOptions.Provider"/>.
+/// 3 providers are supported: <c>"Claude"</c> (case-insensitive), <c>"AzureOpenAI"</c>, <c>"Mock"</c>.
 /// </summary>
 public interface ILlmClientFactory
 {
-    /// <summary>Trả về client cho provider được cấu hình mặc định trong <see cref="LlmOptions"/>.</summary>
+    /// <summary>Returns the client for the provider configured as default in <see cref="LlmOptions"/>.</summary>
     ILlmClient CreateDefault();
 
-    /// <summary>Trả về client cho provider được chỉ định (override cấu hình mặc định).</summary>
+    /// <summary>Returns the client for the specified provider (overrides the default configuration).</summary>
     ILlmClient Create(string providerName);
 }
 
-/// <summary>Default implementation lookup từ DI container.</summary>
+/// <summary>Default implementation that looks up from the DI container.</summary>
 public sealed class LlmClientFactory : ILlmClientFactory
 {
     private readonly IServiceProvider _services;
     private readonly LlmOptions _options;
 
-    /// <summary>Khởi tạo với DI provider + options.</summary>
+    /// <summary>Initializes with the DI provider + options.</summary>
     public LlmClientFactory(IServiceProvider services, IOptions<LlmOptions> options)
     {
         ArgumentNullException.ThrowIfNull(options);

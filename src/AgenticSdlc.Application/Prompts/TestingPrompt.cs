@@ -1,5 +1,5 @@
 // AgenticSdlc.Application/Prompts/TestingPrompt.cs
-// Sprint 3 — tách prompt khỏi TestingAgent. Version v1.
+// Sprint 3 — extracted the prompt from TestingAgent. Version v1.
 
 using System.Text;
 using System.Text.Json;
@@ -9,7 +9,7 @@ using AgenticSdlc.Domain.Requirements;
 
 namespace AgenticSdlc.Application.Prompts;
 
-/// <summary>System + User template cho Testing Agent (v1).</summary>
+/// <summary>System + User template for the Testing Agent (v1).</summary>
 public static class TestingPrompt
 {
     /// <summary>Prompt version.</summary>
@@ -17,10 +17,10 @@ public static class TestingPrompt
 
     /// <summary>System prompt.</summary>
     public const string System = """
-        Bạn là Testing Agent trong hệ thống Agentic SDLC.
-        Sinh xUnit test cho code đã được Coding Agent sinh ra, dựa trên RequirementSpec.
+        You are the Testing Agent in the Agentic SDLC system.
+        Generate xUnit tests for the code produced by the Coding Agent, based on the RequirementSpec.
 
-        Trả về CHỈ JSON theo schema:
+        Return ONLY JSON following the schema:
         {
           "framework": "xUnit",
           "files": [
@@ -32,17 +32,17 @@ public static class TestingPrompt
           "estimatedCoveragePercent": 0
         }
 
-        Quy tắc:
-        - Mỗi class test 1 file riêng.
-        - PHẢI có ≥ 1 happy-path, ≥ 1 edge-case, ≥ 1 error-case.
-        - Dùng [Theory] + [InlineData] cho test có nhiều input variation.
-        - Assertion: Shouldly (vd .ShouldBe(...), .ShouldThrow<T>(...)).
-        - Mocking: NSubstitute nếu cần.
-        - Đảm bảo tests cover AcceptanceCriteria từ spec.
-        - estimatedCoveragePercent là ước tính, KHÔNG đo thật (≥ 60 cho prototype).
+        Rules:
+        - One test class per file.
+        - MUST have ≥ 1 happy-path, ≥ 1 edge-case, ≥ 1 error-case.
+        - Use [Theory] + [InlineData] for tests with multiple input variations.
+        - Assertions: Shouldly (e.g. .ShouldBe(...), .ShouldThrow<T>(...)).
+        - Mocking: NSubstitute if needed.
+        - Make sure the tests cover the AcceptanceCriteria from the spec.
+        - estimatedCoveragePercent is an estimate, NOT actually measured (≥ 60 for the prototype).
         """;
 
-    /// <summary>Render user prompt từ spec + code + optional feedback.</summary>
+    /// <summary>Renders the user prompt from spec + code + optional feedback.</summary>
     public static string RenderUser(RequirementSpec spec, CodeArtifact code, QaReport? previousFeedback = null)
     {
         global::System.ArgumentNullException.ThrowIfNull(spec);
@@ -52,7 +52,7 @@ public static class TestingPrompt
         sb.AppendLine("Specification (acceptance criteria):");
         sb.AppendLine(JsonSerializer.Serialize(spec.AcceptanceCriteria, PromptJson.Default));
         sb.AppendLine();
-        sb.AppendLine($"Code đã sinh ({code.Files.Count} file):");
+        sb.AppendLine($"Generated code ({code.Files.Count} file(s)):");
         foreach (var f in code.Files)
         {
             sb.AppendLine($"--- {f.Path} ---");
@@ -62,12 +62,12 @@ public static class TestingPrompt
 
         if (previousFeedback is not null)
         {
-            sb.AppendLine("Previous QA feedback (issue test coverage cần fix):");
+            sb.AppendLine("Previous QA feedback (test coverage issues to fix):");
             sb.AppendLine(JsonSerializer.Serialize(previousFeedback.Issues, PromptJson.Default));
         }
 
         sb.AppendLine();
-        sb.AppendLine("Sinh TestArtifact JSON.");
+        sb.AppendLine("Generate the TestArtifact JSON.");
         return sb.ToString();
     }
 }

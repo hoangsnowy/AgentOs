@@ -1,5 +1,5 @@
 // AgenticSdlc.Application/Agents/IQaAgent.cs
-// Phase 3 — Contract cho QA Agent.
+// Phase 3 — Contract for the QA Agent.
 
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,12 +11,12 @@ using AgenticSdlc.Domain.Testing;
 namespace AgenticSdlc.Application.Agents;
 
 /// <summary>
-/// Đánh giá nhất quán requirement-code-test. Trả <see cref="QaReport"/> với
-/// cờ <see cref="QaReport.IterationNeeded"/> drive vòng lặp.
+/// Evaluates requirement-code-test consistency. Returns a <see cref="QaReport"/> whose
+/// <see cref="QaReport.IterationNeeded"/> flag drives the loop.
 /// </summary>
 public interface IQaAgent
 {
-    /// <summary>Chạy agent.</summary>
+    /// <summary>Runs the agent.</summary>
     Task<QaReport> RunAsync(
         RequirementSpec spec,
         CodeArtifact code,

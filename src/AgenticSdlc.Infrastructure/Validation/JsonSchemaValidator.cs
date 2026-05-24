@@ -1,5 +1,5 @@
 // AgenticSdlc.Infrastructure/Validation/JsonSchemaValidator.cs
-// Sprint 3 — impl ILlmOutputValidator bằng JsonSchema.Net 7.
+// Sprint 3 — ILlmOutputValidator impl using JsonSchema.Net 7.
 
 using System;
 using System.Collections.Concurrent;
@@ -13,7 +13,7 @@ using Json.Schema;
 
 namespace AgenticSdlc.Infrastructure.Validation;
 
-/// <summary>JSON Schema 2020-12 validator. Load schema từ file path lúc startup, cache theo tên.</summary>
+/// <summary>JSON Schema 2020-12 validator. Loads schemas from a file path at startup, caches by name.</summary>
 public sealed class JsonSchemaValidator : ILlmOutputValidator
 {
     private readonly ConcurrentDictionary<string, JsonSchema> _schemas = new();
@@ -23,7 +23,7 @@ public sealed class JsonSchemaValidator : ILlmOutputValidator
         RequireFormatValidation = false,
     };
 
-    /// <summary>Đăng ký schema từ file path. Gọi 1 lần lúc startup.</summary>
+    /// <summary>Registers a schema from a file path. Call once at startup.</summary>
     public void RegisterFromFile(string schemaName, string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(schemaName);
@@ -37,7 +37,7 @@ public sealed class JsonSchemaValidator : ILlmOutputValidator
         _schemas[schemaName] = schema;
     }
 
-    /// <summary>Đăng ký schema từ raw JSON string.</summary>
+    /// <summary>Registers a schema from a raw JSON string.</summary>
     public void RegisterFromJson(string schemaName, string schemaJson)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(schemaName);
@@ -54,7 +54,7 @@ public sealed class JsonSchemaValidator : ILlmOutputValidator
 
         if (!_schemas.TryGetValue(schemaName, out var schema))
         {
-            throw new InvalidOperationException($"Schema '{schemaName}' chưa được đăng ký.");
+            throw new InvalidOperationException($"Schema '{schemaName}' has not been registered.");
         }
 
         JsonNode? node;

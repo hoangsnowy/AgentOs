@@ -4,15 +4,15 @@
 namespace AgenticSdlc.Domain.Llm;
 
 /// <summary>
-/// Request gửi vào <see cref="ILlmClient.SendAsync(LlmRequest, System.Threading.CancellationToken)"/>.
-/// Đây là DTO trung lập với provider — <see cref="ILlmClient"/> sẽ map sang shape của Anthropic / Azure OpenAI.
+/// Request passed into <see cref="ILlmClient.SendAsync(LlmRequest, System.Threading.CancellationToken)"/>.
+/// This is a provider-neutral DTO — <see cref="ILlmClient"/> maps it to the Anthropic / Azure OpenAI shape.
 /// </summary>
-/// <param name="SystemPrompt">System / role prompt áp cho agent. Không được null nhưng có thể rỗng.</param>
-/// <param name="UserPrompt">User prompt. Bắt buộc, không rỗng.</param>
-/// <param name="Model">Tên model (ví dụ "claude-sonnet-4-20250514", "gpt-4.1"). Bắt buộc.</param>
-/// <param name="Temperature">Sampling temperature. Mặc định 0 (deterministic).</param>
-/// <param name="MaxTokens">Giới hạn output token. Mặc định 4096.</param>
-/// <param name="JsonSchema">JSON schema (optional) cho structured output. Null = free-form text.</param>
+/// <param name="SystemPrompt">System / role prompt applied to the agent. Must not be null but may be empty.</param>
+/// <param name="UserPrompt">User prompt. Required, non-empty.</param>
+/// <param name="Model">Model name (for example "claude-sonnet-4-20250514", "gpt-4.1"). Required.</param>
+/// <param name="Temperature">Sampling temperature. Default 0 (deterministic).</param>
+/// <param name="MaxTokens">Output token limit. Default 4096.</param>
+/// <param name="JsonSchema">JSON schema (optional) for structured output. Null = free-form text.</param>
 public sealed record LlmRequest(
     string SystemPrompt,
     string UserPrompt,
@@ -22,7 +22,7 @@ public sealed record LlmRequest(
     string? JsonSchema = null)
 {
     /// <summary>
-    /// Validate giá trị bắt buộc. Ném <see cref="System.ArgumentException"/> nếu sai.
+    /// Validates required values. Throws <see cref="System.ArgumentException"/> if invalid.
     /// </summary>
     public void Validate()
     {

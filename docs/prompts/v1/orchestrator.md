@@ -2,25 +2,25 @@
 
 Version: **v1** · Source: `src/AgenticSdlc.Application/Prompts/OrchestratorPrompt.cs`
 
-Orchestrator hiện tại là deterministic state machine (KHÔNG gọi LLM). File này chỉ ghi policy text dùng cho documentation + dự phòng nếu sau này có một "meta-orchestrator" do LLM điều khiển.
+The Orchestrator is currently a deterministic state machine (does NOT call an LLM). This file only records the policy text used for documentation + as a fallback if there is later an LLM-driven "meta-orchestrator".
 
 ## Policy
 
 ```text
-Orchestrator policy (deterministic, không gọi LLM):
+Orchestrator policy (deterministic, does not call an LLM):
 
 1. RequirementAgent(story) → spec.
-2. Vòng lặp i = 1..NMax:
+2. Loop i = 1..NMax:
    a. CodingAgent(spec, qaFeedback[i-1]?) → code.
    b. TestingAgent(spec, code, qaFeedback[i-1]?) → tests.
    c. QaAgent(spec, code, tests) → qaReport.
-   d. Nếu qaReport.isConsistent → trả PipelineResult(Done, iterations=i).
-   e. Nếu i = NMax → trả PipelineResult(MaxIterationReached).
-3. Nếu bất kỳ agent ném LlmException → trả PipelineResult(Failed) với agent + lỗi.
+   d. If qaReport.isConsistent → return PipelineResult(Done, iterations=i).
+   e. If i = NMax → return PipelineResult(MaxIterationReached).
+3. If any agent throws LlmException → return PipelineResult(Failed) with the agent + error.
 
-Bất kỳ exception khác phải propagate (không nuốt).
-Metric aggregate: tổng InputTokens, OutputTokens, CostUsd, Latency của tất cả agent call.
+Any other exception must propagate (do not swallow).
+Metric aggregate: sum of InputTokens, OutputTokens, CostUsd, Latency across all agent calls.
 ```
 
 ## Changelog
-- **v1** (2026-05-18): khởi tạo file để snapshot policy.
+- **v1** (2026-05-18): created the file to snapshot the policy.

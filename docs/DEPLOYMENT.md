@@ -1,23 +1,24 @@
 # Deployment — Azure Container Apps
 
-Hướng dẫn deploy `AgenticSdlc.Api` lên Azure Container Apps qua Bicep + GitHub Actions.
+> ⚠️ **Superseded.** Deployment moved to .NET Aspire + `azd` — see [infra/README.md](../infra/README.md).
+> The Bicep + GitHub Actions flow below was removed; this page is kept for historical reference only.
 
 ## 1. One-time setup (Azure side)
 
 ### 1.1 Service Principal + OIDC federated credential
 
-GitHub Actions dùng OIDC token (KHÔNG cần client secret lưu trong GH).
+GitHub Actions uses an OIDC token (NO client secret stored in GH).
 
 ```bash
-# Tạo Azure AD application
+# Create the Azure AD application
 APP_ID=$(az ad app create --display-name "agentic-sdlc-net-github" --query appId -o tsv)
 SP_ID=$(az ad sp create --id "$APP_ID" --query id -o tsv)
 
-# Gán role Contributor lên subscription (hoặc resource group nếu muốn hẹp hơn)
+# Assign the Contributor role on the subscription (or the resource group for a narrower scope)
 SUB_ID=$(az account show --query id -o tsv)
 az role assignment create --role Contributor --assignee "$APP_ID" --scope "/subscriptions/$SUB_ID"
 
-# Federated credential — chỉ cho phép workflow trên branch main (hoặc env tag)
+# Federated credential — only allow workflows on the main branch (or an env tag)
 az ad app federated-credential create --id "$APP_ID" --parameters '{
   "name": "github-main",
   "issuer": "https://token.actions.githubusercontent.com",
@@ -25,25 +26,25 @@ az ad app federated-credential create --id "$APP_ID" --parameters '{
   "audiences": ["api://AzureADTokenExchange"]
 }'
 
-# Lấy info cho GH secret
+# Get the info for the GH secrets
 echo "AZURE_CLIENT_ID = $APP_ID"
 echo "AZURE_TENANT_ID = $(az account show --query tenantId -o tsv)"
 echo "AZURE_SUBSCRIPTION_ID = $SUB_ID"
 ```
 
-### 1.2 GitHub repository secret
+### 1.2 GitHub repository secrets
 
 **Settings → Secrets and variables → Actions → New repository secret**:
 
-| Tên | Giá trị |
+| Name | Value |
 |---|---|
-| `AZURE_CLIENT_ID` | App ID từ bước trên |
+| `AZURE_CLIENT_ID` | App ID from the step above |
 | `AZURE_TENANT_ID` | Tenant ID |
 | `AZURE_SUBSCRIPTION_ID` | Subscription ID |
 
 ### 1.3 First-time infrastructure deployment
 
-Workflow `deploy.yml` cần resource group + ACR có sẵn. Lần đầu tạo thủ công:
+The `deploy.yml` workflow needs an existing resource group + ACR. Create them manually the first time:
 
 ```bash
 az group create --name rg-Hoang-LuanVan --location southeastasia
@@ -55,19 +56,19 @@ az deployment group create \
   --parameters containerImage=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
 ```
 
-Sau đó set LLM secret vào Key Vault (xem `infra/README.md` bước 5).
+Then set the LLM secrets in Key Vault (see `infra/README.md` step 5).
 
 ## 2. Subsequent deployments
 
-Mỗi push lên `main` (không touch `docs/` hoặc `.md`) tự trigger workflow:
+Every push to `main` (that does not touch `docs/` or `.md`) automatically triggers the workflow:
 
 1. Run `dotnet test` Release.
-2. Login Azure (OIDC).
-3. Build Docker image, push lên ACR với tag = `${{ github.sha }}`.
-4. Re-apply Bicep với image tag mới → Container App revision update.
-5. Print FQDN của container app.
+2. Log in to Azure (OIDC).
+3. Build the Docker image, push to ACR with tag = `${{ github.sha }}`.
+4. Re-apply Bicep with the new image tag → Container App revision update.
+5. Print the container app FQDN.
 
-Manual trigger qua **Actions → Deploy to Azure Container Apps → Run workflow**, chọn environment `dev|staging|prod`.
+Trigger manually via **Actions → Deploy to Azure Container Apps → Run workflow**, choosing the environment `dev|staging|prod`.
 
 ## 3. Smoke test post-deploy
 
@@ -79,12 +80,12 @@ curl "https://$FQDN/health"
 
 curl -X POST "https://$FQDN/requirement" \
   -H "Content-Type: application/json" \
-  -d '{"description":"Hệ thống quản lý sản phẩm","nMax":3}'
+  -d '{"description":"Product management system","nMax":3}'
 ```
 
 ## 4. Roll back
 
-Container Apps lưu tất cả revision. Roll back qua:
+Container Apps keeps every revision. Roll back via:
 
 ```bash
 # List revisions
@@ -92,7 +93,7 @@ az containerapp revision list -n agenticsdlc-dev -g rg-Hoang-LuanVan \
   --query "[].{name:name, active:properties.active, image:properties.template.containers[0].image, created:properties.createdTime}" \
   -o table
 
-# Activate revision cũ
+# Activate the old revision
 az containerapp revision activate \
   --name <revision-name> \
   --resource-group rg-Hoang-LuanVan \
@@ -104,7 +105,7 @@ az containerapp revision activate \
 - **Logs**: `az containerapp logs show -n agenticsdlc-dev -g rg-Hoang-LuanVan --tail 100`
 - **Application Insights**: <https://portal.azure.com> → Application Insights → `agenticsdlc-ai-dev`
 - **Live metrics**: Application Insights → Live Metrics
-- **Cost log**: query KQL trong App Insights:
+- **Cost log**: query KQL in App Insights:
   ```kusto
   traces
   | where message contains "RequirementAgent done" or message contains "CodingAgent done"
@@ -116,15 +117,15 @@ az containerapp revision activate \
 
 ```bash
 az group delete --name rg-Hoang-LuanVan --yes --no-wait
-# Key Vault soft-delete → purge sau 7 ngày hoặc chủ động:
+# Key Vault soft-delete → purge after 7 days or proactively:
 # az keyvault purge --name <kv-name>
 ```
 
 ## Troubleshooting
 
-| Triệu chứng | Nguyên nhân thường gặp | Fix |
+| Symptom | Common cause | Fix |
 |---|---|---|
-| Workflow fail tại `az containerapp update` | ACR chưa setup | Chạy bước 1.3 thủ công lần đầu |
-| Container app trả 503 sau deploy | Probe `/health` timeout | Check log: `az containerapp logs show ...` |
-| LLM call trả 401 từ Container App | Secret Key Vault chưa set | Set qua `az keyvault secret set ...` + restart revision |
-| Cost App Insights tăng đột biến | Verbose log level | Reduce `Logging:LogLevel:Default` về `Warning` |
+| Workflow fails at `az containerapp update` | ACR not set up | Run step 1.3 manually the first time |
+| Container app returns 503 after deploy | Probe `/health` timeout | Check the logs: `az containerapp logs show ...` |
+| LLM call returns 401 from the Container App | Key Vault secret not set | Set via `az keyvault secret set ...` + restart the revision |
+| App Insights cost spikes | Verbose log level | Reduce `Logging:LogLevel:Default` to `Warning` |

@@ -1,10 +1,10 @@
 // AgenticSdlc.Web/Services/Demo/DemoLlmClient.cs
-// Phase 7 — Nguồn LLM "canned" cho chế độ Demo offline. KHÔNG gọi mạng: nhận biết agent
-// đang gọi qua system prompt rồi trả JSON hợp lệ theo schema, đồng thời mô phỏng Quality Loop
-// (QA fail vòng đầu → pass vòng sau) để buổi bảo vệ thấy được cơ chế lặp.
+// Phase 7 — A "canned" LLM source for offline Demo mode. NO network calls: it identifies the calling
+// agent from the system prompt then returns schema-valid JSON, while also simulating the Quality Loop
+// (QA fails the first round → passes the next) so the defense can see the iteration mechanism.
 //
-// Lưu ý: client này scoped theo circuit nên bộ đếm vòng lặp độc lập giữa các phiên người dùng.
-// Một lần chạy pipeline là tuần tự (orchestrator await từng agent) nên các bộ đếm an toàn.
+// Note: this client is circuit-scoped, so the iteration counters are independent across user sessions.
+// A single pipeline run is sequential (the orchestrator awaits each agent), so the counters are safe.
 
 using System;
 using System.Diagnostics;
@@ -19,8 +19,8 @@ using Microsoft.Extensions.Logging;
 namespace AgenticSdlc.Web.Services.Demo;
 
 /// <summary>
-/// Impl <see cref="ILlmClient"/> trả dữ liệu mẫu deterministic cho demo offline.
-/// Phân biệt agent bằng dòng mở đầu system prompt ("Bạn là … Agent").
+/// An <see cref="ILlmClient"/> implementation that returns deterministic sample data for the offline demo.
+/// It distinguishes agents by the opening line of the system prompt ("You are the … Agent").
 /// </summary>
 public sealed class DemoLlmClient : ILlmClient
 {
@@ -34,14 +34,14 @@ public sealed class DemoLlmClient : ILlmClient
     private readonly int _failingQaRounds;
     private readonly ILogger<DemoLlmClient> _logger;
 
-    // Bộ đếm theo circuit — reset khi bắt đầu một story mới (lần gọi Requirement).
+    // Per-circuit counters — reset when a new story begins (the Requirement call).
     private int _qaCalls;
     private int _codingCalls;
 
     /// <inheritdoc />
     public string Provider => "Demo";
 
-    /// <summary>Khởi tạo, đọc tham số tốc độ + số vòng QA fail từ section <c>Demo</c>.</summary>
+    /// <summary>Initialize, reading the speed parameter + the number of failing QA rounds from the <c>Demo</c> section.</summary>
     public DemoLlmClient(IConfiguration configuration, ILogger<DemoLlmClient> logger)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -66,27 +66,29 @@ public sealed class DemoLlmClient : ILlmClient
         string content;
         int inTok, outTok;
 
-        // Khớp theo DÒNG ĐỊNH DANH "Bạn là <X> Agent" — không khớp suffix trần "<X> Agent"
-        // vì prompt khác có nhắc chéo (vd Testing prompt nhắc "Coding Agent") gây route nhầm.
-        if (Contains(sys, "Bạn là Requirement Agent"))
+        // Match on the IDENTIFIER LINE "You are the <X> Agent" — not a bare "<X> Agent" suffix,
+        // because other prompts cross-reference agents (e.g. the Testing prompt mentions "Coding Agent"),
+        // which would mis-route. This literal is a routing key shared with the Application prompt files
+        // (Application/Prompts/*.cs) — keep both in sync if you reword the prompt opening line.
+        if (Contains(sys, "You are the Requirement Agent"))
         {
             _qaCalls = 0;
             _codingCalls = 0;
             content = RequirementJson(request.UserPrompt);
             (inTok, outTok) = (420, 360);
         }
-        else if (Contains(sys, "Bạn là Coding Agent"))
+        else if (Contains(sys, "You are the Coding Agent"))
         {
             _codingCalls++;
             content = CodeJson(_codingCalls);
             (inTok, outTok) = (680, _codingCalls > 1 ? 1240 : 1180);
         }
-        else if (Contains(sys, "Bạn là Testing Agent"))
+        else if (Contains(sys, "You are the Testing Agent"))
         {
             content = TestJson();
             (inTok, outTok) = (640, 760);
         }
-        else if (Contains(sys, "Bạn là QA Agent"))
+        else if (Contains(sys, "You are the QA Agent"))
         {
             _qaCalls++;
             var pass = _qaCalls > _failingQaRounds;
@@ -97,7 +99,7 @@ public sealed class DemoLlmClient : ILlmClient
         {
             content = "{}";
             (inTok, outTok) = (10, 2);
-            _logger.LogWarning("DemoLlmClient: không nhận diện được agent từ system prompt.");
+            _logger.LogWarning("DemoLlmClient: could not identify the agent from the system prompt.");
         }
 
         sw.Stop();
@@ -115,20 +117,20 @@ public sealed class DemoLlmClient : ILlmClient
         var snippet = Snippet(userPrompt, 140);
         var obj = new
         {
-            title = "Quản lý sản phẩm trong danh mục",
-            summary = $"Cho phép quản trị viên tạo, cập nhật, tìm kiếm sản phẩm với SKU duy nhất. (User story: {snippet})",
-            stakeholders = new[] { "Quản trị viên", "Khách hàng" },
+            title = "Manage products in the catalog",
+            summary = $"Allows administrators to create, update, and search products with a unique SKU. (User story: {snippet})",
+            stakeholders = new[] { "Administrator", "Customer" },
             functionalRequirements = new[]
             {
-                "Tạo sản phẩm mới với SKU duy nhất",
-                "Cập nhật thông tin và giá sản phẩm",
-                "Xoá mềm (soft-delete) sản phẩm",
-                "Tìm kiếm sản phẩm theo tên và phân trang",
+                "Create a new product with a unique SKU",
+                "Update product information and price",
+                "Soft-delete a product",
+                "Search products by name with pagination",
             },
             nonFunctionalRequirements = new[]
             {
-                "Thời gian phản hồi p95 ≤ 200ms",
-                "Ghi log mọi thao tác ghi dữ liệu",
+                "p95 response time ≤ 200ms",
+                "Log every data-write operation",
             },
             entities = new[]
             {
@@ -136,20 +138,20 @@ public sealed class DemoLlmClient : ILlmClient
                 {
                     name = "Product",
                     fields = new[] { "Id: Guid", "Sku: string", "Name: string", "Price: decimal", "IsActive: bool" },
-                    notes = "SKU phải duy nhất trên toàn hệ thống",
+                    notes = "SKU must be unique across the entire system",
                 },
             },
             endpoints = new[]
             {
-                new { method = "POST", path = "/products", purpose = "Tạo sản phẩm mới", authRequired = true },
-                new { method = "GET", path = "/products/{id}", purpose = "Lấy chi tiết sản phẩm", authRequired = false },
-                new { method = "GET", path = "/products", purpose = "Danh sách + tìm kiếm có phân trang", authRequired = false },
+                new { method = "POST", path = "/products", purpose = "Create a new product", authRequired = true },
+                new { method = "GET", path = "/products/{id}", purpose = "Get product details", authRequired = false },
+                new { method = "GET", path = "/products", purpose = "List + search with pagination", authRequired = false },
             },
             acceptanceCriteria = new[]
             {
-                "Tạo sản phẩm trùng SKU phải trả lỗi 409 Conflict",
-                "Lấy sản phẩm không tồn tại trả 404 Not Found",
-                "Danh sách hỗ trợ phân trang với pageSize tối đa 100",
+                "Creating a product with a duplicate SKU must return 409 Conflict",
+                "Fetching a non-existent product returns 404 Not Found",
+                "The list supports pagination with a max pageSize of 100",
             },
         };
         return JsonSerializer.Serialize(obj, Json);
@@ -158,8 +160,8 @@ public sealed class DemoLlmClient : ILlmClient
     private static string CodeJson(int iteration)
     {
         var fixedNote = iteration > 1
-            ? "Vòng tái sinh: đã bổ sung phân trang cho GET /products và kiểm tra SKU trùng theo feedback QA."
-            : "Bản sinh đầu tiên theo Clean Architecture (Domain / Application / Api).";
+            ? "Regeneration round: added pagination to GET /products and a duplicate-SKU check per QA feedback."
+            : "First generation following Clean Architecture (Domain / Application / Api).";
 
         var obj = new
         {
@@ -201,7 +203,7 @@ public sealed class DemoLlmClient : ILlmClient
                         "        app.MapPost(\"/products\", async (CreateProduct cmd, IProductRepository repo, CancellationToken ct) =>\n" +
                         "        {\n" +
                         "            if (await repo.SkuExistsAsync(cmd.Sku, ct))\n" +
-                        "                return Results.Conflict($\"SKU {cmd.Sku} đã tồn tại.\");\n" +
+                        "                return Results.Conflict($\"SKU {cmd.Sku} already exists.\");\n" +
                         "            var p = new Domain.Product { Sku = cmd.Sku, Name = cmd.Name, Price = cmd.Price };\n" +
                         "            await repo.AddAsync(p, ct);\n" +
                         "            return Results.Created($\"/products/{p.Id}\", p);\n" +
@@ -231,18 +233,18 @@ public sealed class DemoLlmClient : ILlmClient
                         "    [Fact]\n" +
                         "    public async Task CreateProduct_NewSku_Returns201()\n    {\n" +
                         "        var repo = new FakeRepo(skuExists: false);\n" +
-                        "        var result = await CreateHandler.Run(new(\"SKU-1\", \"Bàn\", 100m), repo);\n" +
+                        "        var result = await CreateHandler.Run(new(\"SKU-1\", \"Table\", 100m), repo);\n" +
                         "        result.ShouldBeOfType<Created<Product>>();\n    }\n\n" +
                         "    [Fact]\n" +
                         "    public async Task CreateProduct_DuplicateSku_Returns409()\n    {\n" +
                         "        var repo = new FakeRepo(skuExists: true);\n" +
-                        "        var result = await CreateHandler.Run(new(\"SKU-1\", \"Bàn\", 100m), repo);\n" +
+                        "        var result = await CreateHandler.Run(new(\"SKU-1\", \"Table\", 100m), repo);\n" +
                         "        result.ShouldBeOfType<Conflict<string>>();\n    }\n\n" +
                         "    [Theory]\n    [InlineData(-1)]\n    [InlineData(0)]\n" +
                         "    public async Task CreateProduct_InvalidPrice_Throws(decimal price)\n    {\n" +
                         "        var repo = new FakeRepo(skuExists: false);\n" +
                         "        await Should.ThrowAsync<ArgumentException>(\n" +
-                        "            () => CreateHandler.Run(new(\"SKU-2\", \"Ghế\", price), repo));\n    }\n}\n",
+                        "            () => CreateHandler.Run(new(\"SKU-2\", \"Chair\", price), repo));\n    }\n}\n",
                     language = "csharp",
                 },
             },
@@ -268,7 +270,7 @@ public sealed class DemoLlmClient : ILlmClient
                     {
                         severity = "Minor",
                         category = "CodeQuality",
-                        description = "Nên thêm validation FluentValidation cho CreateProduct (không bắt buộc).",
+                        description = "Consider adding FluentValidation for CreateProduct (optional).",
                         location = "src/Api/ProductEndpoints.cs",
                     },
                 },
@@ -285,21 +287,21 @@ public sealed class DemoLlmClient : ILlmClient
                     {
                         severity = "Major",
                         category = "RequirementCoverage",
-                        description = "Endpoint GET /products chưa hiện thực phân trang theo acceptance criteria.",
+                        description = "The GET /products endpoint does not implement pagination per the acceptance criteria.",
                         location = "src/Api/ProductEndpoints.cs",
                     },
                     new
                     {
                         severity = "Major",
                         category = "TestCoverage",
-                        description = "Thiếu test cho phân trang và giới hạn pageSize ≤ 100.",
+                        description = "Missing tests for pagination and the pageSize ≤ 100 limit.",
                         location = "tests/ProductEndpointsTests.cs",
                     },
                 },
                 recommendations = new[]
                 {
-                    "Bổ sung tham số page/size cho GET /products và clamp size ≤ 100.",
-                    "Thêm test phân trang vào ProductEndpointsTests.",
+                    "Add page/size parameters to GET /products and clamp size ≤ 100.",
+                    "Add pagination tests to ProductEndpointsTests.",
                 },
             };
         return JsonSerializer.Serialize(obj, Json);
@@ -309,7 +311,7 @@ public sealed class DemoLlmClient : ILlmClient
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return "(không có)";
+            return "(none)";
         }
         var t = text.Trim().ReplaceLineEndings(" ");
         return t.Length <= max ? t : string.Concat(t.AsSpan(0, max), "…");
