@@ -28,6 +28,9 @@
 
 # Doc / IaC không cần trong image runtime
 docs/
+# nhưng docs/schemas/*.json embed vào Infrastructure.dll lúc build → phải giữ
+!docs/schemas/
+!docs/schemas/**
 infra/
 tests/fixtures/
 Dockerfile

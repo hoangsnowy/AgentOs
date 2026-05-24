@@ -14,7 +14,7 @@ COPY src/AgenticSdlc.Application/AgenticSdlc.Application.csproj  src/AgenticSdlc
 COPY src/AgenticSdlc.Infrastructure/AgenticSdlc.Infrastructure.csproj src/AgenticSdlc.Infrastructure/
 COPY src/AgenticSdlc.Api/AgenticSdlc.Api.csproj                  src/AgenticSdlc.Api/
 COPY tests/AgenticSdlc.Tests/AgenticSdlc.Tests.csproj            tests/AgenticSdlc.Tests/
-RUN dotnet restore AgenticSdlc.sln
+RUN dotnet restore src/AgenticSdlc.Api/AgenticSdlc.Api.csproj
 
 # Copy source + publish Release
 COPY . .
@@ -28,11 +28,8 @@ RUN dotnet publish src/AgenticSdlc.Api/AgenticSdlc.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Non-root user (security best practice — App Container chạy uid 1654 mặc định)
-RUN groupadd --gid 1654 app && useradd --uid 1654 --gid app --no-create-home app
-
-COPY --from=build /app/publish .
-RUN chown -R app:app /app
+# Base image aspnet:10.0 đã có sẵn non-root user 'app' (uid 1654) — không tạo lại.
+COPY --from=build --chown=app:app /app/publish .
 USER app
 
 ENV ASPNETCORE_URLS=http://+:8080 \
