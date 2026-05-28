@@ -4,7 +4,6 @@
 @using Microsoft.Extensions.DependencyInjection
 @using AgenticSdlc.Domain.Llm
 @inject IServiceProvider Sp
-@inject DemoRunContext DemoCtx
 @inject CircuitPipelineProgress Progress
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
@@ -17,14 +16,7 @@
 <!-- ============ STATUS BAR (mode · persistence · settings) ============ -->
 <div class="status-bar">
     <div class="status-chips">
-        @if (_useDemo)
-        {
-            <span class="status-chip mode-demo">⚙ Demo mode <em>· offline canned data</em></span>
-        }
-        else
-        {
-            <span class="status-chip mode-live">⚡ Live · @ActiveProvider</span>
-        }
+        <span class="status-chip mode-live">⚡ Live · @ActiveProvider</span>
 
         @if (_dbConnected)
         {
@@ -96,11 +88,6 @@
                 <input type="number" min="1" max="5" @bind="_nmax" />
             </label>
 
-            <label class="toggle">
-                <input type="checkbox" @bind="_useDemo" />
-                Run in Demo mode (offline, no API key required)
-            </label>
-
             <button class="run" @onclick="RunAsync" disabled="@(_running || string.IsNullOrWhiteSpace(_description))">
                 @(_running ? "Running pipeline…" : "▶ Run pipeline")
             </button>
@@ -109,14 +96,7 @@
                 <button class="ghost" @onclick="Cancel">Cancel</button>
             }
 
-            @if (!_useDemo)
-            {
-                <p class="hint">Live mode → provider <strong>@ActiveProvider</strong>. Set the API key in user-secrets. Azure-only: set <code>Llm:ForceProvider=AzureOpenAI</code> + your Azure deployment in <code>Llm:AzureOpenAi:Model</code>.</p>
-            }
-            else
-            {
-                <p class="hint">Demo mode uses sample data, runs offline, and simulates QA failing the first round → passing the next to illustrate the Quality Loop.</p>
-            }
+            <p class="hint">Live mode → provider <strong>@ActiveProvider</strong>. Set API keys + provider on <a href="/settings">Settings</a> (or via <code>dotnet user-secrets</code>).</p>
         </div>
 
         <div class="card">
@@ -345,7 +325,6 @@
     // ---- Input ----
     private string _description = "As an administrator, I want to manage products in the catalog with a unique SKU to avoid duplicates.";
     private int _nmax = 3;
-    private bool _useDemo = true;
 
     private string ActiveProvider => string.IsNullOrWhiteSpace(LlmOpts.Value.ForceProvider)
         ? LlmOpts.Value.Provider
@@ -475,7 +454,6 @@
         }
         ResetState();
         _running = true;
-        DemoCtx.UseDemo = _useDemo;
         Progress.Listener = OnProgress;
         _cts = new CancellationTokenSource();
 

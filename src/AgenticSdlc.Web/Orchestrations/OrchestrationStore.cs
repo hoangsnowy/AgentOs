@@ -181,7 +181,7 @@ public sealed class OrchestrationStore
         {
             Id = "sdlc-5agent",
             Name = "5-Agent SDLC Pipeline",
-            Description = "Leader–Specialists–Quality Loop. Runnable with real agents or Demo.",
+            Description = "Leader–Specialists–Quality Loop. Real LLM agents.",
             StateSchemaJson = "{\n  \"userStory\": \"string\",\n  \"spec\": \"RequirementSpec\",\n  \"code\": \"CodeArtifact\",\n  \"tests\": \"TestArtifact\",\n  \"qa\": \"QaReport\"\n}",
             Guardrails = ["QA score ≥ 0.8 to pass", "At most NMax iterations", "Each agent's output must match the JSON schema"],
             Nodes =
