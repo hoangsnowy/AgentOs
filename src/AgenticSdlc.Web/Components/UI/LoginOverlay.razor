@@ -1,0 +1,51 @@
+@* Login splash overlay — full-screen on first visit. Sign in → persists flag in localStorage. *@
+
+@inject IJSRuntime JS
+
+@if (_show)
+{
+    <div class="login-overlay">
+        <div class="login-card">
+            <div class="login-brand">
+                <div class="brand-mark">◆</div>
+                <div>
+                    <div class="brand-title">Agentic SDLC</div>
+                    <div class="brand-sub">.NET multi-agent framework</div>
+                </div>
+            </div>
+
+            <div class="login-form">
+                <Field Label="Username">
+                    <input type="text" @bind="_user" placeholder="developer" />
+                </Field>
+                <Field Label="Password">
+                    <input type="password" @bind="_pass" placeholder="••••••••" />
+                </Field>
+                <Btn Variant="Btn.ButtonVariant.Primary" ExtraClass="login-btn" OnClick="SignIn">Sign in</Btn>
+                <div class="login-hint">Local prototype — any credentials work. Stored in localStorage.</div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _show;
+    private string _user = "developer";
+    private string _pass = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var signed = await JS.InvokeAsync<string>("localStorage.getItem", "agentic-signed-in");
+            _show = string.IsNullOrEmpty(signed);
+            if (_show) { StateHasChanged(); }
+        }
+    }
+
+    private async Task SignIn()
+    {
+        await JS.InvokeVoidAsync("localStorage.setItem", "agentic-signed-in", _user);
+        _show = false;
+    }
+}

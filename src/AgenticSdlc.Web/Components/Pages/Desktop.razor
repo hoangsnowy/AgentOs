@@ -1,0 +1,29 @@
+@page "/"
+@inject NavigationManager Nav
+
+<PageTitle>Desktop — Agentic SDLC</PageTitle>
+
+<div class="desktop">
+    <div class="desktop-group">
+        <div class="desktop-group-title">Apps</div>
+        <div class="desktop-icons">
+            <DesktopIcon Title="Pipeline" Icon="🚀" Caption="Run the 5-agent pipeline" Href="/pipeline" />
+            <DesktopIcon Title="Workflow" Icon="🕸" Caption="Visual orchestration editor" Href="/orchestration" />
+            <DesktopIcon Title="Settings" Icon="⚙" Caption="LLM keys, GitHub integration" Href="/settings" />
+        </div>
+    </div>
+
+    <div class="desktop-group">
+        <div class="desktop-group-title">Quick actions</div>
+        <div class="desktop-icons">
+            <DesktopIcon Title="Open PR" Icon="🚀" Caption="Push generated code → GitHub" Href="/pipeline" />
+            <DesktopIcon Title="Verify build" Icon="🔨" Caption="dotnet build the agent output" Href="/pipeline" />
+            <DesktopIcon Title="GitHub" Icon="↗" Caption="Repository" Href="https://github.com/hoangsnowy/agentic-sdlc-net" Target="_blank" />
+        </div>
+    </div>
+
+    <div class="desktop-clock">
+        <div class="clock-time">@DateTime.Now.ToString("HH:mm")</div>
+        <div class="clock-date">@DateTime.Now.ToString("dddd, d MMMM yyyy")</div>
+    </div>
+</div>

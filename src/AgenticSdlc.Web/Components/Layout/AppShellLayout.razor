@@ -1,6 +1,8 @@
 @inherits LayoutComponentBase
 @inject Microsoft.JSInterop.IJSRuntime JS
 
+<LoginOverlay />
+
 <div class="shell">
 
     <aside class="shell-sidebar">
@@ -15,6 +17,9 @@
         <nav class="shell-nav">
             <div class="nav-section">Workspace</div>
             <NavLink class="nav-item" Match="NavLinkMatch.All" href="/">
+                <span class="nav-ic">🖥</span> Desktop
+            </NavLink>
+            <NavLink class="nav-item" href="/pipeline">
                 <span class="nav-ic">▶</span> Pipeline
             </NavLink>
             <NavLink class="nav-item" href="/orchestration">
@@ -63,7 +68,8 @@
                     </div>
                 </div>
                 <div class="sm-section">Apps</div>
-                <a class="sm-item" href="/" @onclick="CloseStart"><span class="sm-ic">▶</span> Pipeline <span class="sm-hint">Ctrl+1</span></a>
+                <a class="sm-item" href="/" @onclick="CloseStart"><span class="sm-ic">🖥</span> Desktop <span class="sm-hint">Ctrl+0</span></a>
+                <a class="sm-item" href="/pipeline" @onclick="CloseStart"><span class="sm-ic">▶</span> Pipeline <span class="sm-hint">Ctrl+1</span></a>
                 <a class="sm-item" href="/orchestration" @onclick="CloseStart"><span class="sm-ic">🕸</span> Workflow <span class="sm-hint">Ctrl+2</span></a>
                 <a class="sm-item" href="/settings" @onclick="CloseStart"><span class="sm-ic">⚙</span> Settings <span class="sm-hint">Ctrl+,</span></a>
                 <div class="sm-section">Help</div>
@@ -91,8 +97,9 @@
 
         <!-- Toolbar (icon strip) -->
         <div class="toolbar-strip">
-            <button class="tbtn" title="New" @onclick="@(() => Nav.NavigateTo("/orchestration"))">⊕ New</button>
-            <button class="tbtn" title="Pipeline" @onclick="@(() => Nav.NavigateTo("/"))">▶ Run</button>
+            <button class="tbtn" title="Desktop" @onclick="@(() => Nav.NavigateTo("/"))">🖥 Home</button>
+            <button class="tbtn" title="Run pipeline" @onclick="@(() => Nav.NavigateTo("/pipeline"))">▶ Pipeline</button>
+            <button class="tbtn" title="Workflow editor" @onclick="@(() => Nav.NavigateTo("/orchestration"))">🕸 Workflow</button>
             <span class="tbtn-sep"></span>
             <button class="tbtn" title="Settings" @onclick="@(() => Nav.NavigateTo("/settings"))">⚙ Config</button>
             <span class="tbtn-sep"></span>
