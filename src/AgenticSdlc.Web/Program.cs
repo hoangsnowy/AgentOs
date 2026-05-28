@@ -43,6 +43,9 @@ builder.Services.AddPersistence(builder.Configuration);
 // GitHub integration — IGitHubPrService for opening a PR with the generated code.
 builder.Services.AddGitHubIntegration();
 
+// Build verifier — runs `dotnet build` on the generated code in a temp directory.
+builder.Services.AddBuildVerifier();
+
 // --- Overrides for the presentation layer ---
 
 // 1) Demo-aware LLM source: UseDemo ⇒ returns canned JSON (runs offline, with the Quality Loop);

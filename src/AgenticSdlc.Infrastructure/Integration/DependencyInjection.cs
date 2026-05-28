@@ -15,4 +15,11 @@ public static class IntegrationServiceCollectionExtensions
         services.AddTransient<IGitHubPrService, GitHubPrService>();
         return services;
     }
+
+    /// <summary>Register <see cref="IBuildVerifier"/> — runs <c>dotnet build</c> on the generated code.</summary>
+    public static IServiceCollection AddBuildVerifier(this IServiceCollection services)
+    {
+        services.AddTransient<IBuildVerifier, BuildVerifier>();
+        return services;
+    }
 }

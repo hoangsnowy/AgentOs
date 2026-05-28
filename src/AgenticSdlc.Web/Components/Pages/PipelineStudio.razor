@@ -9,6 +9,7 @@
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
 @inject AgenticSdlc.Application.Integration.IGitHubPrService GitHubPr
+@inject AgenticSdlc.Application.Integration.IBuildVerifier BuildVerifier
 @implements IDisposable
 
 <PageTitle>Agent Studio — Agentic SDLC</PageTitle>
@@ -285,6 +286,33 @@
             @if (_result?.Code is not null && _result.Code.Files.Count > 0)
             {
                 <div class="card">
+                    <h2>Verify build (sandbox)</h2>
+                    <p class="muted">Write the generated files to a temp directory and run <code>dotnet build</code> to check the agent's output actually compiles. Real container sandbox is on the roadmap.</p>
+                    <button class="run" @onclick="VerifyBuildAsync" disabled="@_verifying">
+                        @(_verifying ? "Building…" : "🔨 Verify build")
+                    </button>
+                    @if (_buildResult is not null)
+                    {
+                        <p class="hint" style="margin-top:10px">
+                            @if (_buildResult.Success)
+                            {
+                                <span class="badge ok">Build OK</span>
+                            }
+                            else
+                            {
+                                <span class="badge err">Build failed</span>
+                            }
+                            <span class="muted"> exit @_buildResult.ExitCode · @(_buildResult.ElapsedMilliseconds)ms</span>
+                        </p>
+                        <pre class="code">@_buildResult.Output</pre>
+                    }
+                    @if (_buildError is not null)
+                    {
+                        <p class="hint" style="margin-top:10px"><span class="badge err">Error</span> <span class="muted">@_buildError</span></p>
+                    }
+                </div>
+
+                <div class="card">
                     <h2>Push to GitHub</h2>
                     <p class="muted">Open a pull request with the generated code + tests to a target repo. Set PAT + repo on <a href="/settings">Settings</a>.</p>
                     <button class="run" @onclick="OpenPrAsync" disabled="@_openingPr">
@@ -381,6 +409,31 @@
     private bool _openingPr;
     private string? _prUrl;
     private string? _prError;
+
+    // Build verify state
+    private bool _verifying;
+    private AgenticSdlc.Application.Integration.BuildVerifyResult? _buildResult;
+    private string? _buildError;
+
+    private async Task VerifyBuildAsync()
+    {
+        if (_result is null) return;
+        _verifying = true;
+        _buildResult = null;
+        _buildError = null;
+        try
+        {
+            _buildResult = await BuildVerifier.VerifyAsync(_result, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _buildError = ex.Message;
+        }
+        finally
+        {
+            _verifying = false;
+        }
+    }
 
     private async Task OpenPrAsync()
     {
