@@ -1,0 +1,109 @@
+@page "/settings"
+@using AgenticSdlc.Application.Configuration
+@using AgenticSdlc.Domain.Llm
+@inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
+@inject IRuntimeOverrides Overrides
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
+
+<PageTitle>Settings — Agentic SDLC</PageTitle>
+
+<div class="card">
+    <h2>Current configuration</h2>
+    <table class="settings-table">
+        <tbody>
+            <tr><th>Default provider</th><td><code>@LlmOpts.Value.Provider</code></td></tr>
+            <tr><th>Effective force provider</th><td>@EffectiveForceLabel()</td></tr>
+            <tr><th>Anthropic API key</th><td>@KeyState(LlmOpts.Value.Claude.ApiKey)</td></tr>
+            <tr><th>Azure OpenAI API key</th><td>@KeyState(LlmOpts.Value.AzureOpenAi.ApiKey)</td></tr>
+            <tr><th>Azure OpenAI endpoint</th><td>@(string.IsNullOrEmpty(LlmOpts.Value.AzureOpenAi.Endpoint) ? "— not set —" : LlmOpts.Value.AzureOpenAi.Endpoint)</td></tr>
+            <tr><th>Persistence</th><td>@(_dbConnected ? "Postgres connected" : "Stateless (no DB)")</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Runtime overrides</h2>
+    <p class="muted">Stored in memory; live for the lifetime of the server process. Permanent changes belong in <code>appsettings.json</code> or <code>dotnet user-secrets</code>.</p>
+
+    <label class="field">
+        <span>Force provider — applies to <strong>every</strong> agent regardless of its per-agent setting</span>
+        <select @bind="_forceProvider">
+            <option value="">— no override (use per-agent config) —</option>
+            <option value="Claude">Claude (Anthropic)</option>
+            <option value="AzureOpenAI">Azure OpenAI</option>
+            <option value="MAF">MAF (Azure OpenAI via SDK)</option>
+            <option value="Mock">Mock (offline, fixture-driven)</option>
+        </select>
+    </label>
+
+    <button class="run" @onclick="Save">💾 Save overrides</button>
+    <button class="ghost" @onclick="Clear">Reset to appsettings</button>
+
+    @if (_saved)
+    {
+        <p class="hint" style="margin-top:10px;">
+            <span class="badge ok">Saved</span>
+            <span class="muted">Applied to subsequent LLM calls. Return to the <a href="/">pipeline</a> to run.</span>
+        </p>
+    }
+</div>
+
+<div class="card">
+    <h2>Where data lives</h2>
+    <ul class="clean">
+        <li><strong>Pipeline results</strong>: in-memory unless <code>ConnectionStrings:DefaultConnection</code> is set → Postgres tables <code>pipeline_runs</code>, <code>run_metrics</code>, <code>orchestrations</code>.</li>
+        <li><strong>API keys</strong>: <code>dotnet user-secrets</code> (dev) or environment variables (prod). Runtime API-key edit from this page is a roadmap item — for now, set keys via:
+            <pre class="code" style="font-size:11.5px;">cd src/AgenticSdlc.Api
+dotnet user-secrets set "Llm:Claude:ApiKey"      "sk-ant-..."
+dotnet user-secrets set "Llm:AzureOpenAi:ApiKey" "..."
+dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai.azure.com"</pre>
+        </li>
+        <li><strong>Generated code/tests</strong>: returned inline in the pipeline response; not written to disk by the agents. Real-file build/test execution is a roadmap item (sandbox runner).</li>
+        <li><strong>GitHub integration</strong>: not built yet — opening a PR with the generated code is on the roadmap.</li>
+    </ul>
+</div>
+
+@code {
+    private string _forceProvider = "";
+    private bool _saved;
+    private bool _dbConnected;
+
+    protected override void OnInitialized()
+    {
+        _forceProvider = Overrides.ForceProvider ?? "";
+        _dbConnected = !string.IsNullOrWhiteSpace(Config.GetConnectionString("DefaultConnection"));
+    }
+
+    private void Save()
+    {
+        Overrides.ForceProvider = string.IsNullOrWhiteSpace(_forceProvider) ? null : _forceProvider;
+        _saved = true;
+    }
+
+    private void Clear()
+    {
+        Overrides.ForceProvider = null;
+        _forceProvider = "";
+        _saved = true;
+    }
+
+    private string EffectiveForceLabel()
+    {
+        var runtime = Overrides.ForceProvider;
+        var appset = LlmOpts.Value.ForceProvider;
+        if (!string.IsNullOrWhiteSpace(runtime))
+        {
+            return $"{runtime} (runtime override)";
+        }
+        if (!string.IsNullOrWhiteSpace(appset))
+        {
+            return $"{appset} (appsettings)";
+        }
+        return "— none (per-agent config) —";
+    }
+
+    private MarkupString KeyState(string key)
+        => string.IsNullOrWhiteSpace(key)
+            ? new MarkupString("<span class=\"badge err\">⊘ not set</span>")
+            : new MarkupString("<span class=\"badge ok\">✓ set</span>");
+}

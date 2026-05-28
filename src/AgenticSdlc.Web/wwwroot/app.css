@@ -264,3 +264,15 @@ ul.clean li { margin: 3px 0; }
     font-size: 11px; font-weight: 700;
 }
 .step-pill strong { color: var(--txt); font-weight: 600; }
+
+/* ===== Settings page ===== */
+.settings-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.settings-table th, .settings-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.settings-table th { width: 220px; font-weight: 600; color: var(--txt-dim); }
+.settings-table tr:last-child th, .settings-table tr:last-child td { border-bottom: 0; }
+.settings-table code { font-family: var(--mono); background: var(--bg-3); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
+select {
+    width: 100%; background: var(--bg-3); color: var(--txt);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px;
+    font-family: inherit; font-size: 14px;
+}

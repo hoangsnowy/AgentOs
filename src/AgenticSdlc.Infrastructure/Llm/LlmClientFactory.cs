@@ -2,6 +2,7 @@
 // Sprint 1 — Factory that resolves ILlmClient by LlmOptions.Provider.
 
 using System;
+using AgenticSdlc.Application.Configuration;
 using AgenticSdlc.Domain.Llm;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -26,13 +27,15 @@ public sealed class LlmClientFactory : ILlmClientFactory
 {
     private readonly IServiceProvider _services;
     private readonly LlmOptions _options;
+    private readonly IRuntimeOverrides _overrides;
 
-    /// <summary>Initializes with the DI provider + options.</summary>
-    public LlmClientFactory(IServiceProvider services, IOptions<LlmOptions> options)
+    /// <summary>Initializes with the DI provider + options + runtime overrides (set from the Settings UI).</summary>
+    public LlmClientFactory(IServiceProvider services, IOptions<LlmOptions> options, IRuntimeOverrides overrides)
     {
         ArgumentNullException.ThrowIfNull(options);
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _options = options.Value ?? new LlmOptions();
+        _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
     }
 
     /// <inheritdoc />
@@ -41,8 +44,11 @@ public sealed class LlmClientFactory : ILlmClientFactory
     /// <inheritdoc />
     public ILlmClient Create(string providerName)
     {
-        // Llm:ForceProvider (when set) overrides the per-agent provider — e.g. run the whole pipeline on Azure only.
-        var effective = string.IsNullOrWhiteSpace(_options.ForceProvider) ? providerName : _options.ForceProvider;
+        // Effective force provider: runtime override (Settings UI) wins; falls back to appsettings ForceProvider; else use the per-agent provider.
+        var force = !string.IsNullOrWhiteSpace(_overrides.ForceProvider)
+            ? _overrides.ForceProvider
+            : _options.ForceProvider;
+        var effective = string.IsNullOrWhiteSpace(force) ? providerName : force;
         if (string.IsNullOrWhiteSpace(effective))
         {
             throw new ArgumentException("Provider name must not be empty.", nameof(providerName));

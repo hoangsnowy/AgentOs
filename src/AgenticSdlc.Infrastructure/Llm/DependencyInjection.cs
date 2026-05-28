@@ -2,6 +2,7 @@
 // Sprint 1 — Extension that registers the LLM Gateway into IServiceCollection.
 
 using System;
+using AgenticSdlc.Application.Configuration;
 using AgenticSdlc.Domain.Llm;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -79,6 +80,9 @@ public static class LlmGatewayServiceCollectionExtensions
 
         services.AddTransient<MockLlmClient>();
         services.AddTransient<MafChatClient>();   // Azure OpenAI via official SDK + Microsoft.Extensions.AI
+
+        // Runtime overrides (in-memory) — settable from the Settings UI; take precedence over LlmOptions.
+        services.AddSingleton<IRuntimeOverrides, RuntimeOverrides>();
 
         // Factory + default ILlmClient.
         services.AddSingleton<ILlmClientFactory, LlmClientFactory>();
