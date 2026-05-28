@@ -31,7 +31,7 @@ public class ClaudeClientTests
                 TimeoutSeconds = timeoutSeconds,
             },
         });
-        var client = new ClaudeClient(http, opts, NullLogger<ClaudeClient>.Instance);
+        var client = new ClaudeClient(http, opts, new RuntimeOverrides(), NullLogger<ClaudeClient>.Instance);
         return (client, handler);
     }
 

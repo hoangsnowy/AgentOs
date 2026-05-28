@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using AgenticSdlc.Application.Configuration;
 using AgenticSdlc.Domain.Llm;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -26,17 +27,21 @@ public sealed class ClaudeClient : ILlmClient
 
     private readonly HttpClient _http;
     private readonly ClaudeOptions _options;
+    private readonly IRuntimeOverrides _overrides;
     private readonly ILogger<ClaudeClient> _logger;
 
     /// <inheritdoc />
     public string Provider => "Claude";
 
-    /// <summary>Initializes the client. <paramref name="http"/> should be resolved via <see cref="IHttpClientFactory"/>.</summary>
-    public ClaudeClient(HttpClient http, IOptions<LlmOptions> options, ILogger<ClaudeClient> logger)
+    /// <summary>Initializes the client. <paramref name="http"/> should be resolved via <see cref="IHttpClientFactory"/>.
+    /// The API key is read at request time from <paramref name="overrides"/> (runtime, Settings UI) with the
+    /// <c>Llm:Claude:ApiKey</c> appsettings value as fallback — so swapping a key in the UI takes effect immediately.</summary>
+    public ClaudeClient(HttpClient http, IOptions<LlmOptions> options, IRuntimeOverrides overrides, ILogger<ClaudeClient> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _options = options.Value?.Claude ?? new ClaudeOptions();
+        _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         ConfigureHttpClient();
@@ -55,17 +60,16 @@ public sealed class ClaudeClient : ILlmClient
             _http.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         }
 
-        // Headers should be set once (idempotent — check before adding to avoid duplicates when the client is reused).
-        if (!_http.DefaultRequestHeaders.Contains("x-api-key") && !string.IsNullOrWhiteSpace(_options.ApiKey))
-        {
-            _http.DefaultRequestHeaders.Add("x-api-key", _options.ApiKey);
-        }
-
+        // Static (provider-level) header only — the api-key is attached per request so runtime overrides take effect.
         if (!_http.DefaultRequestHeaders.Contains("anthropic-version"))
         {
             _http.DefaultRequestHeaders.Add("anthropic-version", _options.ApiVersion);
         }
     }
+
+    /// <summary>Resolve the effective API key: runtime override (Settings UI) wins; falls back to appsettings.</summary>
+    private string EffectiveApiKey()
+        => !string.IsNullOrWhiteSpace(_overrides.AnthropicApiKey) ? _overrides.AnthropicApiKey! : _options.ApiKey;
 
     /// <inheritdoc />
     public async Task<LlmResponse> SendAsync(LlmRequest request, CancellationToken cancellationToken = default)
@@ -73,10 +77,11 @@ public sealed class ClaudeClient : ILlmClient
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
 
-        if (string.IsNullOrWhiteSpace(_options.ApiKey))
+        var apiKey = EffectiveApiKey();
+        if (string.IsNullOrWhiteSpace(apiKey))
         {
             throw new LlmException(
-                "Anthropic API key not configured. Set 'Llm:Claude:ApiKey' (user-secrets or env), "
+                "Anthropic API key not configured. Set it on the Settings page, or 'Llm:Claude:ApiKey' (user-secrets or env), "
                 + "or set 'Llm:ForceProvider=AzureOpenAI' to run the whole pipeline on Azure only.",
                 Provider);
         }
@@ -96,7 +101,7 @@ public sealed class ClaudeClient : ILlmClient
         };
 
         var dto = await RetryPolicy.ExecuteAsync(
-            async ct => await PostOnceAsync(payload, ct).ConfigureAwait(false),
+            async ct => await PostOnceAsync(payload, apiKey, ct).ConfigureAwait(false),
             maxRetries: _options.MaxRetries,
             baseDelay: TimeSpan.FromSeconds(1),
             logger: _logger,
@@ -120,10 +125,17 @@ public sealed class ClaudeClient : ILlmClient
             Provider: Provider);
     }
 
-    /// <summary>A single POST. Throws <see cref="TransientHttpException"/> on 429/5xx, <see cref="LlmException"/> on other 4xx or malformed responses.</summary>
-    private async Task<ClaudeResponseDto> PostOnceAsync(ClaudeRequestDto payload, CancellationToken ct)
+    /// <summary>A single POST. Sets the <c>x-api-key</c> header per request so runtime overrides take effect.
+    /// Throws <see cref="TransientHttpException"/> on 429/5xx, <see cref="LlmException"/> on other 4xx or malformed responses.</summary>
+    private async Task<ClaudeResponseDto> PostOnceAsync(ClaudeRequestDto payload, string apiKey, CancellationToken ct)
     {
-        using var response = await _http.PostAsJsonAsync("v1/messages", payload, JsonOpts, ct).ConfigureAwait(false);
+        using var req = new HttpRequestMessage(HttpMethod.Post, "v1/messages")
+        {
+            Content = JsonContent.Create(payload, options: JsonOpts),
+        };
+        req.Headers.Add("x-api-key", apiKey);
+
+        using var response = await _http.SendAsync(req, ct).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {

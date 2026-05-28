@@ -66,16 +66,18 @@ public static class LlmGatewayServiceCollectionExtensions
         {
             var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(ClaudeClient.HttpClientName);
             var opts = sp.GetRequiredService<IOptions<LlmOptions>>();
+            var overrides = sp.GetRequiredService<IRuntimeOverrides>();
             var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ClaudeClient>>();
-            return new ClaudeClient(http, opts, logger);
+            return new ClaudeClient(http, opts, overrides, logger);
         });
 
         services.AddTransient<AzureOpenAiClient>(sp =>
         {
             var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(AzureOpenAiClient.HttpClientName);
             var opts = sp.GetRequiredService<IOptions<LlmOptions>>();
+            var overrides = sp.GetRequiredService<IRuntimeOverrides>();
             var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AzureOpenAiClient>>();
-            return new AzureOpenAiClient(http, opts, logger);
+            return new AzureOpenAiClient(http, opts, overrides, logger);
         });
 
         services.AddTransient<MockLlmClient>();

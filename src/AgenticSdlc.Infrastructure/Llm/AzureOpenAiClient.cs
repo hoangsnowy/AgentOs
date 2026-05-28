@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using AgenticSdlc.Application.Configuration;
 using AgenticSdlc.Domain.Llm;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,17 +28,21 @@ public sealed class AzureOpenAiClient : ILlmClient
 
     private readonly HttpClient _http;
     private readonly AzureOpenAiOptions _options;
+    private readonly IRuntimeOverrides _overrides;
     private readonly ILogger<AzureOpenAiClient> _logger;
 
     /// <inheritdoc />
     public string Provider => "AzureOpenAI";
 
-    /// <summary>Initializes the client.</summary>
-    public AzureOpenAiClient(HttpClient http, IOptions<LlmOptions> options, ILogger<AzureOpenAiClient> logger)
+    /// <summary>Initializes the client. The api-key + endpoint are read at request time from
+    /// <paramref name="overrides"/> (runtime, Settings UI) with the appsettings values as fallback —
+    /// so swapping in the UI takes effect immediately.</summary>
+    public AzureOpenAiClient(HttpClient http, IOptions<LlmOptions> options, IRuntimeOverrides overrides, ILogger<AzureOpenAiClient> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _options = options.Value?.AzureOpenAi ?? new AzureOpenAiOptions();
+        _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         ConfigureHttpClient();
@@ -55,11 +60,14 @@ public sealed class AzureOpenAiClient : ILlmClient
             _http.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         }
 
-        if (!_http.DefaultRequestHeaders.Contains("api-key") && !string.IsNullOrWhiteSpace(_options.ApiKey))
-        {
-            _http.DefaultRequestHeaders.Add("api-key", _options.ApiKey);
-        }
+        // api-key is attached per request so runtime overrides take effect.
     }
+
+    private string EffectiveApiKey()
+        => !string.IsNullOrWhiteSpace(_overrides.AzureApiKey) ? _overrides.AzureApiKey! : _options.ApiKey;
+
+    private string EffectiveEndpoint()
+        => !string.IsNullOrWhiteSpace(_overrides.AzureEndpoint) ? _overrides.AzureEndpoint! : _options.Endpoint;
 
     /// <inheritdoc />
     public async Task<LlmResponse> SendAsync(LlmRequest request, CancellationToken cancellationToken = default)
@@ -67,11 +75,13 @@ public sealed class AzureOpenAiClient : ILlmClient
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
 
-        if (string.IsNullOrWhiteSpace(_options.ApiKey) || string.IsNullOrWhiteSpace(_options.Endpoint))
+        var apiKey = EffectiveApiKey();
+        var endpoint = EffectiveEndpoint();
+        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(endpoint))
         {
             throw new LlmException(
-                "Azure OpenAI not configured. Set 'Llm:AzureOpenAi:ApiKey' and 'Llm:AzureOpenAi:Endpoint' "
-                + "(user-secrets or env).",
+                "Azure OpenAI not configured. Set api-key + endpoint on the Settings page, "
+                + "or 'Llm:AzureOpenAi:ApiKey' / 'Llm:AzureOpenAi:Endpoint' (user-secrets or env).",
                 Provider);
         }
 
@@ -96,10 +106,12 @@ public sealed class AzureOpenAiClient : ILlmClient
         };
 
         var deployment = string.IsNullOrWhiteSpace(_options.Model) ? request.Model : _options.Model;
-        var url = $"openai/deployments/{deployment}/chat/completions?api-version={_options.ApiVersion}";
+        // Build absolute URL when endpoint differs from BaseAddress so runtime endpoint overrides take effect.
+        var relPath = $"openai/deployments/{deployment}/chat/completions?api-version={_options.ApiVersion}";
+        var url = endpoint.TrimEnd('/') + "/" + relPath;
 
         var dto = await RetryPolicy.ExecuteAsync(
-            async ct => await PostOnceAsync(url, payload, ct).ConfigureAwait(false),
+            async ct => await PostOnceAsync(url, payload, apiKey, ct).ConfigureAwait(false),
             maxRetries: _options.MaxRetries,
             baseDelay: TimeSpan.FromSeconds(1),
             logger: _logger,
@@ -123,9 +135,15 @@ public sealed class AzureOpenAiClient : ILlmClient
             Provider: Provider);
     }
 
-    private async Task<ChatResponseDto> PostOnceAsync(string url, ChatRequestDto payload, CancellationToken ct)
+    private async Task<ChatResponseDto> PostOnceAsync(string url, ChatRequestDto payload, string apiKey, CancellationToken ct)
     {
-        using var response = await _http.PostAsJsonAsync(url, payload, JsonOpts, ct).ConfigureAwait(false);
+        using var req = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = JsonContent.Create(payload, options: JsonOpts),
+        };
+        req.Headers.Add("api-key", apiKey);
+
+        using var response = await _http.SendAsync(req, ct).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {

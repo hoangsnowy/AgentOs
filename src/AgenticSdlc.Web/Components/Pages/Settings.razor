@@ -37,12 +37,26 @@
             <option value="Claude">Claude (Anthropic)</option>
             <option value="AzureOpenAI">Azure OpenAI</option>
             <option value="MAF">MAF (Azure OpenAI via SDK)</option>
-            <option value="Mock">Mock (offline, fixture-driven)</option>
         </select>
     </label>
 
-    <button class="run" @onclick="Save">💾 Save overrides</button>
-    <button class="ghost" @onclick="Clear">Reset to appsettings</button>
+    <label class="field">
+        <span>Anthropic API key</span>
+        <input type="password" @bind="_anthropicKey" placeholder="sk-ant-..." />
+    </label>
+
+    <label class="field">
+        <span>Azure OpenAI API key</span>
+        <input type="password" @bind="_azureKey" placeholder="(Azure key)" />
+    </label>
+
+    <label class="field">
+        <span>Azure OpenAI endpoint</span>
+        <input type="text" @bind="_azureEndpoint" placeholder="https://your-resource.openai.azure.com" />
+    </label>
+
+    <button class="btn btn-primary" @onclick="Save">💾 Save overrides</button>
+    <button class="btn btn-ghost" @onclick="Clear">Reset to appsettings</button>
 
     @if (_saved)
     {
@@ -91,7 +105,7 @@
     <h2>Where data lives</h2>
     <ul class="clean">
         <li><strong>Pipeline results</strong>: in-memory unless <code>ConnectionStrings:DefaultConnection</code> is set → Postgres tables <code>pipeline_runs</code>, <code>run_metrics</code>, <code>orchestrations</code>.</li>
-        <li><strong>API keys</strong>: <code>dotnet user-secrets</code> (dev) or environment variables (prod). Runtime API-key edit from this page is a roadmap item — for now, set keys via:
+        <li><strong>API keys</strong>: persistent values live in <code>dotnet user-secrets</code> (dev) or environment variables (prod). The runtime overrides on this page are in-memory only — restart clears them. Use the form above for ad-hoc runs, or save permanently via:
             <pre class="code" style="font-size:11.5px;">cd src/AgenticSdlc.Api
 dotnet user-secrets set "Llm:Claude:ApiKey"      "sk-ant-..."
 dotnet user-secrets set "Llm:AzureOpenAi:ApiKey" "..."
@@ -104,6 +118,9 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
 
 @code {
     private string _forceProvider = "";
+    private string _anthropicKey = "";
+    private string _azureKey = "";
+    private string _azureEndpoint = "";
     private bool _saved;
     private bool _dbConnected;
 
@@ -116,6 +133,9 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     protected override void OnInitialized()
     {
         _forceProvider = Overrides.ForceProvider ?? "";
+        _anthropicKey = Overrides.AnthropicApiKey ?? "";
+        _azureKey = Overrides.AzureApiKey ?? "";
+        _azureEndpoint = Overrides.AzureEndpoint ?? "";
         _dbConnected = !string.IsNullOrWhiteSpace(Config.GetConnectionString("DefaultConnection"));
 
         _githubPat = Overrides.GitHubPat ?? "";
@@ -127,13 +147,22 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     private void Save()
     {
         Overrides.ForceProvider = string.IsNullOrWhiteSpace(_forceProvider) ? null : _forceProvider;
+        Overrides.AnthropicApiKey = string.IsNullOrWhiteSpace(_anthropicKey) ? null : _anthropicKey;
+        Overrides.AzureApiKey = string.IsNullOrWhiteSpace(_azureKey) ? null : _azureKey;
+        Overrides.AzureEndpoint = string.IsNullOrWhiteSpace(_azureEndpoint) ? null : _azureEndpoint;
         _saved = true;
     }
 
     private void Clear()
     {
         Overrides.ForceProvider = null;
+        Overrides.AnthropicApiKey = null;
+        Overrides.AzureApiKey = null;
+        Overrides.AzureEndpoint = null;
         _forceProvider = "";
+        _anthropicKey = "";
+        _azureKey = "";
+        _azureEndpoint = "";
         _saved = true;
     }
 
