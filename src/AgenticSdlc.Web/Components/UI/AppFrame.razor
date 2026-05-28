@@ -12,16 +12,19 @@
          @ondblclick="ToggleMax">
         <span class="appwin-icon">@W.Icon</span>
         <span class="appwin-title">@W.Title</span>
-        <div class="appwin-actions">
+        <div class="appwin-actions" @onmousedown:stopPropagation="true" @ondblclick:stopPropagation="true">
             <button class="appwin-btn" title="Minimize"
                     @onclick="@(() => WM.Minimize(W.Id))"
-                    @onclick:stopPropagation="true">—</button>
+                    @onclick:stopPropagation="true"
+                    @onmousedown:stopPropagation="true">—</button>
             <button class="appwin-btn" title="@(_maximized ? "Restore" : "Maximize")"
                     @onclick="ToggleMax"
-                    @onclick:stopPropagation="true">@(_maximized ? "❐" : "□")</button>
+                    @onclick:stopPropagation="true"
+                    @onmousedown:stopPropagation="true">@(_maximized ? "❐" : "□")</button>
             <button class="appwin-btn appwin-btn-close" title="Close"
                     @onclick="@(() => WM.Close(W.Id))"
-                    @onclick:stopPropagation="true">×</button>
+                    @onclick:stopPropagation="true"
+                    @onmousedown:stopPropagation="true">×</button>
         </div>
     </div>
     <div class="appwin-body">
