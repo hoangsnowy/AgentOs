@@ -1,27 +1,39 @@
-@* AppFrame — draggable / resizable / maximizable window chrome. Click brings to front. *@
+@* AppFrame — KDE Plasma 6 Breeze window chrome.
+   Drag titlebar, dblclick titlebar = toggle maximize, click anywhere = focus.
+   Action bar on the right (min / max-restore / close).
+   8 resize handles (4 edges + 4 corners). ARIA dialog with labelled title. *@
 
 @using AgenticSdlc.Web.Services
 @inject WindowManagerService WM
 
-<div class="appwin @(W.Minimized ? "minimized" : "") @(_maximized ? "maximized" : "") @(_dragging ? "dragging" : "") @(_resizing ? "resizing" : "")"
+<div class="appwin @(IsFocused ? "focused" : "") @(W.Minimized ? "minimized" : "") @(_maximized ? "maximized" : "") @(_dragging ? "dragging" : "") @(_resizing ? "resizing" : "")"
      style="@PositionStyle z-index:@(W.Z);"
+     role="dialog"
+     aria-labelledby="@TitleId"
+     aria-modal="false"
      @onmousedown="@(() => WM.Focus(W.Id))">
     <div class="appwin-titlebar"
          @onmousedown="StartDrag"
          @onmousedown:stopPropagation="true"
          @ondblclick="ToggleMax">
-        <span class="appwin-icon">@W.Icon</span>
-        <span class="appwin-title">@W.Title</span>
+        <span class="appwin-icon" aria-hidden="true">@W.Icon</span>
+        <span class="appwin-title" id="@TitleId">@W.Title</span>
         <div class="appwin-actions" @onmousedown:stopPropagation="true" @ondblclick:stopPropagation="true">
-            <button class="appwin-btn" title="Minimize"
+            <button class="appwin-btn" type="button"
+                    aria-label="Minimize"
+                    title="Minimize"
                     @onclick="@(() => WM.Minimize(W.Id))"
                     @onclick:stopPropagation="true"
                     @onmousedown:stopPropagation="true">—</button>
-            <button class="appwin-btn" title="@(_maximized ? "Restore" : "Maximize")"
+            <button class="appwin-btn" type="button"
+                    aria-label="@(_maximized ? "Restore" : "Maximize")"
+                    title="@(_maximized ? "Restore" : "Maximize")"
                     @onclick="ToggleMax"
                     @onclick:stopPropagation="true"
                     @onmousedown:stopPropagation="true">@(_maximized ? "❐" : "□")</button>
-            <button class="appwin-btn appwin-btn-close" title="Close"
+            <button class="appwin-btn appwin-btn-close" type="button"
+                    aria-label="Close"
+                    title="Close"
                     @onclick="@(() => WM.Close(W.Id))"
                     @onclick:stopPropagation="true"
                     @onmousedown:stopPropagation="true">×</button>
@@ -32,9 +44,15 @@
     </div>
     @if (!_maximized)
     {
-        <div class="appwin-resize" title="Drag to resize"
-             @onmousedown="StartResize"
-             @onmousedown:stopPropagation="true">⤡</div>
+        @* 8 resize zones — invisible, edge & corner. *@
+        <div class="appwin-resize appwin-resize-n"  @onmousedown="@(e => StartResize(e, "n"))"  @onmousedown:stopPropagation="true"></div>
+        <div class="appwin-resize appwin-resize-s"  @onmousedown="@(e => StartResize(e, "s"))"  @onmousedown:stopPropagation="true"></div>
+        <div class="appwin-resize appwin-resize-e"  @onmousedown="@(e => StartResize(e, "e"))"  @onmousedown:stopPropagation="true"></div>
+        <div class="appwin-resize appwin-resize-w"  @onmousedown="@(e => StartResize(e, "w"))"  @onmousedown:stopPropagation="true"></div>
+        <div class="appwin-resize appwin-resize-ne" @onmousedown="@(e => StartResize(e, "ne"))" @onmousedown:stopPropagation="true"></div>
+        <div class="appwin-resize appwin-resize-nw" @onmousedown="@(e => StartResize(e, "nw"))" @onmousedown:stopPropagation="true"></div>
+        <div class="appwin-resize appwin-resize-se" @onmousedown="@(e => StartResize(e, "se"))" @onmousedown:stopPropagation="true"></div>
+        <div class="appwin-resize appwin-resize-sw" @onmousedown="@(e => StartResize(e, "sw"))" @onmousedown:stopPropagation="true"></div>
     }
 </div>
 
@@ -47,16 +65,36 @@
 }
 
 @code {
+    private const int MinW = 280;
+    private const int MinH = 200;
+
     [Parameter, EditorRequired] public AppWindowState W { get; set; } = default!;
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private bool _dragging;
     private bool _resizing;
     private bool _maximized;
+    private string _resizeDir = "se";
 
     private double _startMouseX, _startMouseY;
     private int _startWinX, _startWinY;
     private int _startWinW, _startWinH;
+
+    private string TitleId => $"appwin-title-{W.Id}";
+
+    /// <summary>True when this window is the front-most (highest Z) of the open set.</summary>
+    private bool IsFocused
+    {
+        get
+        {
+            int maxZ = int.MinValue;
+            foreach (var o in WM.Open)
+            {
+                if (o.Z > maxZ) { maxZ = o.Z; }
+            }
+            return W.Z == maxZ;
+        }
+    }
 
     private string PositionStyle => _maximized
         ? "left:0; top:30px; right:0; bottom:80px; width:auto; height:auto;"
@@ -70,18 +108,19 @@
 
     private void StartDrag(MouseEventArgs e)
     {
-        if (_maximized) return;
+        if (_maximized) { return; }
         WM.Focus(W.Id);
         _dragging = true;
         _startMouseX = e.ClientX; _startMouseY = e.ClientY;
         _startWinX = W.X; _startWinY = W.Y;
     }
 
-    private void StartResize(MouseEventArgs e)
+    private void StartResize(MouseEventArgs e, string dir)
     {
-        if (_maximized) return;
+        if (_maximized) { return; }
         WM.Focus(W.Id);
         _resizing = true;
+        _resizeDir = dir;
         _startMouseX = e.ClientX; _startMouseY = e.ClientY;
         _startWinW = W.W; _startWinH = W.H;
         _startWinX = W.X; _startWinY = W.Y;
@@ -94,13 +133,43 @@
             var nx = _startWinX + (int)(e.ClientX - _startMouseX);
             var ny = _startWinY + (int)(e.ClientY - _startMouseY);
             WM.Move(W.Id, nx, ny);
+            return;
         }
-        else if (_resizing)
+        if (!_resizing) { return; }
+
+        var dx = (int)(e.ClientX - _startMouseX);
+        var dy = (int)(e.ClientY - _startMouseY);
+
+        int newX = _startWinX, newY = _startWinY;
+        int newW = _startWinW, newH = _startWinH;
+
+        // N edge: shrink/grow top -> change Y and H together, clamp at min height.
+        if (_resizeDir.Contains('n'))
         {
-            var nw = Math.Max(280, _startWinW + (int)(e.ClientX - _startMouseX));
-            var nh = Math.Max(200, _startWinH + (int)(e.ClientY - _startMouseY));
-            WM.Resize(W.Id, nw, nh);
+            var dyClamped = Math.Min(dy, _startWinH - MinH);
+            newY = _startWinY + dyClamped;
+            newH = _startWinH - dyClamped;
         }
+        if (_resizeDir.Contains('s'))
+        {
+            newH = _startWinH + dy;
+        }
+        if (_resizeDir.Contains('w'))
+        {
+            var dxClamped = Math.Min(dx, _startWinW - MinW);
+            newX = _startWinX + dxClamped;
+            newW = _startWinW - dxClamped;
+        }
+        if (_resizeDir.Contains('e'))
+        {
+            newW = _startWinW + dx;
+        }
+
+        if (newX != _startWinX || newY != _startWinY)
+        {
+            WM.Move(W.Id, newX, newY);
+        }
+        WM.Resize(W.Id, newW, newH);
     }
 
     private void EndAll(MouseEventArgs e)
