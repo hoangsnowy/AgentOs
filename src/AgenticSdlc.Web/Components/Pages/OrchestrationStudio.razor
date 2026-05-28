@@ -18,7 +18,7 @@
 @inject Microsoft.JSInterop.IJSRuntime JS
 @implements IDisposable
 
-<PageTitle>Orchestrations — Agentic SDLC</PageTitle>
+<PageTitle>Agentic Workflow — Agentic SDLC</PageTitle>
 
 <div class="syn-root">
 
@@ -27,7 +27,7 @@
         <div class="syn-logo"><span class="g">◆</span> AGENT STUDIO</div>
         <nav class="syn-nav">
             <a class="syn-nav-item" href="/"><span class="ic">▶</span> Pipeline</a>
-            <div class="syn-nav-item active"><span class="ic">🕸</span> Orchestrations</div>
+            <div class="syn-nav-item active"><span class="ic">🕸</span> Agentic Workflow</div>
         </nav>
         <div class="syn-version">Agent Studio v1.0</div>
     </aside>
@@ -37,7 +37,7 @@
 
         <div class="syn-topbar">
             <div>
-                <h1>Orchestrations</h1>
+                <h1>Agentic Workflow</h1>
                 <p>Design multi-agent workflows with visual canvas</p>
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
@@ -76,7 +76,7 @@
         <!-- name + desc -->
         <div class="syn-namerow">
             <input class="syn-name" @bind="_graph.Name" @bind:event="oninput" />
-            <input class="syn-desc" @bind="_graph.Description" @bind:event="oninput" placeholder="Orchestration description…" />
+            <input class="syn-desc" @bind="_graph.Description" @bind:event="oninput" placeholder="Workflow description…" />
         </div>
 
         <!-- add step palette -->
@@ -407,7 +407,7 @@
         SyncFromCanvas();
         Store.Save(_graph);
         _all = Store.All().ToList();
-        Log("💾 Orchestration saved.");
+        Log("💾 Workflow saved.");
     }
 
     private void Duplicate()
@@ -496,7 +496,7 @@
 
                 if (current.Type == StepType.End)
                 {
-                    Log("■ Orchestration complete.");
+                    Log("■ Workflow complete.");
                     break;
                 }
 

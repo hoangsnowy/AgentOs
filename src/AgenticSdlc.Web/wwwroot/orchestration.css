@@ -1,6 +1,6 @@
-/* Phase 7b — Agent Studio editor theme. Dark by default; light via [data-theme="light"]. */
+/* Agent Studio editor theme — light by default; dark via [data-theme="dark"]. */
 
-:root {
+:root[data-theme="dark"] {
     /* surfaces */
     --syn-bg: #0c0f14;
     --syn-bg-deep: #0a0d12;
@@ -39,7 +39,7 @@
     --syn-canvas-dot: #0c0f14;
 }
 
-[data-theme="light"] {
+:root {
     --syn-bg: #f4f6f9;
     --syn-bg-deep: #eef1f5;
     --syn-panel: #ffffff;
@@ -81,9 +81,14 @@ html, body { margin: 0; height: 100%; }
     width: 100%;
     background: var(--syn-bg);
     color: var(--syn-text);
-    font-family: "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
-    font-size: 13px;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
     overflow: hidden;
+}
+
+/* Mono kept only for code / log / schema surfaces */
+.syn-code, .syn-log, .syn-log .ln {
+    font-family: "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
 }
 
 /* ---------- sidebar ---------- */

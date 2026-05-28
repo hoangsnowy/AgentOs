@@ -1,6 +1,6 @@
 // Light/dark theme: persisted in localStorage, applied to <html data-theme>.
 window.agenticTheme = {
-    get: function () { return localStorage.getItem('theme') || 'dark'; },
+    get: function () { return localStorage.getItem('theme') || 'light'; },
     apply: function (t) {
         document.documentElement.dataset.theme = t;
         localStorage.setItem('theme', t);

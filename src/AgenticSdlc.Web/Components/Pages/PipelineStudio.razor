@@ -7,18 +7,49 @@
 @inject DemoRunContext DemoCtx
 @inject CircuitPipelineProgress Progress
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
 @implements IDisposable
 
 <PageTitle>Agent Studio — Agentic SDLC</PageTitle>
+
+<!-- ============ STATUS BAR (mode · persistence · settings) ============ -->
+<div class="status-bar">
+    <div class="status-chips">
+        @if (_useDemo)
+        {
+            <span class="status-chip mode-demo">⚙ Demo mode <em>· offline canned data</em></span>
+        }
+        else
+        {
+            <span class="status-chip mode-live">⚡ Live · @ActiveProvider</span>
+        }
+
+        @if (_dbConnected)
+        {
+            <span class="status-chip db-on">🗄 Postgres connected</span>
+        }
+        else
+        {
+            <span class="status-chip db-off">⊘ Stateless (no DB)</span>
+        }
+    </div>
+    <a class="settings-link" href="/settings" title="Configure providers + API keys">⚙ Settings →</a>
+</div>
 
 <!-- ============ ARCHITECTURE OVERVIEW ============ -->
 <div class="card arch">
     <div class="arch-head">
         <div>
-            <h2>Leader · Specialists · Quality Loop</h2>
-            <p class="arch-tagline muted">An <strong>Orchestrator (Leader)</strong> hands the user story to four specialist agents in turn; the <strong>QA agent</strong> scores requirement–code–test consistency and loops back until consistent or <code>NMax</code> is reached. <strong>Hybrid LLM</strong>: Anthropic Claude + Azure OpenAI, one model per agent.</p>
+            <h2>Turn a user story into a reviewed code scaffold</h2>
+            <p class="arch-tagline muted">Paste a story below. An <strong>Orchestrator</strong> hands it to four specialist agents (Requirement → Coding → Testing); the <strong>QA agent</strong> scores requirement–code–test consistency and loops until consistent or <code>NMax</code>. <strong>Hybrid LLM</strong>: Anthropic Claude + Azure OpenAI, one model per agent. Output: structured spec, C# code, xUnit tests + QA scorecard.</p>
         </div>
         <a class="arch-designer" href="/orchestration">Workflow designer →</a>
+    </div>
+
+    <div class="steps-row">
+        <div class="step-pill"><span class="num">1</span> Paste a user story below</div>
+        <div class="step-pill"><span class="num">2</span> Click <strong>Run pipeline</strong></div>
+        <div class="step-pill"><span class="num">3</span> Review spec, code, tests, QA</div>
     </div>
 
     <div class="arch-flow">
@@ -324,12 +355,15 @@
         [PipelineStage.Testing] = "azure", [PipelineStage.Qa] = "anthropic", [PipelineStage.Aggregate] = "anthropic",
     };
 
+    private bool _dbConnected;
+
     protected override void OnInitialized()
     {
         foreach (var s in _order)
         {
             _stages[s] = new StageRow();
         }
+        _dbConnected = !string.IsNullOrWhiteSpace(Config.GetConnectionString("DefaultConnection"));
     }
 
     private async Task RunAsync()
