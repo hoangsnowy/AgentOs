@@ -78,13 +78,22 @@
 html, body {
     margin: 0;
     padding: 0;
-    background: var(--bg);
+    background:
+        radial-gradient(900px 600px at 0% 0%, rgba(124,58,237,.07), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(37,99,235,.06), transparent 60%),
+        var(--bg);
     color: var(--txt);
     font-family: var(--font);
     font-size: 14px;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+:root[data-theme="dark"] body {
+    background:
+        radial-gradient(900px 600px at 0% 0%, rgba(167,139,250,.08), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(92,200,255,.07), transparent 60%),
+        var(--bg);
 }
 
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
@@ -190,12 +199,40 @@ button.ghost {
 .score-bar { flex: 1; height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; }
 .score-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--warn), var(--ok)); }
 
-/* Metrics */
+/* Metrics — KPI strip */
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 @media (max-width: 560px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
-.metric { background: var(--bg-3); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-.metric .v { font-size: 22px; font-weight: 700; font-family: var(--mono); }
-.metric .k { font-size: 12px; color: var(--txt-dim); margin-top: 2px; }
+.metric {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-4);
+    padding: 14px 16px;
+    box-shadow: var(--shadow-1);
+    position: relative;
+    overflow: hidden;
+}
+.metric::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--accent-2), var(--accent));
+    opacity: .85;
+}
+.metric .v {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    color: var(--txt);
+    line-height: 1.1;
+}
+.metric .k {
+    font-size: 11px;
+    color: var(--txt-faint);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-weight: 600;
+}
 
 /* Tabs + code */
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -368,6 +405,16 @@ select {
     flex: 1;
     overflow-y: auto;
 }
+.nav-section {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: var(--txt-faint);
+    padding: 14px 12px 6px;
+    text-transform: uppercase;
+}
+.nav-section:first-child { padding-top: 6px; }
+
 .nav-item {
     display: flex; align-items: center; gap: 10px;
     padding: 8px 12px;
@@ -487,3 +534,44 @@ select {
     background: rgba(22,163,74,.10); border: 1px solid rgba(22,163,74,.30);
     color: var(--ok); font-size: 11.5px; font-weight: 500;
 }
+
+/* ===== Top issues panel — pink-tinted card for QA failures / errors ===== */
+.issues-panel {
+    background: linear-gradient(135deg, rgba(220,38,38,.04), rgba(220,38,38,.02));
+    border: 1px solid rgba(220,38,38,.18);
+    border-radius: var(--r-4);
+    padding: 16px 18px;
+    margin-bottom: 18px;
+}
+.issues-panel h3 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--err);
+    display: flex; align-items: center; gap: 8px;
+}
+.issues-panel h3::before {
+    content: "●";
+    color: var(--err);
+}
+.issues-panel ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.issues-panel li { color: var(--txt-soft); font-size: 13px; display: flex; gap: 8px; }
+.issues-panel li::before { content: "•"; color: var(--err); flex: none; }
+
+/* ===== Letter grade chip ===== */
+.grade {
+    display: inline-grid; place-items: center;
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    font-size: 12px; font-weight: 700;
+    background: var(--bg-3);
+    color: var(--txt);
+    border: 1px solid var(--line);
+}
+.grade.a, .grade.A { background: rgba(22,163,74,.12); color: var(--ok); border-color: rgba(22,163,74,.30); }
+.grade.b, .grade.B { background: rgba(22,163,74,.08); color: var(--ok); border-color: rgba(22,163,74,.20); }
+.grade.c, .grade.C { background: rgba(217,119,6,.10); color: var(--warn); border-color: rgba(217,119,6,.30); }
+.grade.d, .grade.D { background: rgba(217,119,6,.08); color: var(--warn); border-color: rgba(217,119,6,.20); }
+.grade.f, .grade.F { background: rgba(220,38,38,.10); color: var(--err); border-color: rgba(220,38,38,.30); }

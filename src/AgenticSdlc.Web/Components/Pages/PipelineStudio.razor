@@ -156,6 +156,7 @@
                     @foreach (var r in _qaRounds)
                     {
                         <div class="qa-round">
+                            <span class="grade @QaGrade(r.Score)">@QaGrade(r.Score)</span>
                             <span>Round @r.Iteration</span>
                             <span class="score">@r.Score.ToString("0.00")</span>
                             <span class="score-bar"><i style="width:@((int)(r.Score * 100))%"></i></span>
@@ -174,7 +175,10 @@
 
             @if (_error is not null)
             {
-                <p style="margin-top:14px"><span class="badge err">Error</span> <span class="muted">@_error</span></p>
+                <div class="issues-panel" style="margin-top:14px">
+                    <h3>Pipeline error</h3>
+                    <ul><li>@_error</li></ul>
+                </div>
             }
             else if (_result is not null)
             {
@@ -559,6 +563,16 @@
     }
 
     private string ProvName(PipelineStage s) => _agentProv[s] == "azure" ? "Azure" : "Claude";
+
+    /// <summary>Letter grade for a QA score: A (≥.9), B (≥.8), C (≥.7), D (≥.6), else F.</summary>
+    private static string QaGrade(double score) => score switch
+    {
+        >= 0.9 => "A",
+        >= 0.8 => "B",
+        >= 0.7 => "C",
+        >= 0.6 => "D",
+        _ => "F",
+    };
 
     private string LeaderState()
         => _running ? "running"
