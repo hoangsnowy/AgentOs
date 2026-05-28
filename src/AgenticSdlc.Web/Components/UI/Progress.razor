@@ -1,0 +1,18 @@
+@* Progress — horizontal progress bar 0..1. Indeterminate when Value is null. *@
+
+<div class="progress @(Indeterminate ? "indeterminate" : "") @(ExtraClass ?? "")" role="progressbar" aria-valuenow="@((int)(Pct * 100))" aria-valuemin="0" aria-valuemax="100">
+    <div class="progress-fill" style="width:@((int)(Pct * 100))%"></div>
+</div>
+@if (ShowLabel)
+{
+    <div class="progress-label">@($"{(int)(Pct * 100)}%")</div>
+}
+
+@code {
+    [Parameter] public double? Value { get; set; }
+    [Parameter] public bool ShowLabel { get; set; }
+    [Parameter] public string? ExtraClass { get; set; }
+
+    private bool Indeterminate => Value is null;
+    private double Pct => Value is null ? 1.0 : Math.Clamp(Value.Value, 0, 1);
+}

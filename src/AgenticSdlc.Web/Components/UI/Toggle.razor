@@ -1,0 +1,20 @@
+@* Toggle — switch input bound by Checked + CheckedChanged. *@
+
+<label class="toggle @(Checked ? "on" : "")" title="@Title">
+    <input type="checkbox" checked="@Checked" @onchange="OnChange" />
+    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <span class="toggle-label">@Label</span>
+    }
+</label>
+
+@code {
+    [Parameter] public bool Checked { get; set; }
+    [Parameter] public EventCallback<bool> CheckedChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Title { get; set; }
+
+    private Task OnChange(ChangeEventArgs e)
+        => CheckedChanged.InvokeAsync((bool)(e.Value ?? false));
+}

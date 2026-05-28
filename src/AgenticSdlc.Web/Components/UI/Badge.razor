@@ -1,0 +1,21 @@
+@* Badge — small inline pill (count or label). *@
+
+<span class="badgepill @VariantClass @(ExtraClass ?? "")">@ChildContent</span>
+
+@code {
+    public enum BadgeVariant { Default, Ok, Warn, Err, Info, Brand }
+
+    [Parameter] public BadgeVariant Variant { get; set; } = BadgeVariant.Default;
+    [Parameter] public string? ExtraClass { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string VariantClass => Variant switch
+    {
+        BadgeVariant.Ok => "badge-ok",
+        BadgeVariant.Warn => "badge-warn",
+        BadgeVariant.Err => "badge-err",
+        BadgeVariant.Info => "badge-info",
+        BadgeVariant.Brand => "badge-brand",
+        _ => "",
+    };
+}

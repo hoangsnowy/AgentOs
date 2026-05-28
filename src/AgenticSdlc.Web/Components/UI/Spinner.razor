@@ -1,0 +1,9 @@
+@* Spinner — rotating indicator. Size = small | medium | large. *@
+
+<span class="spinner spinner-@Size.ToLowerInvariant() @(ExtraClass ?? "")" role="status" aria-label="@Label"></span>
+
+@code {
+    [Parameter] public string Size { get; set; } = "Medium";
+    [Parameter] public string Label { get; set; } = "Loading…";
+    [Parameter] public string? ExtraClass { get; set; }
+}

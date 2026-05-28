@@ -1,9 +1,13 @@
 @page "/"
 @inject AgenticSdlc.Web.Services.WindowManagerService WM
+@inject AgenticSdlc.Web.Services.ToastService Toasts
 
 <PageTitle>Desktop — AgentOS</PageTitle>
 
-<div class="desktop">
+<div class="desktop"
+     @oncontextmenu="OnRightClick"
+     @oncontextmenu:preventDefault="true">
+
     <div class="desktop-group">
         <div class="desktop-group-title">Apps</div>
         <div class="desktop-icons">
@@ -13,6 +17,8 @@
                          OnClick="@(() => WM.OpenApp("workflow", "Workflow", "🕸", w: 1080, h: 660))" />
             <DesktopIcon Title="Settings" Icon="⚙" Caption="LLM keys, GitHub integration"
                          OnClick="@(() => WM.OpenApp("settings", "Settings", "⚙", w: 720, h: 600))" />
+            <DesktopIcon Title="System" Icon="🛠" Caption="OS-level settings + about"
+                         OnClick="@(() => WM.OpenApp("system", "System", "🛠", w: 540, h: 520))" />
         </div>
     </div>
 
@@ -33,3 +39,42 @@
         <div class="clock-date">@DateTime.Now.ToString("dddd, d MMMM yyyy")</div>
     </div>
 </div>
+
+<ContextMenu Show="_ctxShow" X="_ctxX" Y="_ctxY" OnClose="@(() => _ctxShow = false)">
+    <button class="ctx-item" @onclick="Refresh"><span class="ctx-ic">⟳</span> Refresh</button>
+    <button class="ctx-item" @onclick="@(() => Launch("system", "System", "🛠", 540, 520))"><span class="ctx-ic">🛠</span> System settings</button>
+    <button class="ctx-item" @onclick="@(() => Launch("settings", "Settings", "⚙", 720, 600))"><span class="ctx-ic">⚙</span> App settings</button>
+    <div class="ctx-sep"></div>
+    <button class="ctx-item" @onclick="DemoToast"><span class="ctx-ic">🔔</span> Test notification</button>
+    <button class="ctx-item" @onclick="@(() => Launch("pipeline", "Pipeline", "▶", 920, 620))"><span class="ctx-ic">▶</span> Open Pipeline</button>
+</ContextMenu>
+
+@code {
+    private bool _ctxShow;
+    private int _ctxX, _ctxY;
+
+    private void OnRightClick(MouseEventArgs e)
+    {
+        _ctxX = (int)e.ClientX;
+        _ctxY = (int)e.ClientY;
+        _ctxShow = true;
+    }
+
+    private void Refresh()
+    {
+        _ctxShow = false;
+        Toasts.Show("Desktop", "Refreshed.", AgenticSdlc.Web.Services.ToastKind.Ok);
+    }
+
+    private void Launch(string key, string title, string icon, int w, int h)
+    {
+        WM.OpenApp(key, title, icon, w, h);
+        _ctxShow = false;
+    }
+
+    private void DemoToast()
+    {
+        Toasts.Show("Demo", "Triggered from right-click context menu.", AgenticSdlc.Web.Services.ToastKind.Info);
+        _ctxShow = false;
+    }
+}

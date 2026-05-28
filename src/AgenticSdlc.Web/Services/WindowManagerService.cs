@@ -86,6 +86,15 @@ public sealed class WindowManagerService
         Changed?.Invoke();
     }
 
+    /// <summary>Resize a window (corner drag).</summary>
+    public void Resize(Guid id, int w, int h)
+    {
+        var i = _open.FindIndex(x => x.Id == id);
+        if (i < 0) { return; }
+        _open[i] = _open[i] with { W = Math.Max(280, w), H = Math.Max(200, h) };
+        Changed?.Invoke();
+    }
+
     /// <summary>Minimize a window (hidden from view, still in taskbar).</summary>
     public void Minimize(Guid id)
     {

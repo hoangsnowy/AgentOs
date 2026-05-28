@@ -1,29 +1,46 @@
-@* AppFrame — desktop app window chrome (drag, focus, min/close). Hosts a child component as body. *@
+@* AppFrame — draggable / resizable / maximizable window chrome. Click brings to front. *@
 
 @using AgenticSdlc.Web.Services
 @inject WindowManagerService WM
 
-<div class="appwin @(W.Minimized ? "minimized" : "") @(_dragging ? "dragging" : "")"
-     style="left:@(W.X)px; top:@(W.Y)px; width:@(W.W)px; height:@(W.H)px; z-index:@(W.Z);"
+<div class="appwin @(W.Minimized ? "minimized" : "") @(_maximized ? "maximized" : "") @(_dragging ? "dragging" : "") @(_resizing ? "resizing" : "")"
+     style="@PositionStyle z-index:@(W.Z);"
      @onmousedown="@(() => WM.Focus(W.Id))">
     <div class="appwin-titlebar"
          @onmousedown="StartDrag"
-         @onmousedown:stopPropagation="true">
+         @onmousedown:stopPropagation="true"
+         @ondblclick="ToggleMax">
         <span class="appwin-icon">@W.Icon</span>
         <span class="appwin-title">@W.Title</span>
         <div class="appwin-actions">
-            <button class="appwin-btn" title="Minimize" @onclick="@(() => WM.Minimize(W.Id))" @onclick:stopPropagation="true">—</button>
-            <button class="appwin-btn appwin-btn-close" title="Close" @onclick="@(() => WM.Close(W.Id))" @onclick:stopPropagation="true">×</button>
+            <button class="appwin-btn" title="Minimize"
+                    @onclick="@(() => WM.Minimize(W.Id))"
+                    @onclick:stopPropagation="true">—</button>
+            <button class="appwin-btn" title="@(_maximized ? "Restore" : "Maximize")"
+                    @onclick="ToggleMax"
+                    @onclick:stopPropagation="true">@(_maximized ? "❐" : "□")</button>
+            <button class="appwin-btn appwin-btn-close" title="Close"
+                    @onclick="@(() => WM.Close(W.Id))"
+                    @onclick:stopPropagation="true">×</button>
         </div>
     </div>
     <div class="appwin-body">
         @ChildContent
     </div>
+    @if (!_maximized)
+    {
+        <div class="appwin-resize" title="Drag to resize"
+             @onmousedown="StartResize"
+             @onmousedown:stopPropagation="true">⤡</div>
+    }
 </div>
 
-@if (_dragging)
+@if (_dragging || _resizing)
 {
-    <div class="drag-overlay" @onmousemove="OnDrag" @onmouseup="EndDrag" @onmouseleave="EndDrag"></div>
+    <div class="drag-overlay"
+         @onmousemove="OnMouseMove"
+         @onmouseup="EndAll"
+         @onmouseleave="EndAll"></div>
 }
 
 @code {
@@ -31,24 +48,61 @@
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private bool _dragging;
+    private bool _resizing;
+    private bool _maximized;
+
     private double _startMouseX, _startMouseY;
     private int _startWinX, _startWinY;
+    private int _startWinW, _startWinH;
+
+    private string PositionStyle => _maximized
+        ? "left:0; top:30px; right:0; bottom:80px; width:auto; height:auto;"
+        : $"left:{W.X}px; top:{W.Y}px; width:{W.W}px; height:{W.H}px;";
+
+    private void ToggleMax()
+    {
+        _maximized = !_maximized;
+        WM.Focus(W.Id);
+    }
 
     private void StartDrag(MouseEventArgs e)
     {
+        if (_maximized) return;
         WM.Focus(W.Id);
         _dragging = true;
         _startMouseX = e.ClientX; _startMouseY = e.ClientY;
         _startWinX = W.X; _startWinY = W.Y;
     }
 
-    private void OnDrag(MouseEventArgs e)
+    private void StartResize(MouseEventArgs e)
     {
-        if (!_dragging) return;
-        var nx = _startWinX + (int)(e.ClientX - _startMouseX);
-        var ny = _startWinY + (int)(e.ClientY - _startMouseY);
-        WM.Move(W.Id, nx, ny);
+        if (_maximized) return;
+        WM.Focus(W.Id);
+        _resizing = true;
+        _startMouseX = e.ClientX; _startMouseY = e.ClientY;
+        _startWinW = W.W; _startWinH = W.H;
+        _startWinX = W.X; _startWinY = W.Y;
     }
 
-    private void EndDrag(MouseEventArgs e) => _dragging = false;
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        if (_dragging)
+        {
+            var nx = _startWinX + (int)(e.ClientX - _startMouseX);
+            var ny = _startWinY + (int)(e.ClientY - _startMouseY);
+            WM.Move(W.Id, nx, ny);
+        }
+        else if (_resizing)
+        {
+            var nw = Math.Max(280, _startWinW + (int)(e.ClientX - _startMouseX));
+            var nh = Math.Max(200, _startWinH + (int)(e.ClientY - _startMouseY));
+            WM.Resize(W.Id, nw, nh);
+        }
+    }
+
+    private void EndAll(MouseEventArgs e)
+    {
+        _dragging = false;
+        _resizing = false;
+    }
 }
