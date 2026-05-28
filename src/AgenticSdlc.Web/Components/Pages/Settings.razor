@@ -49,6 +49,40 @@
 </div>
 
 <div class="card">
+    <h2>GitHub integration</h2>
+    <p class="muted">Open a pull request with the generated code + tests to a target repo. Personal access token needs the <code>repo</code> scope.</p>
+
+    <label class="field">
+        <span>Personal access token (PAT)</span>
+        <input type="password" @bind="_githubPat" placeholder="ghp_..." />
+    </label>
+
+    <label class="field">
+        <span>Repo owner (user or org)</span>
+        <input type="text" @bind="_repoOwner" placeholder="your-username" />
+    </label>
+
+    <label class="field">
+        <span>Repo name</span>
+        <input type="text" @bind="_repoName" placeholder="target-repo" />
+    </label>
+
+    <label class="field">
+        <span>Base branch (default: main)</span>
+        <input type="text" @bind="_baseBranch" placeholder="main" />
+    </label>
+
+    <button class="run" @onclick="SaveGithub">💾 Save GitHub settings</button>
+    @if (_savedGithub)
+    {
+        <p class="hint" style="margin-top:10px;">
+            <span class="badge ok">Saved</span>
+            <span class="muted">"Open PR" button on the pipeline page will use these.</span>
+        </p>
+    }
+</div>
+
+<div class="card">
     <h2>Where data lives</h2>
     <ul class="clean">
         <li><strong>Pipeline results</strong>: in-memory unless <code>ConnectionStrings:DefaultConnection</code> is set → Postgres tables <code>pipeline_runs</code>, <code>run_metrics</code>, <code>orchestrations</code>.</li>
@@ -68,10 +102,21 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     private bool _saved;
     private bool _dbConnected;
 
+    private string _githubPat = "";
+    private string _repoOwner = "";
+    private string _repoName = "";
+    private string _baseBranch = "";
+    private bool _savedGithub;
+
     protected override void OnInitialized()
     {
         _forceProvider = Overrides.ForceProvider ?? "";
         _dbConnected = !string.IsNullOrWhiteSpace(Config.GetConnectionString("DefaultConnection"));
+
+        _githubPat = Overrides.GitHubPat ?? "";
+        _repoOwner = Overrides.GitHubRepoOwner ?? "";
+        _repoName = Overrides.GitHubRepoName ?? "";
+        _baseBranch = Overrides.GitHubBaseBranch ?? "";
     }
 
     private void Save()
@@ -85,6 +130,15 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
         Overrides.ForceProvider = null;
         _forceProvider = "";
         _saved = true;
+    }
+
+    private void SaveGithub()
+    {
+        Overrides.GitHubPat = string.IsNullOrWhiteSpace(_githubPat) ? null : _githubPat;
+        Overrides.GitHubRepoOwner = string.IsNullOrWhiteSpace(_repoOwner) ? null : _repoOwner;
+        Overrides.GitHubRepoName = string.IsNullOrWhiteSpace(_repoName) ? null : _repoName;
+        Overrides.GitHubBaseBranch = string.IsNullOrWhiteSpace(_baseBranch) ? null : _baseBranch;
+        _savedGithub = true;
     }
 
     private string EffectiveForceLabel()

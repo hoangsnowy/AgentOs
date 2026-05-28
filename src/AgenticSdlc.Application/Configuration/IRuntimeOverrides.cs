@@ -24,4 +24,16 @@ public interface IRuntimeOverrides
 
     /// <summary>Overrides <c>Llm:AzureOpenAi:Endpoint</c>. Empty/null = no override.</summary>
     string? AzureEndpoint { get; set; }
+
+    /// <summary>GitHub Personal Access Token (scope: <c>repo</c>). Used by <c>IGitHubPrService</c>.</summary>
+    string? GitHubPat { get; set; }
+
+    /// <summary>Target repository owner (user or org).</summary>
+    string? GitHubRepoOwner { get; set; }
+
+    /// <summary>Target repository name.</summary>
+    string? GitHubRepoName { get; set; }
+
+    /// <summary>Base branch the generated PR is opened against (default: <c>main</c>).</summary>
+    string? GitHubBaseBranch { get; set; }
 }

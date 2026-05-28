@@ -42,6 +42,9 @@
     <!-- Web host: Blazor diagram editor -->
     <PackageVersion Include="Z.Blazor.Diagrams" Version="3.0.4.1" />
 
+    <!-- GitHub integration (Octokit REST client) -->
+    <PackageVersion Include="Octokit" Version="13.0.1" />
+
     <!-- Test stack -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageVersion Include="xunit.v3" Version="1.1.0" />

@@ -40,6 +40,9 @@
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
 
+    <!-- GitHub integration -->
+    <PackageReference Include="Octokit" />
+
     <!-- Persistence: EF Core + Npgsql (Postgres) -->
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">

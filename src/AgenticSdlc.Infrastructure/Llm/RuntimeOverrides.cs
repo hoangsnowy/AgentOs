@@ -13,4 +13,8 @@ public sealed class RuntimeOverrides : IRuntimeOverrides
     public string? AnthropicApiKey { get; set; }
     public string? AzureApiKey { get; set; }
     public string? AzureEndpoint { get; set; }
+    public string? GitHubPat { get; set; }
+    public string? GitHubRepoOwner { get; set; }
+    public string? GitHubRepoName { get; set; }
+    public string? GitHubBaseBranch { get; set; }
 }

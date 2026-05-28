@@ -5,6 +5,7 @@
 
 using AgenticSdlc.Application.Pipeline;
 using AgenticSdlc.Infrastructure.Agents;
+using AgenticSdlc.Infrastructure.Integration;
 using AgenticSdlc.Infrastructure.Llm;
 using AgenticSdlc.Infrastructure.Metrics;
 using AgenticSdlc.Infrastructure.Persistence;
@@ -38,6 +39,9 @@ builder.Services.AddAgents(builder.Configuration);
 
 // Persistence (Postgres). Without ConnectionStrings:DefaultConnection → no-op repos (in-memory).
 builder.Services.AddPersistence(builder.Configuration);
+
+// GitHub integration — IGitHubPrService for opening a PR with the generated code.
+builder.Services.AddGitHubIntegration();
 
 // --- Overrides for the presentation layer ---
 
