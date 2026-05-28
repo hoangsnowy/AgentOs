@@ -1,0 +1,61 @@
+@inherits LayoutComponentBase
+@inject Microsoft.JSInterop.IJSRuntime JS
+
+<div class="shell">
+
+    <aside class="shell-sidebar">
+        <div class="shell-brand">
+            <span class="brand-mark">◆</span>
+            <div class="brand-text">
+                <div class="brand-title">Agentic SDLC</div>
+                <div class="brand-sub">Multi-agent framework</div>
+            </div>
+        </div>
+
+        <nav class="shell-nav">
+            <NavLink class="nav-item" Match="NavLinkMatch.All" href="/">
+                <span class="nav-ic">▶</span> Pipeline
+            </NavLink>
+            <NavLink class="nav-item" href="/orchestration">
+                <span class="nav-ic">🕸</span> Workflow
+            </NavLink>
+            <NavLink class="nav-item" href="/settings">
+                <span class="nav-ic">⚙</span> Settings
+            </NavLink>
+        </nav>
+
+        <div class="shell-foot">
+            <span>v1.0 · open source</span>
+        </div>
+    </aside>
+
+    <div class="shell-pane">
+        <header class="shell-topbar">
+            <div class="topbar-spacer"></div>
+            <button class="theme-btn" @onclick="ToggleTheme" title="Toggle light/dark theme">
+                @(_theme == "light" ? "🌙 Dark" : "☀ Light")
+            </button>
+        </header>
+
+        <main class="shell-main">
+            @Body
+        </main>
+    </div>
+
+</div>
+
+@code {
+    private string _theme = "light";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _theme = await JS.InvokeAsync<string>("agenticTheme.get");
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleTheme()
+        => _theme = await JS.InvokeAsync<string>("agenticTheme.toggle");
+}

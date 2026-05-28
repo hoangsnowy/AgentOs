@@ -1,33 +1,76 @@
 :root {
-    /* Light (default) — clean, professional palette aligned with orchestration.css */
-    --bg: #f8fafc;            /* slate-50 — page background */
-    --bg-2: #ffffff;          /* card / panel surface */
-    --bg-3: #f1f5f9;          /* nested surface */
-    --line: #e2e8f0;          /* slate-200 — borders */
-    --txt: #0f172a;           /* slate-900 — strong text */
-    --txt-dim: #64748b;       /* slate-500 — muted text */
-    --accent: #2563eb;        /* blue-600 — primary */
-    --accent-2: #7c3aed;      /* violet-600 — brand / secondary */
-    --ok: #16a34a;            /* green-600 */
-    --warn: #d97706;          /* amber-600 */
-    --err: #dc2626;           /* red-600 */
-    --idle: #cbd5e1;          /* slate-300 */
-    --mono: "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, monospace;
+    /* ===== Surfaces ===== */
+    --bg: #fafbfc;
+    --bg-2: #ffffff;
+    --bg-3: #f5f7fa;
+    --bg-sunk: #eef1f5;
+    --bg-sidebar: #ffffff;
+    --bg-topbar: #ffffff;
+
+    /* ===== Lines / borders ===== */
+    --line: #e4e7eb;
+    --line-strong: #d1d5db;
+
+    /* ===== Text ===== */
+    --txt: #0f172a;
+    --txt-soft: #334155;
+    --txt-dim: #64748b;
+    --txt-faint: #94a3b8;
+    --txt-on-accent: #ffffff;
+
+    /* ===== Brand + semantic ===== */
+    --accent: #2563eb;        /* blue-600 — info / links */
+    --accent-2: #7c3aed;      /* violet-600 — brand / primary CTA */
+    --accent-2-soft: #ede9fe;
+    --ok: #16a34a;
+    --warn: #d97706;
+    --err: #dc2626;
+    --idle: #cbd5e1;
+
+    /* ===== Shadows ===== */
+    --shadow-1: 0 1px 2px rgba(15,23,42,.05);
+    --shadow-2: 0 4px 12px rgba(15,23,42,.06);
+    --shadow-3: 0 16px 40px rgba(15,23,42,.12);
+
+    /* ===== Radii ===== */
+    --r-1: 4px;  --r-2: 6px;  --r-3: 8px;  --r-4: 12px;  --r-5: 16px;
+
+    /* ===== Spacing scale (4-base) ===== */
+    --s-1: 4px;  --s-2: 8px;  --s-3: 12px;  --s-4: 16px;
+    --s-5: 20px; --s-6: 24px; --s-8: 32px;  --s-10: 40px;
+
+    /* ===== Type ===== */
+    --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, ui-monospace, monospace;
+
+    /* ===== Layout constants ===== */
+    --shell-sidebar-w: 232px;
+    --shell-topbar-h: 56px;
 }
 
 :root[data-theme="dark"] {
-    --bg: #0f1419;
-    --bg-2: #161c24;
-    --bg-3: #1d2630;
-    --line: #2a3542;
+    --bg: #0c1117;
+    --bg-2: #121821;
+    --bg-3: #1a2230;
+    --bg-sunk: #0a0f15;
+    --bg-sidebar: #0f151c;
+    --bg-topbar: #0f151c;
+    --line: #232b36;
+    --line-strong: #33414f;
     --txt: #e6edf3;
-    --txt-dim: #9bacc0;
-    --accent: #4ea1ff;
-    --accent-2: #7c5cff;
+    --txt-soft: #c2c9d2;
+    --txt-dim: #8893a3;
+    --txt-faint: #6b7888;
+    --accent: #5cc8ff;
+    --accent-2: #a78bfa;
+    --accent-2-soft: #2a1c52;
     --ok: #3fb950;
     --warn: #d29922;
     --err: #f85149;
     --idle: #3a4654;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.30);
+    --shadow-2: 0 4px 12px rgba(0,0,0,.35);
+    --shadow-3: 0 16px 40px rgba(0,0,0,.45);
 }
 
 * { box-sizing: border-box; }
@@ -37,9 +80,11 @@ html, body {
     padding: 0;
     background: var(--bg);
     color: var(--txt);
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    font-size: 15px;
-    line-height: 1.5;
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
@@ -272,7 +317,173 @@ ul.clean li { margin: 3px 0; }
 .settings-table tr:last-child th, .settings-table tr:last-child td { border-bottom: 0; }
 .settings-table code { font-family: var(--mono); background: var(--bg-3); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
 select {
-    width: 100%; background: var(--bg-3); color: var(--txt);
+    width: 100%; background: var(--bg-2); color: var(--txt);
     border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px;
     font-family: inherit; font-size: 14px;
+}
+
+/* =================================================================
+   App Shell (sidebar nav + topbar + main) — used by AppShellLayout
+   ================================================================= */
+.shell {
+    display: grid;
+    grid-template-columns: var(--shell-sidebar-w) 1fr;
+    min-height: 100vh;
+}
+
+/* --- Sidebar --- */
+.shell-sidebar {
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+}
+.shell-brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 18px 18px 14px;
+    border-bottom: 1px solid var(--line);
+}
+.shell-brand .brand-mark {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    color: #fff;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    box-shadow: var(--shadow-1);
+}
+.shell-brand .brand-text { line-height: 1.25; }
+.shell-brand .brand-title { font-weight: 600; font-size: 14px; color: var(--txt); }
+.shell-brand .brand-sub { font-size: 11px; color: var(--txt-dim); margin-top: 1px; }
+
+.shell-nav {
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    overflow-y: auto;
+}
+.nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    color: var(--txt-soft);
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 500;
+    transition: background .12s, color .12s;
+}
+.nav-item:hover { background: var(--bg-3); color: var(--txt); }
+.nav-item.active { background: var(--accent-2-soft); color: var(--accent-2); }
+.nav-item .nav-ic { width: 18px; text-align: center; font-size: 13px; opacity: .9; }
+
+.shell-foot {
+    padding: 14px 18px;
+    border-top: 1px solid var(--line);
+    color: var(--txt-faint);
+    font-size: 11px;
+}
+
+/* --- Topbar --- */
+.shell-pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.shell-topbar {
+    height: var(--shell-topbar-h);
+    background: var(--bg-topbar);
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center;
+    padding: 0 24px;
+    gap: 16px;
+    position: sticky; top: 0; z-index: 5;
+}
+.topbar-spacer { flex: 1; }
+.theme-btn {
+    background: transparent;
+    color: var(--txt-soft);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 11px;
+    font-size: 12.5px;
+    font-family: inherit;
+    cursor: pointer;
+}
+.theme-btn:hover { background: var(--bg-3); border-color: var(--line-strong); color: var(--txt); }
+
+/* --- Main content --- */
+.shell-main {
+    flex: 1;
+    padding: 28px 32px;
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+/* --- Page header --- */
+.page-head { margin-bottom: 20px; }
+.page-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: var(--txt);
+    letter-spacing: -.01em;
+}
+.page-sub { color: var(--txt-dim); font-size: 13.5px; margin: 0; }
+
+/* =================================================================
+   Component vocabulary — buttons / panels (shared across pages)
+   ================================================================= */
+.btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    color: var(--txt);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.btn:hover:not(:disabled) { background: var(--bg-3); border-color: var(--line-strong); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    border-color: transparent; color: #fff;
+    font-weight: 600;
+    box-shadow: var(--shadow-1);
+}
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); background: linear-gradient(135deg, var(--accent-2), var(--accent)); border-color: transparent; }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--txt-soft); }
+.btn-ghost:hover:not(:disabled) { background: var(--bg-3); color: var(--txt); border-color: transparent; }
+.btn-danger { color: var(--err); border-color: rgba(220,38,38,.30); background: rgba(220,38,38,.06); }
+.btn-danger:hover:not(:disabled) { background: rgba(220,38,38,.12); border-color: rgba(220,38,38,.50); }
+
+/* =================================================================
+   Responsive — collapse sidebar on small screens
+   ================================================================= */
+@media (max-width: 800px) {
+    .shell { grid-template-columns: 1fr; }
+    .shell-sidebar { position: relative; height: auto; flex-direction: row; align-items: center; overflow-x: auto; }
+    .shell-brand { border-bottom: 0; border-right: 1px solid var(--line); padding: 12px 16px; }
+    .shell-nav { flex-direction: row; padding: 8px; }
+    .shell-foot { display: none; }
+}
+
+/* =================================================================
+   .syn-live-tag — Live provider chip on OrchestrationStudio toolbar
+   ================================================================= */
+.syn-live-tag {
+    display: inline-flex; align-items: center;
+    padding: 4px 10px; border-radius: 999px;
+    background: rgba(22,163,74,.10); border: 1px solid rgba(22,163,74,.30);
+    color: var(--ok); font-size: 11.5px; font-weight: 500;
 }
