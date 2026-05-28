@@ -154,3 +154,37 @@ ul.clean li { margin: 3px 0; }
 .issue .sev { font-weight: 700; font-size: 11px; text-transform: uppercase; }
 .empty-state { color: var(--txt-dim); text-align: center; padding: 50px 20px; }
 .empty-state .big { font-size: 40px; opacity: .4; }
+
+/* ===== Architecture story header (Leader · Specialists · Quality Loop) ===== */
+.card.arch { background: linear-gradient(180deg, var(--bg-2), var(--bg-3)); }
+.arch-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.arch-head h2 { margin: 0 0 4px; font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--txt); }
+.arch-tagline { font-size: 13px; max-width: 780px; margin: 0; }
+.arch-designer { white-space: nowrap; color: var(--accent); text-decoration: none; font-size: 13px; border: 1px solid var(--line); padding: 6px 12px; border-radius: 8px; }
+.arch-designer:hover { border-color: var(--accent); }
+
+.arch-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.arch-chain { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; }
+.arch-node {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+    background: var(--bg-3); border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; min-width: 118px;
+}
+.arch-node.leader { border-color: var(--accent-2); background: rgba(124,92,255,.10); }
+.arch-node.qa { border-color: var(--warn); }
+.arch-node.agg { border-color: var(--ok); }
+.arch-node .an-role { font-weight: 600; font-size: 13px; }
+.an-tag { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-2); font-weight: 700; }
+.arch-arr, .arch-feed { color: var(--txt-dim); font-size: 13px; }
+.arch-feed { font-style: italic; }
+.arch-loop { margin-top: 12px; font-size: 12.5px; color: var(--txt-dim); background: rgba(210,153,34,.08); border: 1px solid rgba(210,153,34,.25); border-radius: 8px; padding: 8px 12px; }
+.arch-loop strong { color: var(--warn); }
+
+/* Provider badge — the hybrid-LLM signal (which vendor handled each step) */
+.prov { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid transparent; }
+.prov.anthropic { background: rgba(124,92,255,.16); color: #b9a6ff; border-color: rgba(124,92,255,.35); }
+.prov.azure { background: rgba(78,161,255,.16); color: #8fc4ff; border-color: rgba(78,161,255,.35); }
+.prov.mock { background: rgba(155,172,192,.14); color: var(--txt-dim); }
+
+/* Leader (Orchestrator) row in the live timeline */
+.stage.leader .dot { background: var(--accent-2); color: #0b0e12; }
+.stage.leader.idle .dot { background: var(--bg-3); color: var(--accent-2); border-color: var(--accent-2); }

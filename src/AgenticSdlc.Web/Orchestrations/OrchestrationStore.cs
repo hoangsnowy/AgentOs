@@ -173,7 +173,7 @@ public sealed class OrchestrationStore
         yield return SeedStrictDeveloper();
     }
 
-    /// <summary>Graph mapping the thesis's 5-agent pipeline — "Run" actually executes.</summary>
+    /// <summary>Graph mapping the 5-agent pipeline — "Run" actually executes.</summary>
     private static OrchestrationGraph SeedSdlcPipeline()
     {
         string req = "req", cod = "cod", tst = "tst", qa = "qa", agg = "agg";
@@ -181,7 +181,7 @@ public sealed class OrchestrationStore
         {
             Id = "sdlc-5agent",
             Name = "5-Agent SDLC Pipeline",
-            Description = "Leader–Specialists–Quality Loop (KC1–KC5). Runnable with real agents/Demo.",
+            Description = "Leader–Specialists–Quality Loop. Runnable with real agents or Demo.",
             StateSchemaJson = "{\n  \"userStory\": \"string\",\n  \"spec\": \"RequirementSpec\",\n  \"code\": \"CodeArtifact\",\n  \"tests\": \"TestArtifact\",\n  \"qa\": \"QaReport\"\n}",
             Guardrails = ["QA score ≥ 0.8 to pass", "At most NMax iterations", "Each agent's output must match the JSON schema"],
             Nodes =

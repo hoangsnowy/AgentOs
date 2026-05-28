@@ -1,4 +1,4 @@
-# KC Dataset — Thesis Section 2.5
+# KC Dataset — benchmark scenarios
 
 5 dataset files for the experimental scenarios KC1-KC5. Each file = an array of test cases `{id, input, expected}`.
 

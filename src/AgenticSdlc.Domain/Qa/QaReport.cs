@@ -30,9 +30,9 @@ public sealed record QaReport(
 /// <param name="Location">Location (file path, line, requirement ID).</param>
 public sealed record QaIssue(string Severity, string Category, string Description, string? Location = null);
 
-/// <summary>Hardcoded QA thresholds for the thesis prototype.</summary>
+/// <summary>Hardcoded QA thresholds.</summary>
 public static class QaThresholds
 {
-    /// <summary>Minimum score to pass (thesis Section 2.4.5).</summary>
+    /// <summary>Minimum score to pass.</summary>
     public const double PassScore = 0.8;
 }

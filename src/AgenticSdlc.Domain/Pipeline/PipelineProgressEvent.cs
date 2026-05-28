@@ -33,7 +33,7 @@ public sealed record PipelineProgressEvent(
     public System.DateTime OccurredAtUtc => TimestampUtc ?? System.DateTime.UtcNow;
 }
 
-/// <summary>A step in the 5-agent pipeline (corresponding to KC1–KC5, thesis Section 2.4).</summary>
+/// <summary>A step in the 5-agent pipeline.</summary>
 public enum PipelineStage
 {
     /// <summary>KC1 — Requirement Agent analyzes the user story.</summary>

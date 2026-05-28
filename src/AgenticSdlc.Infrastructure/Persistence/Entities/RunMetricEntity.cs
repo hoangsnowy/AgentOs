@@ -1,5 +1,5 @@
 // Persistence entity for a single LLM call (maps 1-1 from Application.Metrics.RunMetric).
-// Relational → run_metrics table, SQL queries for cost-report / kc-bench / Table 2.6.
+// Relational → run_metrics table, SQL queries for cost-report / kc-bench.
 namespace AgenticSdlc.Infrastructure.Persistence.Entities;
 
 internal sealed class RunMetricEntity

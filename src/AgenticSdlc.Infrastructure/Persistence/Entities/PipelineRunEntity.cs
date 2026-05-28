@@ -1,4 +1,4 @@
-// Persistence entity for a single pipeline run. Relational columns for querying (Chapter 4) +
+// Persistence entity for a single pipeline run. Relational columns for querying (analytics) +
 // the jsonb ResultJson column holding the full serialized PipelineResult.
 namespace AgenticSdlc.Infrastructure.Persistence.Entities;
 

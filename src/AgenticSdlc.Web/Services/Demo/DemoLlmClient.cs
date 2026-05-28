@@ -1,7 +1,7 @@
 // AgenticSdlc.Web/Services/Demo/DemoLlmClient.cs
 // Phase 7 — A "canned" LLM source for offline Demo mode. NO network calls: it identifies the calling
 // agent from the system prompt then returns schema-valid JSON, while also simulating the Quality Loop
-// (QA fails the first round → passes the next) so the defense can see the iteration mechanism.
+// (QA fails the first round → passes the next) so you can see the iteration mechanism.
 //
 // Note: this client is circuit-scoped, so the iteration counters are independent across user sessions.
 // A single pipeline run is sequential (the orchestrator awaits each agent), so the counters are safe.

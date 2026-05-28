@@ -1,4 +1,4 @@
-@page "/"
+@page "/orchestration"
 @layout StudioLayout
 @using System.Linq
 @using AgenticSdlc.Web.Orchestrations
@@ -24,14 +24,10 @@
 
     <!-- ============ SIDEBAR ============ -->
     <aside class="syn-sidebar">
-        <div class="syn-logo"><span class="g">⚙</span> SETTINGS</div>
+        <div class="syn-logo"><span class="g">◆</span> AGENT STUDIO</div>
         <nav class="syn-nav">
-            @foreach (var item in NavItems)
-            {
-                <div class="syn-nav-item @(item == "Orchestrations" ? "active" : "")">
-                    <span class="ic">@NavIcon(item)</span> @item
-                </div>
-            }
+            <a class="syn-nav-item" href="/"><span class="ic">▶</span> Pipeline</a>
+            <div class="syn-nav-item active"><span class="ic">🕸</span> Orchestrations</div>
         </nav>
         <div class="syn-version">Agent Studio v1.0</div>
     </aside>
@@ -48,7 +44,7 @@
                 <button class="syn-theme-toggle" @onclick="ToggleTheme" title="Toggle light/dark theme">
                     @(_theme == "light" ? "🌙 Dark" : "☀ Light")
                 </button>
-                <a class="syn-close" href="/timeline" title="View legacy timeline">✕</a>
+                <a class="syn-close" href="/" title="Back to the pipeline">← Pipeline</a>
             </div>
         </div>
 
@@ -61,7 +57,6 @@
                 }
             </select>
             <button class="syn-btn" @onclick="NewGraph">+ New</button>
-            <button class="syn-btn purple" @onclick="@(() => {})" disabled>🪄 Build with AI</button>
 
             <div class="syn-spacer"></div>
 
@@ -74,7 +69,6 @@
                 <span style="font-size:12px;color:#5cc8ff;" title="Active LLM provider for live runs">Live: @ActiveProvider</span>
             }
             <button class="syn-btn green" @onclick="Run" disabled="@_running">▶ @(_running ? "Running…" : "Run")</button>
-            <button class="syn-btn purple" disabled>Deploy as Agent</button>
             <button class="syn-btn" @onclick="Duplicate">Duplicate</button>
             <button class="syn-btn ghost" @onclick="DeleteGraph">🗑 Delete</button>
         </div>
@@ -212,13 +206,6 @@
     private string ActiveProvider => string.IsNullOrWhiteSpace(LlmOpts.Value.ForceProvider)
         ? LlmOpts.Value.Provider
         : $"{LlmOpts.Value.ForceProvider} (forced)";
-
-    private static readonly string[] NavItems =
-    [
-        "General", "Personal Details", "Orchestrations", "Build Agents", "MCP Servers",
-        "Tool Builder", "Repos", "DB Configs", "Models", "Messaging", "Integrations",
-        "Schedules", "Vault", "Usage", "Import / Export", "Logs", "Memory", "API Keys", "Support & Docs",
-    ];
 
     private static readonly StepType[] PaletteOrder =
     [
@@ -618,7 +605,7 @@
     private string UserFor(GraphNode n)
         => $"Step: {n.Title}\nDescription: {n.Description}\nInput: {n.Input}\nUser input: {(_runInput.Length == 0 ? "(default)" : _runInput)}";
 
-    // Assign the real model per role ⇒ estimated cost matches the thesis's hybrid strategy.
+    // Assign the real model per role ⇒ estimated cost reflects the hybrid LLM strategy.
     private static string ModelFor(GraphNode n) => n.AgentRole switch
     {
         "Requirement" => "claude-sonnet-4",
@@ -668,13 +655,5 @@
         StepType.Parallel => "⑂", StepType.Merge => "⑃", StepType.Loop => "↻", StepType.Human => "◉",
         StepType.Transform => "⇄", StepType.ExtractJson => "{}", StepType.IfElse => "⌥", StepType.Switch => "⇆",
         StepType.Print => "🖶", StepType.End => "■", _ => "▣",
-    };
-
-    private static string NavIcon(string item) => item switch
-    {
-        "Orchestrations" => "🕸", "Build Agents" => "🤖", "MCP Servers" => "🖧", "Tool Builder" => "🔧",
-        "Repos" => "🗂", "DB Configs" => "🗄", "Models" => "◴", "Messaging" => "✉", "Integrations" => "🔌",
-        "Schedules" => "🕒", "Vault" => "🔒", "Usage" => "＄", "Logs" => "▦", "Memory" => "🧠", "API Keys" => "🔑",
-        _ => "•",
     };
 }

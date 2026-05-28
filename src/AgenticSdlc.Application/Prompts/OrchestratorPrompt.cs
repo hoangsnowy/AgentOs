@@ -10,7 +10,7 @@ public static class OrchestratorPrompt
     /// <summary>Prompt version.</summary>
     public const string Version = "v1";
 
-    /// <summary>Policy describing the KC4 flow (thesis Section 2.4).</summary>
+    /// <summary>Policy describing the end-to-end pipeline flow.</summary>
     public const string Policy = """
         Orchestrator policy (deterministic, does not call the LLM):
 

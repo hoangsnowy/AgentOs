@@ -10,9 +10,9 @@
 - [ ] Documentation / README
 - [ ] Infrastructure / CI configuration
 
-## Thesis references
+## Related issues
 
-<!-- Link to the Section/Table/Figure in the thesis if applicable (e.g. Section 2.4.2, Table 2.3). -->
+<!-- Link any related issues, e.g. "Closes #123". -->
 
 ## Checklist
 

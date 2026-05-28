@@ -1,3 +1,4 @@
+@page "/"
 @page "/timeline"
 @using AgenticSdlc.Application.Agents
 @using Microsoft.Extensions.DependencyInjection
@@ -9,6 +10,41 @@
 @implements IDisposable
 
 <PageTitle>Agent Studio — Agentic SDLC</PageTitle>
+
+<!-- ============ ARCHITECTURE OVERVIEW ============ -->
+<div class="card arch">
+    <div class="arch-head">
+        <div>
+            <h2>Leader · Specialists · Quality Loop</h2>
+            <p class="arch-tagline muted">An <strong>Orchestrator (Leader)</strong> hands the user story to four specialist agents in turn; the <strong>QA agent</strong> scores requirement–code–test consistency and loops back until consistent or <code>NMax</code> is reached. <strong>Hybrid LLM</strong>: Anthropic Claude + Azure OpenAI, one model per agent.</p>
+        </div>
+        <a class="arch-designer" href="/orchestration">Workflow designer →</a>
+    </div>
+
+    <div class="arch-flow">
+        <div class="arch-node leader">
+            <span class="an-role">◆ Orchestrator</span>
+            <span class="an-tag">Leader</span>
+            <span class="prov anthropic">Claude Haiku 4.5</span>
+        </div>
+        <span class="arch-feed">assigns ▸</span>
+
+        <div class="arch-chain">
+            <div class="arch-node"><span class="an-role">R · Requirement</span><span class="prov anthropic">Claude Sonnet 4</span></div>
+            <span class="arch-arr">→</span>
+            <div class="arch-node"><span class="an-role">C · Coding</span><span class="prov azure">Azure GPT-4.1</span></div>
+            <span class="arch-arr">→</span>
+            <div class="arch-node"><span class="an-role">T · Testing</span><span class="prov azure">Azure GPT-4o-mini</span></div>
+            <span class="arch-arr">→</span>
+            <div class="arch-node qa"><span class="an-role">Q · QA</span><span class="prov anthropic">Claude Haiku 4.5</span></div>
+        </div>
+
+        <span class="arch-feed">▸ aggregates</span>
+        <div class="arch-node agg"><span class="an-role">Σ Aggregate</span></div>
+    </div>
+
+    <div class="arch-loop">↺ <strong>Quality Loop</strong> — when QA finds the code inconsistent with the requirement, the Orchestrator re-runs Coding → Testing → QA, up to <code>NMax</code> iterations.</div>
+</div>
 
 <div class="studio-grid">
 
@@ -66,6 +102,14 @@
         <div class="card">
             <h2>Agent progress</h2>
             <div class="timeline">
+                <div class="stage leader @LeaderState()">
+                    <div class="dot">◆</div>
+                    <div>
+                        <div class="label">Orchestrator <span class="badge info">Leader</span></div>
+                        <div class="sub">Assigns the user story to specialists · drives the Quality Loop</div>
+                    </div>
+                    <div class="meta"><span class="prov anthropic">Claude</span></div>
+                </div>
                 @foreach (var stage in _order)
                 {
                     var row = _stages[stage];
@@ -74,6 +118,7 @@
                         <div>
                             <div class="label">
                                 @_title[stage]
+                                <span class="prov @_agentProv[stage]">@ProvName(stage)</span>
                                 @if ((stage == PipelineStage.Coding || stage == PipelineStage.Testing || stage == PipelineStage.Qa)
                                      && row.State != StageState.Idle && _currentIteration > 0)
                                 {
@@ -267,9 +312,16 @@
     };
     private readonly Dictionary<PipelineStage, string> _subtitle = new()
     {
-        [PipelineStage.Requirement] = "KC1 · Analyze user story", [PipelineStage.Coding] = "KC2 · Generate C# code",
-        [PipelineStage.Testing] = "KC3 · Generate xUnit tests", [PipelineStage.Qa] = "KC5 · Evaluate consistency",
-        [PipelineStage.Aggregate] = "Finalize result + total cost",
+        [PipelineStage.Requirement] = "Analyze user story", [PipelineStage.Coding] = "Generate C# code",
+        [PipelineStage.Testing] = "Generate xUnit tests", [PipelineStage.Qa] = "Evaluate consistency",
+        [PipelineStage.Aggregate] = "Orchestrator finalizes result + total cost",
+    };
+
+    // Hybrid LLM mapping (appsettings Agents:*:Provider) — drives the per-agent provider badge.
+    private readonly Dictionary<PipelineStage, string> _agentProv = new()
+    {
+        [PipelineStage.Requirement] = "anthropic", [PipelineStage.Coding] = "azure",
+        [PipelineStage.Testing] = "azure", [PipelineStage.Qa] = "anthropic", [PipelineStage.Aggregate] = "anthropic",
     };
 
     protected override void OnInitialized()
@@ -387,6 +439,13 @@
             _stages[s] = new StageRow();
         }
     }
+
+    private string ProvName(PipelineStage s) => _agentProv[s] == "azure" ? "Azure" : "Claude";
+
+    private string LeaderState()
+        => _running ? "running"
+         : _result is null ? "idle"
+         : _finalStatus == PipelineStatus.Failed ? "failed" : "done";
 
     private static string StateClass(StageState s) => s switch
     {

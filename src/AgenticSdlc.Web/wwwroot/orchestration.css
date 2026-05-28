@@ -115,8 +115,9 @@ html, body { margin: 0; height: 100%; }
 .syn-topbar { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 24px 10px; }
 .syn-topbar h1 { margin: 0; font-size: 26px; font-weight: 700; color: var(--syn-text-strong); }
 .syn-topbar p { margin: 4px 0 0; color: var(--syn-muted); }
-.syn-close { color: var(--syn-muted); text-decoration: none; font-size: 20px; padding: 4px 8px; border-radius: 6px; }
+.syn-close { color: var(--syn-muted); text-decoration: none; font-size: 14px; padding: 6px 10px; border-radius: 6px; }
 .syn-close:hover { background: var(--syn-panel-2); color: var(--syn-text-strong); }
+a.syn-nav-item { text-decoration: none; }
 
 /* theme toggle */
 .syn-theme-toggle {

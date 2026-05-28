@@ -20,7 +20,7 @@ using Microsoft.Extensions.Options;
 namespace AgenticSdlc.Infrastructure.Orchestration;
 
 /// <summary>
-/// Orchestrates the KC4 flow (thesis Section 2.4):
+/// Orchestrates the end-to-end pipeline flow:
 /// <list type="number">
 ///   <item>RequirementAgent(story) → spec</item>
 ///   <item>Loop ≤ NMax: CodingAgent → TestingAgent → QaAgent → check IsConsistent</item>

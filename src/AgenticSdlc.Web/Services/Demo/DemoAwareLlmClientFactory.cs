@@ -1,8 +1,8 @@
 // AgenticSdlc.Web/Services/Demo/DemoAwareLlmClientFactory.cs
 // Phase 7 — Factory that wraps the real LlmClientFactory. If the circuit is in Demo mode
 // (DemoRunContext.UseDemo) it returns DemoLlmClient; otherwise it delegates to the original factory
-// to use Claude / Azure OpenAI per each agent's configuration. Preserves the thesis's
-// Platform-Agnostic principle (swap the source without changing agents).
+// to use Claude / Azure OpenAI per each agent's configuration. Preserves the
+// provider-agnostic principle (swap the source without changing agents).
 
 using System;
 using AgenticSdlc.Domain.Llm;

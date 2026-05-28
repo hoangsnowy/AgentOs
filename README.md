@@ -1,169 +1,158 @@
 # agentic-sdlc-net
 
-> Reference prototype for a **multi-agent AI** model supporting the software development lifecycle (SDLC), built on **.NET 10** and **Microsoft Azure**, using a **hybrid LLM** architecture (Claude — Anthropic API + GPT — Azure OpenAI Service).
+> A **.NET-native multi-agent AI framework** for the software development lifecycle. A central orchestrator coordinates specialist agents — requirements → code → tests → QA — in a **Leader · Specialists · Quality Loop**, on a **hybrid LLM** backend (Anthropic Claude + Azure OpenAI), all kept behind one provider-agnostic interface.
 
-This is the companion product to the Master's thesis **"Research and Application of the Agentic AI Model in the Software Development Lifecycle (SDLC)"** — Nguyen Minh Hoang, Hanoi University of Business and Technology, 2026.
+[![CI](https://github.com/hoangsnowy/agentic-sdlc-net/actions/workflows/ci.yml/badge.svg)](https://github.com/hoangsnowy/agentic-sdlc-net/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 
----
+`agentic-sdlc-net` turns a plain-English user story into reviewed, test-backed C# scaffolding. Five agents collaborate under a central orchestrator; a QA agent scores requirement–code–test consistency and loops until it converges or hits an iteration cap. Built on **.NET 10** and **Clean Architecture**, with a provider-agnostic LLM gateway so you can mix vendors per agent — or swap them entirely — from config alone.
 
-## Objectives
+## Features
 
-The prototype realises the **Leader-Specialists-Quality Loop** architecture with 5 agents:
+- **Leader · Specialists · Quality Loop** — the orchestrator assigns work to four specialists; the QA agent gates the result and drives re-runs until consistent or `NMax` is reached.
+- **Hybrid LLM, provider-agnostic** — each agent's provider/model lives in `appsettings.json`; agents depend on `ILlmClient`, never on a vendor SDK directly.
+- **Built-in clients** — Anthropic Claude (`/v1/messages`) and Azure OpenAI (`chat/completions`), plus a deterministic `MockLlmClient` for offline runs and CI.
+- **Per-call telemetry** — token, latency and an estimated USD cost on every LLM call.
+- **Agent Studio (Blazor)** — a realtime web UI to watch the pipeline run live, plus a visual workflow editor.
+- **Optional persistence** — EF Core / Postgres; boots stateless when no connection string is set.
+- **Resilient** — retry with exponential backoff on 429 / 5xx / timeout.
+- **Cloud-ready** — .NET Aspire AppHost + `azd up` to Azure Container Apps.
 
-| Agent | Role | Default LLM |
+## Agents
+
+| Agent | Role | Default model |
 |---|---|---|
-| **Orchestrator Agent** | Central coordination, task assignment, aggregation | Claude Haiku 4.5 |
-| **Requirement Agent** | Requirement analysis → Structured Requirements JSON | Claude Sonnet 4 |
-| **Coding Agent** | Generate C# scaffold code following Clean Architecture | GPT-4.1 (Azure OpenAI) |
-| **Testing Agent** | Generate xUnit test cases (happy / edge / error) | GPT-4o-mini (Azure OpenAI) |
-| **QA Agent** | Assess requirement-code-test consistency, max 3 iterations | Claude Haiku 4.5 |
+| **Orchestrator** | Coordinates the flow, assigns tasks, aggregates the result | Claude Haiku 4.5 |
+| **Requirement** | User story → structured requirements (JSON) | Claude Sonnet 4 |
+| **Coding** | Generate C# scaffolding (Clean Architecture) | GPT-4.1 (Azure) |
+| **Testing** | Generate xUnit tests (happy / edge / error) | GPT-4o-mini (Azure) |
+| **QA** | Score requirement–code–test consistency, drive the loop | Claude Haiku 4.5 |
 
-Assigning an LLM to each agent is configurable via `appsettings.json` — a *Platform Agnostic* architecture.
-
----
+Those are illustrative defaults — reassign any agent to any provider in config.
 
 ## Architecture
 
-The solution contains 5 projects, organised following Clean Architecture:
+Clean Architecture; dependencies point inward (`Api`/`Web` → `Infrastructure` → `Application` → `Domain`).
 
 ```
-agentic-sdlc-net/
-├── src/
-│   ├── AgenticSdlc.Domain/         # Entities, value objects (RequirementSpec, CodeArtifact, ...)
-│   ├── AgenticSdlc.Application/    # Agent interfaces (IRequirementAgent, ...)
-│   ├── AgenticSdlc.Infrastructure/ # LLM Gateway (ClaudeClient, AzureOpenAiClient), agent impls
-│   └── AgenticSdlc.Api/            # ASP.NET Core minimal API host
-└── tests/
-    └── AgenticSdlc.Tests/          # xUnit unit + integration tests
+src/
+├── AgenticSdlc.Domain/          # DTOs, pipeline artifacts, ILlmClient, exceptions (BCL only)
+├── AgenticSdlc.Application/     # Agent interfaces, prompts, metrics + repository contracts
+├── AgenticSdlc.Infrastructure/  # LLM clients, agent + orchestrator impls, EF Core, DI
+├── AgenticSdlc.Api/             # ASP.NET Core minimal API (+ Scalar UI)
+├── AgenticSdlc.Web/             # Blazor Server "Agent Studio"
+├── AgenticSdlc.AppHost/         # .NET Aspire orchestration
+└── AgenticSdlc.ServiceDefaults/ # Shared telemetry / health / resilience
+tests/                           # xUnit unit, integration + E2E
 ```
 
-The LLM Gateway exposes the `ILlmClient` interface with 2 parallel implementations (`ClaudeClient`, `AzureOpenAiClient`) — registered via DI. Each agent receives an `ILlmClient` (already selected by the factory for its role) instead of calling a vendor SDK directly.
+**LLM Gateway** is the core abstraction. Agents depend on `ILlmClient`; `LlmClientFactory` picks the implementation from `Agents:<Name>:Provider`. Swapping a provider is a config change, not a code change.
 
----
+## Quick start
 
-## Environment requirements
-
-- **.NET 10 SDK** (LTS, released 11/2025).
-- One of (or both) LLM accounts:
-  - **Anthropic API key** — create at <https://console.anthropic.com>
-  - **Azure OpenAI Service** — create deployments for `gpt-4.1` and `gpt-4o-mini` via the Azure Portal
-- (Optional) **Azure Cosmos DB** for persistence; by default the prototype uses an in-memory store.
-
-Verify .NET 10:
+Prerequisites: **.NET 10 SDK** (pinned via `global.json`). Optional: Docker (local Postgres), and an Anthropic and/or Azure OpenAI key — the Demo path needs neither.
 
 ```bash
-dotnet --list-sdks
-# Must contain a line starting with "10."
-```
-
----
-
-## Configuration
-
-Copy `src/AgenticSdlc.Api/appsettings.json` to `appsettings.Development.json` (already in `.gitignore`) and fill in the secrets:
-
-```json
-{
-  "Llm": {
-    "Anthropic": {
-      "ApiKey":   "sk-ant-...",
-      "BaseUrl":  "https://api.anthropic.com",
-      "Version":  "2023-06-01"
-    },
-    "AzureOpenAI": {
-      "Endpoint": "https://<your-resource>.openai.azure.com",
-      "ApiKey":   "<your-key>"
-    }
-  },
-  "Agents": {
-    "Orchestrator": { "Provider": "Anthropic",   "Model": "claude-haiku-4-5",   "Temperature": 0.3, "MaxTokens": 2000 },
-    "Requirement":  { "Provider": "Anthropic",   "Model": "claude-sonnet-4",    "Temperature": 0.1, "MaxTokens": 2000 },
-    "Coding":       { "Provider": "AzureOpenAI", "Model": "gpt-4.1",            "Temperature": 0.2, "MaxTokens": 4000 },
-    "Testing":      { "Provider": "AzureOpenAI", "Model": "gpt-4o-mini",        "Temperature": 0.2, "MaxTokens": 3000 },
-    "Qa":           { "Provider": "Anthropic",   "Model": "claude-haiku-4-5",   "Temperature": 0.1, "MaxTokens": 1500 }
-  }
-}
-```
-
-In a production or CI environment, use **Azure Key Vault** or **GitHub Actions Secrets** instead of a file.
-
----
-
-## Build & Run
-
-```bash
-git clone https://github.com/<your-org-or-user>/agentic-sdlc-net.git
+git clone https://github.com/hoangsnowy/agentic-sdlc-net.git
 cd agentic-sdlc-net
 
-# Restore + build
-dotnet restore
-dotnet build
-
-# Run unit tests
-dotnet test
-
-# Run the API locally
-dotnet run --project src/AgenticSdlc.Api
-# Scalar UI:  http://localhost:5080/scalar/v1
-# OpenAPI:    http://localhost:5080/openapi/v1.json
+dotnet restore AgenticSdlc.sln
+dotnet build   AgenticSdlc.sln -c Release
+dotnet test    AgenticSdlc.sln -c Release
 ```
 
-### End-to-end demo
+Run the API — Scalar UI at `http://localhost:5080/scalar/v1`:
+
+```bash
+dotnet run --project src/AgenticSdlc.Api
+```
+
+Run the Agent Studio web UI:
+
+```bash
+dotnet run --project src/AgenticSdlc.Web
+```
+
+Or run the whole stack with the Aspire dashboard:
+
+```bash
+dotnet run --project src/AgenticSdlc.AppHost
+```
+
+Call the end-to-end pipeline:
 
 ```bash
 curl -X POST http://localhost:5080/pipeline \
   -H "Content-Type: application/json" \
-  -d '{"userStory":"The system needs a product management API that lets an admin create/view/edit/delete; users browse by category.","nMax":3}'
+  -d '{"userStory":"An admin can create, view, edit and delete products; users browse by category.","nMax":3}'
 ```
 
----
+## Configuration
 
-## API Endpoints
+Set secrets via user-secrets — never commit keys:
+
+```bash
+cd src/AgenticSdlc.Api
+dotnet user-secrets set "Llm:Anthropic:ApiKey"   "sk-ant-..."
+dotnet user-secrets set "Llm:AzureOpenAI:ApiKey" "..."
+```
+
+Per-agent provider/model mapping (`appsettings.json`):
+
+```json
+{
+  "Llm": {
+    "Anthropic":   { "BaseUrl": "https://api.anthropic.com", "Version": "2023-06-01" },
+    "AzureOpenAI": { "Endpoint": "https://<resource>.openai.azure.com" }
+  },
+  "Agents": {
+    "Orchestrator": { "Provider": "Anthropic",   "Model": "claude-haiku-4-5", "Temperature": 0.3, "MaxTokens": 2000 },
+    "Requirement":  { "Provider": "Anthropic",   "Model": "claude-sonnet-4",  "Temperature": 0.1, "MaxTokens": 2000 },
+    "Coding":       { "Provider": "AzureOpenAI", "Model": "gpt-4.1",          "Temperature": 0.2, "MaxTokens": 4000 },
+    "Testing":      { "Provider": "AzureOpenAI", "Model": "gpt-4o-mini",      "Temperature": 0.2, "MaxTokens": 3000 },
+    "Qa":           { "Provider": "Anthropic",   "Model": "claude-haiku-4-5", "Temperature": 0.1, "MaxTokens": 1500 }
+  }
+}
+```
+
+No keys handy? Run **Demo mode** in Agent Studio (backed by `MockLlmClient`) for a fully offline pipeline.
+
+### Optional: persistence
+
+Provide a connection string to enable EF Core / Postgres (otherwise the app runs stateless):
+
+```bash
+docker compose up -d
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" \
+  "Host=localhost;Port=5432;Database=agentic_sdlc;Username=postgres;Password=postgres"
+```
+
+## API
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/requirement` | Invoke the Requirement Agent on its own |
-| `POST` | `/code` | Invoke the Coding Agent on its own |
-| `POST` | `/test` | Invoke the Testing Agent on its own |
-| `POST` | `/qa` | Invoke the QA Agent on its own |
-| `POST` | `/pipeline` | Run the end-to-end flow (KC4 in the thesis) |
-| `GET`  | `/health` | Healthcheck |
+| `POST` | `/requirement` | Run the Requirement agent on its own |
+| `POST` | `/code` | Run the Coding agent on its own |
+| `POST` | `/test` | Run the Testing agent on its own |
+| `POST` | `/qa` | Run the QA agent on its own |
+| `POST` | `/pipeline` | Run the full end-to-end flow |
+| `GET`  | `/health` | Health check |
 
----
+## Deploy
+
+```bash
+azd up   # provisions + deploys to Azure Container Apps via the Aspire AppHost
+```
 
 ## Roadmap
 
-- [x] Phase 1 — Solution skeleton, CI, README
-- [x] Phase 2 — LLM Gateway (`ILlmClient` + 2 impls + factory + Mock)
-- [x] Phase 3 — Domain models + 5 agent interfaces
-- [x] Phase 4 — `PipelineOrchestrator` + endpoints
-- [x] Phase 5 — Unit tests + benchmark KC1–KC5
-- [x] Phase 6 — Azure deployment (Container Apps + App Insights)
-- [x] Phase 7 — Agent Studio (Blazor Server, realtime UI + orchestration editor) — see [docs/PHASE_7.md](docs/PHASE_7.md)
+The project is growing from a fixed 5-agent pipeline into a general, **governance-first** agentic platform: pluggable agent runtimes (incl. Semantic Kernel), MCP-based tool execution behind a sandbox + approval gate, an evidence/lineage store, and durable workflows — with the SDLC pipeline as the flagship example. Full plan in [docs/ROADMAP_PLATFORM_V2.md](docs/ROADMAP_PLATFORM_V2.md).
 
-### Long-term direction (post-thesis)
+## Contributing
 
-Beyond the thesis, the intent is to grow this prototype into an **open-source, .NET-native agentic
-framework** (hybrid: keep the .NET core, reuse Semantic Kernel + MCP, build the novel runtime / governance /
-evidence layers). The phased plan — from pre-defense hardening to platform-v2 to OSS maturity — lives in
-[docs/ROADMAP_PLATFORM_V2.md](docs/ROADMAP_PLATFORM_V2.md). The prototype stays frozen until tagged `v1.0-thesis`.
-
----
-
-## Thesis references
-
-- Section 2.2 — Proposed Multi-Agent architecture
-- Section 2.4 — Prototype implementation
-- Section 2.5 — Experimental scenarios KC1–KC5
-
----
+Issues and PRs are welcome. Build and test with `dotnet test AgenticSdlc.sln -c Release`; CI runs the same on every push and PR. Commits follow [Conventional Commits](https://www.conventionalcommits.org/). Code, comments and docs are English; `Nullable` and `TreatWarningsAsErrors` are enabled across the solution.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
-
----
-
-## English summary
-
-Reference prototype for a **multi-agent AI system** that supports the software development lifecycle (SDLC), built on **.NET 10** and **Microsoft Azure**, using a **hybrid LLM** strategy (Anthropic Claude + Azure OpenAI). The system orchestrates five specialised agents — Orchestrator, Requirement, Coding, Testing, QA — through a leader-specialists pattern with an explicit Quality Loop (max 3 iterations). Companion to the Master's thesis *"Research and Application of Agentic AI in the Software Development Lifecycle"* (Nguyen Minh Hoang, HUBT, 2026).
+[MIT](LICENSE)
