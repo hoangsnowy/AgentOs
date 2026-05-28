@@ -608,7 +608,7 @@ select {
     padding: 4px 0;
     animation: sm-open .12s ease-out;
 }
-@keyframes sm-open { from { transform: translateY(-4px); opacity: .8; } to { transform: translateY(0); opacity: 1; } }
+@keyframes sm-open { from { opacity: .8; } to { opacity: 1; } }
 
 .sm-header {
     display: flex; align-items: center; gap: 10px;
@@ -943,21 +943,110 @@ select {
 .login-hint { font-size: 11px; color: var(--txt-dim); margin-top: 10px; text-align: center; }
 
 /* =================================================================
-   Taskbar — bottom dock (KDE / Windows style)
+   Dock — floating bottom-center pill (macOS / KDE Latte / Garuda Dr460nized)
    ================================================================= */
-.taskbar {
-    height: 40px;
-    background: linear-gradient(180deg, rgba(14,22,40,.85), rgba(8,16,32,.92));
-    backdrop-filter: blur(28px) saturate(180%);
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
-    border-top: 1px solid rgba(255,255,255,.18);
+.dock {
+    position: fixed;
+    left: 50%; bottom: 14px;
+    transform: translateX(-50%);
+    z-index: 200;
     display: flex; align-items: center;
-    padding: 0 6px;
     gap: 4px;
-    color: #e6edf3;
+    padding: 6px 10px;
+    background: rgba(15,23,42,.50);
+    backdrop-filter: blur(32px) saturate(200%);
+    -webkit-backdrop-filter: blur(32px) saturate(200%);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 18px;
+    box-shadow:
+        0 20px 60px rgba(0,0,0,.50),
+        0 1px 0 rgba(255,255,255,.20) inset,
+        0 0 0 1px rgba(0,0,0,.30);
     user-select: none;
-    box-shadow: 0 -1px 0 rgba(255,255,255,.10) inset, 0 -10px 30px rgba(0,0,0,.30);
 }
+
+.dock-item {
+    width: 44px; height: 44px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: transform .18s cubic-bezier(.34,1.56,.64,1), background .12s, border-color .12s;
+    position: relative;
+    color: #fff;
+    font-family: inherit; font-size: 22px;
+    padding: 0;
+}
+.dock-item:hover {
+    transform: translateY(-6px) scale(1.12);
+    background: rgba(255,255,255,.18);
+    border-color: rgba(255,255,255,.30);
+    z-index: 1;
+}
+.dock-item:hover .di-ic { filter: drop-shadow(0 4px 8px rgba(0,0,0,.30)); }
+.dock-item:active { transform: translateY(-2px) scale(1.05); }
+.di-ic { line-height: 1; transition: filter .18s; }
+
+.dock-start {
+    background: linear-gradient(135deg, #4a8cff, #7c3aed);
+    border-color: rgba(255,255,255,.30);
+    font-size: 24px; font-weight: 700;
+    text-shadow: 0 1px 0 rgba(0,0,0,.30);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 4px 12px rgba(124,58,237,.45);
+}
+.dock-start:hover { background: linear-gradient(135deg, #5a98ff, #8b5cf6); }
+.dock-start.open { background: linear-gradient(135deg, #2563eb, #6d28d9); transform: translateY(-2px) scale(1.05); }
+
+.dock-sep { width: 1px; height: 30px; background: rgba(255,255,255,.20); margin: 0 6px; }
+
+.di-dot {
+    position: absolute;
+    bottom: -8px; left: 50%; transform: translateX(-50%);
+    width: 5px; height: 5px;
+    background: #4a8cff;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(74,140,255,.90);
+}
+.dock-item.min .di-dot { background: rgba(255,255,255,.40); box-shadow: none; }
+
+/* =================================================================
+   System tray (top-right floating chip)
+   ================================================================= */
+.systray {
+    position: fixed;
+    top: 14px; right: 14px;
+    z-index: 200;
+    display: flex; align-items: center;
+    gap: 10px;
+    padding: 5px 12px;
+    background: rgba(15,23,42,.50);
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.40), 0 1px 0 rgba(255,255,255,.15) inset;
+    color: #fff;
+    font-size: 12.5px;
+    user-select: none;
+}
+.st-clock { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; letter-spacing: .02em; }
+.st-divider { width: 1px; height: 18px; background: rgba(255,255,255,.22); }
+.st-user { display: flex; align-items: center; gap: 7px; }
+.st-avatar {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4a8cff, #7c3aed);
+    color: #fff;
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 700;
+    border: 1px solid rgba(255,255,255,.35);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.25);
+}
+.st-name { font-weight: 500; }
+
+/* Hide legacy bottom taskbar (.taskbar) if still anywhere */
+.taskbar { display: none !important; }
 
 .tb-start {
     height: 30px; padding: 0 12px;
@@ -1027,14 +1116,16 @@ select {
    Cascading Start menu — anchored to taskbar, opens upward
    ================================================================= */
 .start-menu.cascading {
-    bottom: 40px; top: auto;
-    left: 4px;
+    bottom: 78px; top: auto;
+    left: 50%;
+    transform: translateX(-50%);
     width: 480px;
-    border-radius: var(--r-4) var(--r-4) 0 0;
-    border-bottom: 0;
+    border-radius: var(--r-4);
+    border: 1px solid rgba(255,255,255,.40);
     overflow: hidden;
-    animation: sm-open-up .12s ease-out;
+    animation: sm-open-up .14s ease-out;
 }
+@keyframes sm-open-up { from { transform: translate(-50%, 6px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
 @keyframes sm-open-up { from { transform: translateY(4px); opacity: .7; } to { transform: translateY(0); opacity: 1; } }
 
 .start-menu.cascading .sm-panes {
@@ -1073,7 +1164,7 @@ select {
 .toast-container {
     position: fixed;
     right: 16px;
-    bottom: 56px;  /* above taskbar */
+    bottom: 84px;  /* above floating dock */
     z-index: 9500;
     display: flex; flex-direction: column-reverse; gap: 8px;
     pointer-events: none;

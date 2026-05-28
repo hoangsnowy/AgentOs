@@ -1,48 +1,58 @@
-@* Taskbar — Start + pinned apps + open window list + tray (clock + user). *@
+@* Floating dock (bottom-center) + system tray (top-right) — macOS / KDE Latte vibe. *@
 
 @using AgenticSdlc.Web.Services
 @inject WindowManagerService WM
 @inject IJSRuntime JS
 @implements IDisposable
 
-<div class="taskbar">
-    <button class="tb-start @(StartOpen ? "open" : "")" @onclick="ToggleStart" @onclick:stopPropagation="true" title="Open Start menu">
-        <span class="tb-start-glyph">⊞</span> Start
+@* ===== System tray (top-right corner, separate glass chip) ===== *@
+<div class="systray">
+    <span class="st-clock" title="@_today">@_now</span>
+    <span class="st-divider"></span>
+    <div class="st-user" title="@(_user ?? "guest")">
+        <span class="st-avatar">@AvatarLetter</span>
+        <span class="st-name">@(_user ?? "guest")</span>
+    </div>
+</div>
+
+@* ===== Dock (floating bottom-center pill) ===== *@
+<div class="dock">
+    <button class="dock-item dock-start @(StartOpen ? "open" : "")" @onclick="ToggleStart" @onclick:stopPropagation="true" title="Start menu">
+        <span class="di-ic">⊞</span>
     </button>
 
-    <div class="tb-divider"></div>
+    <span class="dock-sep"></span>
 
-    <div class="tb-pinned">
-        <button class="tb-app" @onclick="@(() => WM.OpenApp("pipeline", "Pipeline", "▶"))" title="Pipeline">▶</button>
-        <button class="tb-app" @onclick="@(() => WM.OpenApp("workflow", "Workflow", "🕸", w: 1080, h: 660))" title="Workflow">🕸</button>
-        <button class="tb-app" @onclick="@(() => WM.OpenApp("settings", "Settings", "⚙", w: 720, h: 600))" title="Settings">⚙</button>
-    </div>
-
-    @if (WM.Open.Count > 0)
+    @foreach (var app in _pinned)
     {
-        <div class="tb-divider"></div>
-        <div class="tb-open">
-            @foreach (var w in WM.Open)
+        var isOpen = WM.Open.Any(o => o.AppKey == app.Key);
+        <button class="dock-item @(isOpen ? "running" : "")"
+                @onclick="@(() => Launch(app))"
+                title="@app.Title">
+            <span class="di-ic">@app.Icon</span>
+            @if (isOpen)
             {
-                <button class="tb-open-btn @(w.Minimized ? "minimized" : "active")"
-                        @onclick="@(() => OnTaskbarClick(w))"
-                        title="@w.Title">
-                    <span class="tb-open-ic">@w.Icon</span>
-                    <span class="tb-open-title">@w.Title</span>
-                </button>
+                <span class="di-dot"></span>
             }
-        </div>
+        </button>
     }
 
-    <div class="tb-spacer"></div>
-
-    <div class="tb-tray">
-        <span class="tb-tray-item tb-clock" title="@_today">@_now</span>
-        <div class="tb-tray-item tb-user" title="@(_user ?? "guest")">
-            <span class="tb-avatar">@AvatarLetter</span>
-            <span>@(_user ?? "guest")</span>
-        </div>
-    </div>
+    @{
+        var floating = WM.Open.Where(w => !_pinned.Any(p => p.Key == w.AppKey)).ToList();
+    }
+    @if (floating.Count > 0)
+    {
+        <span class="dock-sep"></span>
+        @foreach (var w in floating)
+        {
+            <button class="dock-item running @(w.Minimized ? "min" : "")"
+                    @onclick="@(() => OnTaskClick(w))"
+                    title="@w.Title">
+                <span class="di-ic">@w.Icon</span>
+                <span class="di-dot"></span>
+            </button>
+        }
+    }
 </div>
 
 @code {
@@ -55,6 +65,15 @@
     private string AvatarLetter => string.IsNullOrEmpty(_user) ? "?" : _user[..1].ToUpperInvariant();
 
     private System.Threading.Timer? _timer;
+
+    private sealed record PinnedApp(string Key, string Title, string Icon, int Width, int Height);
+
+    private readonly List<PinnedApp> _pinned = new()
+    {
+        new("pipeline", "Pipeline", "▶", 920, 620),
+        new("workflow", "Workflow", "🕸", 1080, 660),
+        new("settings", "Settings", "⚙", 720, 600),
+    };
 
     protected override void OnInitialized()
     {
@@ -75,7 +94,7 @@
                 _user = await JS.InvokeAsync<string?>("localStorage.getItem", "agentic-signed-in");
                 StateHasChanged();
             }
-            catch { /* JS interop not ready */ }
+            catch { }
         }
     }
 
@@ -86,16 +105,15 @@
         _today = now.ToString("dddd, d MMMM yyyy");
     }
 
-    private void OnTaskbarClick(AppWindowState w)
+    private void Launch(PinnedApp app)
     {
-        if (w.Minimized)
-        {
-            WM.Restore(w.Id);
-        }
-        else
-        {
-            WM.Focus(w.Id);
-        }
+        WM.OpenApp(app.Key, app.Title, app.Icon, app.Width, app.Height);
+    }
+
+    private void OnTaskClick(AppWindowState w)
+    {
+        if (w.Minimized) { WM.Restore(w.Id); }
+        else { WM.Focus(w.Id); }
     }
 
     private Task ToggleStart() => OnToggleStart.InvokeAsync();
