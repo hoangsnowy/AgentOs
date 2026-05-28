@@ -1,5 +1,5 @@
 @page "/"
-@inject NavigationManager Nav
+@inject AgenticSdlc.Web.Services.WindowManagerService WM
 
 <PageTitle>Desktop — Agentic SDLC</PageTitle>
 
@@ -7,18 +7,24 @@
     <div class="desktop-group">
         <div class="desktop-group-title">Apps</div>
         <div class="desktop-icons">
-            <DesktopIcon Title="Pipeline" Icon="🚀" Caption="Run the 5-agent pipeline" Href="/pipeline" />
-            <DesktopIcon Title="Workflow" Icon="🕸" Caption="Visual orchestration editor" Href="/orchestration" />
-            <DesktopIcon Title="Settings" Icon="⚙" Caption="LLM keys, GitHub integration" Href="/settings" />
+            <DesktopIcon Title="Pipeline" Icon="🚀" Caption="Run the 5-agent pipeline"
+                         OnClick="@(() => WM.OpenApp("pipeline", "Pipeline", "▶"))" />
+            <DesktopIcon Title="Workflow" Icon="🕸" Caption="Visual orchestration editor"
+                         OnClick="@(() => WM.OpenApp("workflow", "Workflow", "🕸", w: 1080, h: 660))" />
+            <DesktopIcon Title="Settings" Icon="⚙" Caption="LLM keys, GitHub integration"
+                         OnClick="@(() => WM.OpenApp("settings", "Settings", "⚙", w: 720, h: 600))" />
         </div>
     </div>
 
     <div class="desktop-group">
         <div class="desktop-group-title">Quick actions</div>
         <div class="desktop-icons">
-            <DesktopIcon Title="Open PR" Icon="🚀" Caption="Push generated code → GitHub" Href="/pipeline" />
-            <DesktopIcon Title="Verify build" Icon="🔨" Caption="dotnet build the agent output" Href="/pipeline" />
-            <DesktopIcon Title="GitHub" Icon="↗" Caption="Repository" Href="https://github.com/hoangsnowy/agentic-sdlc-net" Target="_blank" />
+            <DesktopIcon Title="Open PR" Icon="🚀" Caption="Push generated code → GitHub"
+                         OnClick="@(() => WM.OpenApp("pipeline", "Pipeline", "▶"))" />
+            <DesktopIcon Title="Verify build" Icon="🔨" Caption="dotnet build the agent output"
+                         OnClick="@(() => WM.OpenApp("pipeline", "Pipeline", "▶"))" />
+            <DesktopIcon Title="GitHub" Icon="↗" Caption="Repository"
+                         Href="https://github.com/hoangsnowy/agentic-sdlc-net" Target="_blank" />
         </div>
     </div>
 

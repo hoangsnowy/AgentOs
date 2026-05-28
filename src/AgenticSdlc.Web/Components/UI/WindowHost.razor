@@ -1,0 +1,33 @@
+@* WindowHost — renders every open app window from WindowManagerService. *@
+
+@using AgenticSdlc.Web.Services
+@using AgenticSdlc.Web.Components.Pages
+@implements IDisposable
+@inject WindowManagerService WM
+
+@foreach (var w in WM.Open)
+{
+    if (!w.Minimized)
+    {
+        <AppFrame W="@w" @key="w.Id">
+            @switch (w.AppKey)
+            {
+                case "pipeline":     <PipelineStudio />     break;
+                case "workflow":     <OrchestrationStudio /> break;
+                case "settings":     <Settings />            break;
+                default:             <div class="appwin-blank">Unknown app: <code>@w.AppKey</code></div> break;
+            }
+        </AppFrame>
+    }
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        WM.Changed += OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => WM.Changed -= OnChanged;
+}

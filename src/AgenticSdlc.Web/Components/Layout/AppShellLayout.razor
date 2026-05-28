@@ -4,65 +4,17 @@
 
 <LoginOverlay />
 
-<div class="shell">
-
-    <aside class="shell-sidebar">
-        <div class="shell-brand">
-            <span class="brand-mark">◆</span>
-            <div class="brand-text">
-                <div class="brand-title">Agentic SDLC</div>
-                <div class="brand-sub">Multi-agent framework</div>
-            </div>
-        </div>
-
-        <nav class="shell-nav">
-            <div class="nav-section">Workspace</div>
-            <NavLink class="nav-item" Match="NavLinkMatch.All" href="/">
-                <span class="nav-ic">🖥</span> Desktop
-            </NavLink>
-            <NavLink class="nav-item" href="/pipeline">
-                <span class="nav-ic">▶</span> Pipeline
-            </NavLink>
-            <NavLink class="nav-item" href="/orchestration">
-                <span class="nav-ic">🕸</span> Workflow
-            </NavLink>
-
-            <div class="nav-section">Config</div>
-            <NavLink class="nav-item" href="/settings">
-                <span class="nav-ic">⚙</span> Settings
-            </NavLink>
-        </nav>
-
-        <div class="shell-foot">
-            <span>v1.0 · open source</span>
-        </div>
-    </aside>
-
+<div class="shell shell-deskmode">
     <div class="shell-pane">
-
-        @* Toolbar with path indicator + nav buttons *@
-        <div class="toolbar-strip">
-            <button class="tbtn" title="Desktop" @onclick="@(() => Nav.NavigateTo("/"))">🖥 Home</button>
-            <button class="tbtn" title="Run pipeline" @onclick="@(() => Nav.NavigateTo("/pipeline"))">▶ Pipeline</button>
-            <button class="tbtn" title="Workflow editor" @onclick="@(() => Nav.NavigateTo("/orchestration"))">🕸 Workflow</button>
-            <span class="tbtn-sep"></span>
-            <button class="tbtn" title="Settings" @onclick="@(() => Nav.NavigateTo("/settings"))">⚙ Config</button>
-            <span class="tbtn-sep"></span>
-            <span class="tbtn-lbl">Path:</span>
-            <span class="urlbar">@CurrentPath</span>
-        </div>
-
         <main class="shell-main">
             @Body
         </main>
 
-        @* Bottom taskbar (KDE / Windows style) *@
-        <Taskbar StartOpen="_startOpen"
-                 OnToggleStart="ToggleStart"
-                 OnToggleTheme="ToggleTheme"
-                 Theme="_theme" />
-    </div>
+        @* All open desktop-app windows render here on top of the desktop. *@
+        <WindowHost />
 
+        <Taskbar StartOpen="_startOpen" OnToggleStart="ToggleStart" />
+    </div>
 </div>
 
 @* ===== Cascading Start menu (anchored to taskbar, opens upward) ===== *@
@@ -98,15 +50,14 @@
                 @switch (_cat)
                 {
                     case "apps":
-                        <a class="sm-item" href="/" @onclick="CloseStart"><span class="sm-ic">🖥</span> Desktop <span class="sm-hint">Ctrl+0</span></a>
-                        <a class="sm-item" href="/pipeline" @onclick="CloseStart"><span class="sm-ic">▶</span> Pipeline <span class="sm-hint">Ctrl+1</span></a>
-                        <a class="sm-item" href="/orchestration" @onclick="CloseStart"><span class="sm-ic">🕸</span> Workflow <span class="sm-hint">Ctrl+2</span></a>
-                        <a class="sm-item" href="/settings" @onclick="CloseStart"><span class="sm-ic">⚙</span> Settings <span class="sm-hint">Ctrl+,</span></a>
+                        <button class="sm-item" @onclick="@(() => OpenApp("pipeline", "Pipeline", "▶"))"><span class="sm-ic">▶</span> Pipeline <span class="sm-hint">Ctrl+1</span></button>
+                        <button class="sm-item" @onclick="@(() => OpenApp("workflow", "Workflow", "🕸", 1080, 660))"><span class="sm-ic">🕸</span> Workflow <span class="sm-hint">Ctrl+2</span></button>
+                        <button class="sm-item" @onclick="@(() => OpenApp("settings", "Settings", "⚙", 720, 600))"><span class="sm-ic">⚙</span> Settings <span class="sm-hint">Ctrl+,</span></button>
                         break;
                     case "tools":
                         <button class="sm-item" @onclick="DemoToast"><span class="sm-ic">🔔</span> Test notification</button>
-                        <a class="sm-item" href="/pipeline" @onclick="CloseStart"><span class="sm-ic">🔨</span> Verify build</a>
-                        <a class="sm-item" href="/pipeline" @onclick="CloseStart"><span class="sm-ic">🚀</span> Open PR</a>
+                        <button class="sm-item" @onclick="@(() => OpenApp("pipeline", "Pipeline", "▶"))"><span class="sm-ic">🔨</span> Verify build</button>
+                        <button class="sm-item" @onclick="@(() => OpenApp("pipeline", "Pipeline", "▶"))"><span class="sm-ic">🚀</span> Open PR</button>
                         break;
                     case "help":
                         <button class="sm-item" @onclick="ShowAbout"><span class="sm-ic">ℹ</span> About</button>
@@ -139,30 +90,15 @@
     </Footer>
 </Dialog>
 
-@* ===== Toast notifications ===== *@
 <ToastHost />
 
 @code {
     [Inject] private AgenticSdlc.Web.Services.ToastService Toasts { get; set; } = default!;
+    [Inject] private AgenticSdlc.Web.Services.WindowManagerService WM { get; set; } = default!;
 
-    private string _theme = "light";
     private bool _startOpen;
     private bool _aboutOpen;
     private string _cat = "apps";
-
-    private string CurrentPath => new Uri(Nav.Uri).AbsolutePath;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            _theme = await JS.InvokeAsync<string>("agenticTheme.get");
-            StateHasChanged();
-        }
-    }
-
-    private async Task ToggleTheme()
-        => _theme = await JS.InvokeAsync<string>("agenticTheme.toggle");
 
     private void ToggleStart()
     {
@@ -170,6 +106,12 @@
         if (_startOpen) { _cat = "apps"; }
     }
     private void CloseStart() => _startOpen = false;
+
+    private void OpenApp(string key, string title, string icon, int w = 920, int h = 620)
+    {
+        WM.OpenApp(key, title, icon, w, h);
+        _startOpen = false;
+    }
 
     private void ShowAbout()
     {

@@ -1,0 +1,11 @@
+@page "/settings"
+@inject AgenticSdlc.Web.Services.WindowManagerService WM
+@inject NavigationManager Nav
+
+@code {
+    protected override void OnInitialized()
+    {
+        WM.OpenApp("settings", "Settings", "⚙", w: 720, h: 600);
+        Nav.NavigateTo("/", replace: true);
+    }
+}

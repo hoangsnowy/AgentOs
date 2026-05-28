@@ -1,0 +1,54 @@
+@* AppFrame — desktop app window chrome (drag, focus, min/close). Hosts a child component as body. *@
+
+@using AgenticSdlc.Web.Services
+@inject WindowManagerService WM
+
+<div class="appwin @(W.Minimized ? "minimized" : "") @(_dragging ? "dragging" : "")"
+     style="left:@(W.X)px; top:@(W.Y)px; width:@(W.W)px; height:@(W.H)px; z-index:@(W.Z);"
+     @onmousedown="@(() => WM.Focus(W.Id))">
+    <div class="appwin-titlebar"
+         @onmousedown="StartDrag"
+         @onmousedown:stopPropagation="true">
+        <span class="appwin-icon">@W.Icon</span>
+        <span class="appwin-title">@W.Title</span>
+        <div class="appwin-actions">
+            <button class="appwin-btn" title="Minimize" @onclick="@(() => WM.Minimize(W.Id))" @onclick:stopPropagation="true">—</button>
+            <button class="appwin-btn appwin-btn-close" title="Close" @onclick="@(() => WM.Close(W.Id))" @onclick:stopPropagation="true">×</button>
+        </div>
+    </div>
+    <div class="appwin-body">
+        @ChildContent
+    </div>
+</div>
+
+@if (_dragging)
+{
+    <div class="drag-overlay" @onmousemove="OnDrag" @onmouseup="EndDrag" @onmouseleave="EndDrag"></div>
+}
+
+@code {
+    [Parameter, EditorRequired] public AppWindowState W { get; set; } = default!;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _dragging;
+    private double _startMouseX, _startMouseY;
+    private int _startWinX, _startWinY;
+
+    private void StartDrag(MouseEventArgs e)
+    {
+        WM.Focus(W.Id);
+        _dragging = true;
+        _startMouseX = e.ClientX; _startMouseY = e.ClientY;
+        _startWinX = W.X; _startWinY = W.Y;
+    }
+
+    private void OnDrag(MouseEventArgs e)
+    {
+        if (!_dragging) return;
+        var nx = _startWinX + (int)(e.ClientX - _startMouseX);
+        var ny = _startWinY + (int)(e.ClientY - _startMouseY);
+        WM.Move(W.Id, nx, ny);
+    }
+
+    private void EndDrag(MouseEventArgs e) => _dragging = false;
+}

@@ -56,6 +56,9 @@ builder.Services.AddSingleton<AgenticSdlc.Web.Orchestrations.OrchestrationStore>
 // Toast notification bus — any page can push, ToastHost listens.
 builder.Services.AddSingleton<AgenticSdlc.Web.Services.ToastService>();
 
+// Window manager — tracks open desktop-app windows.
+builder.Services.AddSingleton<AgenticSdlc.Web.Services.WindowManagerService>();
+
 var app = builder.Build();
 
 // Apply the EF migration at startup (no-op if the DB is not configured).

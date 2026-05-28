@@ -1,0 +1,12 @@
+@page "/pipeline"
+@page "/timeline"
+@inject AgenticSdlc.Web.Services.WindowManagerService WM
+@inject NavigationManager Nav
+
+@code {
+    protected override void OnInitialized()
+    {
+        WM.OpenApp("pipeline", "Pipeline", "▶");
+        Nav.NavigateTo("/", replace: true);
+    }
+}

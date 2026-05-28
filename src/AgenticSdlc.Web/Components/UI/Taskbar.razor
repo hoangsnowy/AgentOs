@@ -1,6 +1,7 @@
-@* Taskbar — bottom dock with Start button, pinned apps, tray (clock + theme + user). *@
+@* Taskbar — Start + pinned apps + open window list + tray (clock + user). *@
 
-@inject NavigationManager Nav
+@using AgenticSdlc.Web.Services
+@inject WindowManagerService WM
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -12,16 +13,30 @@
     <div class="tb-divider"></div>
 
     <div class="tb-pinned">
-        <a class="tb-app @(IsActive("/") ? "active" : "")" href="/" title="Desktop">🖥</a>
-        <a class="tb-app @(IsActive("/pipeline") ? "active" : "")" href="/pipeline" title="Pipeline">▶</a>
-        <a class="tb-app @(IsActive("/orchestration") ? "active" : "")" href="/orchestration" title="Workflow">🕸</a>
-        <a class="tb-app @(IsActive("/settings") ? "active" : "")" href="/settings" title="Settings">⚙</a>
+        <button class="tb-app" @onclick="@(() => WM.OpenApp("pipeline", "Pipeline", "▶"))" title="Pipeline">▶</button>
+        <button class="tb-app" @onclick="@(() => WM.OpenApp("workflow", "Workflow", "🕸", w: 1080, h: 660))" title="Workflow">🕸</button>
+        <button class="tb-app" @onclick="@(() => WM.OpenApp("settings", "Settings", "⚙", w: 720, h: 600))" title="Settings">⚙</button>
     </div>
+
+    @if (WM.Open.Count > 0)
+    {
+        <div class="tb-divider"></div>
+        <div class="tb-open">
+            @foreach (var w in WM.Open)
+            {
+                <button class="tb-open-btn @(w.Minimized ? "minimized" : "active")"
+                        @onclick="@(() => OnTaskbarClick(w))"
+                        title="@w.Title">
+                    <span class="tb-open-ic">@w.Icon</span>
+                    <span class="tb-open-title">@w.Title</span>
+                </button>
+            }
+        </div>
+    }
 
     <div class="tb-spacer"></div>
 
     <div class="tb-tray">
-        <button class="tb-tray-item" @onclick="ToggleTheme" title="Toggle theme">@_themeIcon</button>
         <span class="tb-tray-item tb-clock" title="@_today">@_now</span>
         <div class="tb-tray-item tb-user" title="@(_user ?? "guest")">
             <span class="tb-avatar">@AvatarLetter</span>
@@ -33,13 +48,10 @@
 @code {
     [Parameter] public bool StartOpen { get; set; }
     [Parameter] public EventCallback OnToggleStart { get; set; }
-    [Parameter] public EventCallback OnToggleTheme { get; set; }
-    [Parameter] public string Theme { get; set; } = "light";
 
     private string _now = "";
     private string _today = "";
     private string? _user;
-    private string _themeIcon => Theme == "light" ? "🌙" : "☀";
     private string AvatarLetter => string.IsNullOrEmpty(_user) ? "?" : _user[..1].ToUpperInvariant();
 
     private System.Threading.Timer? _timer;
@@ -49,7 +61,10 @@
         UpdateClock();
         _timer = new System.Threading.Timer(_ => InvokeAsync(() => { UpdateClock(); StateHasChanged(); }),
             null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        WM.Changed += OnWmChanged;
     }
+
+    private void OnWmChanged() => InvokeAsync(StateHasChanged);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -60,26 +75,34 @@
                 _user = await JS.InvokeAsync<string?>("localStorage.getItem", "agentic-signed-in");
                 StateHasChanged();
             }
-            catch { /* JS interop may not be ready */ }
+            catch { /* JS interop not ready */ }
         }
     }
 
     private void UpdateClock()
     {
         var now = DateTime.Now;
-        _now = now.ToString("HH:mm");
+        _now = now.ToString("HH:mm:ss");
         _today = now.ToString("dddd, d MMMM yyyy");
     }
 
-    private bool IsActive(string path)
+    private void OnTaskbarClick(AppWindowState w)
     {
-        var current = new Uri(Nav.Uri).AbsolutePath;
-        if (path == "/") return current == "/";
-        return current.StartsWith(path, StringComparison.OrdinalIgnoreCase);
+        if (w.Minimized)
+        {
+            WM.Restore(w.Id);
+        }
+        else
+        {
+            WM.Focus(w.Id);
+        }
     }
 
     private Task ToggleStart() => OnToggleStart.InvokeAsync();
-    private Task ToggleTheme() => OnToggleTheme.InvokeAsync();
 
-    public void Dispose() => _timer?.Dispose();
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        WM.Changed -= OnWmChanged;
+    }
 }

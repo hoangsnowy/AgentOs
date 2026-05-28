@@ -1,18 +1,33 @@
-@* Desktop-style icon tile — click navigates. *@
+@* Desktop-style icon tile — OnClick (opens app window) or Href (external link). *@
 
-<a class="dicon" href="@Href" target="@(Target ?? "_self")">
-    <div class="dicon-tile">@Icon</div>
-    <div class="dicon-title">@Title</div>
-    @if (!string.IsNullOrEmpty(Caption))
-    {
-        <div class="dicon-caption">@Caption</div>
-    }
-</a>
+@if (OnClick.HasDelegate)
+{
+    <button type="button" class="dicon" @onclick="OnClick">
+        <div class="dicon-tile">@Icon</div>
+        <div class="dicon-title">@Title</div>
+        @if (!string.IsNullOrEmpty(Caption))
+        {
+            <div class="dicon-caption">@Caption</div>
+        }
+    </button>
+}
+else
+{
+    <a class="dicon" href="@Href" target="@(Target ?? "_self")">
+        <div class="dicon-tile">@Icon</div>
+        <div class="dicon-title">@Title</div>
+        @if (!string.IsNullOrEmpty(Caption))
+        {
+            <div class="dicon-caption">@Caption</div>
+        }
+    </a>
+}
 
 @code {
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter, EditorRequired] public string Icon { get; set; } = "";
-    [Parameter, EditorRequired] public string Href { get; set; } = "#";
+    [Parameter] public string Href { get; set; } = "#";
     [Parameter] public string? Caption { get; set; }
     [Parameter] public string? Target { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
 }
