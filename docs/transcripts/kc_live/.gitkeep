@@ -1,0 +1,8 @@
+# KC live bench transcripts land here.
+#
+# Run scripts/run-kc-live.sh (Linux/macOS) or scripts/run-kc-live.ps1 (Windows) with
+# RUN_LIVE_LLM=1 + the LLM API keys exported; the script copies
+# TestResults/kc_live_summary.md + run-*.json + kc_metrics_live.csv into a
+# timestamped subdirectory beneath this folder.
+#
+# Subdirectory naming: {mode}-{utc-timestamp}/  (e.g. hybrid-20260601T093015Z/).
