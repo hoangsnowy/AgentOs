@@ -54,7 +54,7 @@ Phase 8 closes those gaps.
 
 ### 8.3 — Web auth + LoginOverlay              ✅ (token in localStorage; cookie variant deferred)
 
-### 8.4 — Runtime configuration store          🟡 (interface + in-memory + /settings endpoints; EF entity TODO)
+### 8.4 — Runtime configuration store          ✅ (EF + DataProtection-encrypted app_config, 15 s cache, startup hydration)
 
 ### 8.5 — Postgres required by default         ✅
 

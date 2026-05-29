@@ -62,8 +62,11 @@ builder.Services.AddOpenApi();
 // /runs* endpoint. /health and / stay public.
 builder.Services.AddJwtAuth(builder.Configuration);
 
-// Phase 8.4 — Runtime-mutable configuration store. In-memory until the EF entity ships.
-builder.Services.AddSingleton<IAppConfigStore, InMemoryAppConfigStore>();
+// Phase 8.4b — Runtime-mutable configuration store. EF + DataProtection-encrypted when a DB is
+// configured; in-memory fallback otherwise. DataProtection persists its key ring to the DataProtection
+// default location (over_ridable via env for multi-instance Container Apps).
+builder.Services.AddDataProtection();
+builder.Services.AddAppConfigStore(builder.Configuration);
 
 var app = builder.Build();
 
@@ -72,6 +75,9 @@ app.UseAuthorization();
 
 // Apply EF migration at startup (no-op if the DB is not configured yet).
 await app.Services.InitializePersistenceAsync();
+
+// Phase 8.4b — hydrate runtime LLM/GitHub overrides from the persisted app_config table.
+await app.Services.HydrateRuntimeOverridesAsync();
 
 // Enable OpenAPI + Scalar UI in every env except Production (dev deploy runs the Staging env).
 if (!app.Environment.IsProduction())

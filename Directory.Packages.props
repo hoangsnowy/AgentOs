@@ -34,6 +34,9 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0" />
 
+    <!-- Phase 8.4b — encrypt app_config values at rest -->
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="10.0.0" />
+
     <!-- API host: OpenAPI + Scalar + App Insights -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.6.0" />

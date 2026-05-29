@@ -13,9 +13,19 @@ internal sealed class AgenticSdlcDbContext(DbContextOptions<AgenticSdlcDbContext
 
     public DbSet<OrchestrationEntity> Orchestrations => Set<OrchestrationEntity>();
 
+    public DbSet<AppConfigEntity> AppConfig => Set<AppConfigEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
+
+        modelBuilder.Entity<AppConfigEntity>(e =>
+        {
+            e.ToTable("app_config");
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(256);
+            e.Property(x => x.EncryptedValue).IsRequired();
+        });
 
         modelBuilder.Entity<PipelineRunEntity>(e =>
         {
