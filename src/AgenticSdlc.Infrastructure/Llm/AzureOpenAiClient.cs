@@ -2,7 +2,9 @@
 // Sprint 1 — Azure OpenAI Chat Completions client (raw HttpClient, no SDK).
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -29,20 +31,22 @@ public sealed class AzureOpenAiClient : ILlmClient
     private readonly HttpClient _http;
     private readonly AzureOpenAiOptions _options;
     private readonly IRuntimeOverrides _overrides;
+    private readonly ApiKeyRouter _router;
     private readonly ILogger<AzureOpenAiClient> _logger;
 
     /// <inheritdoc />
     public string Provider => "AzureOpenAI";
 
-    /// <summary>Initializes the client. The api-key + endpoint are read at request time from
-    /// <paramref name="overrides"/> (runtime, Settings UI) with the appsettings values as fallback —
-    /// so swapping in the UI takes effect immediately.</summary>
-    public AzureOpenAiClient(HttpClient http, IOptions<LlmOptions> options, IRuntimeOverrides overrides, ILogger<AzureOpenAiClient> logger)
+    /// <summary>Initializes the client. The api-key(s) + endpoint are read at request time from
+    /// <paramref name="overrides"/> (runtime) + the configured pool; <paramref name="router"/> hands out
+    /// keys round-robin with rate-limit failover. Keys in the pool share the one configured endpoint.</summary>
+    public AzureOpenAiClient(HttpClient http, IOptions<LlmOptions> options, IRuntimeOverrides overrides, ApiKeyRouter router, ILogger<AzureOpenAiClient> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _options = options.Value?.AzureOpenAi ?? new AzureOpenAiOptions();
         _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
+        _router = router ?? throw new ArgumentNullException(nameof(router));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         ConfigureHttpClient();
@@ -63,8 +67,17 @@ public sealed class AzureOpenAiClient : ILlmClient
         // api-key is attached per request so runtime overrides take effect.
     }
 
-    private string EffectiveApiKey()
-        => !string.IsNullOrWhiteSpace(_overrides.AzureApiKey) ? _overrides.AzureApiKey! : _options.ApiKey;
+    private List<string> EffectiveApiKeys()
+    {
+        var keys = new List<string>();
+        if (!string.IsNullOrWhiteSpace(_overrides.AzureApiKey)) { keys.Add(_overrides.AzureApiKey!); }
+        foreach (var k in _options.ApiKeys)
+        {
+            if (!string.IsNullOrWhiteSpace(k)) { keys.Add(k); }
+        }
+        if (!string.IsNullOrWhiteSpace(_options.ApiKey)) { keys.Add(_options.ApiKey); }
+        return keys.Distinct(StringComparer.Ordinal).ToList();
+    }
 
     private string EffectiveEndpoint()
         => !string.IsNullOrWhiteSpace(_overrides.AzureEndpoint) ? _overrides.AzureEndpoint! : _options.Endpoint;
@@ -75,13 +88,13 @@ public sealed class AzureOpenAiClient : ILlmClient
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
 
-        var apiKey = EffectiveApiKey();
+        var keys = EffectiveApiKeys();
         var endpoint = EffectiveEndpoint();
-        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(endpoint))
+        if (keys.Count == 0 || string.IsNullOrWhiteSpace(endpoint))
         {
             throw new LlmException(
                 "Azure OpenAI not configured. Set api-key + endpoint on the Settings page, "
-                + "or 'Llm:AzureOpenAi:ApiKey' / 'Llm:AzureOpenAi:Endpoint' (user-secrets or env).",
+                + "or 'Llm:AzureOpenAi:ApiKey' / 'Llm:AzureOpenAi:ApiKeys' / 'Llm:AzureOpenAi:Endpoint' (user-secrets or env).",
                 Provider);
         }
 
@@ -110,9 +123,25 @@ public sealed class AzureOpenAiClient : ILlmClient
         var relPath = $"openai/deployments/{deployment}/chat/completions?api-version={_options.ApiVersion}";
         var url = endpoint.TrimEnd('/') + "/" + relPath;
 
+        var maxRetries = Math.Max(_options.MaxRetries, keys.Count - 1);
         var dto = await RetryPolicy.ExecuteAsync(
-            async ct => await PostOnceAsync(url, payload, apiKey, ct).ConfigureAwait(false),
-            maxRetries: _options.MaxRetries,
+            async ct =>
+            {
+                var apiKey = _router.Acquire(Provider, keys)!;
+                try
+                {
+                    return await PostOnceAsync(url, payload, apiKey, ct).ConfigureAwait(false);
+                }
+                catch (TransientHttpException ex) when (ex.StatusCode == 429)
+                {
+                    _router.Penalize(Provider, apiKey, ex.RetryAfter);
+                    _logger.LogWarning(
+                        "[AzureOpenAI] API key rate-limited (429); {Available}/{Total} keys still available — failing over.",
+                        _router.AvailableCount(Provider, keys), keys.Count);
+                    throw;
+                }
+            },
+            maxRetries: maxRetries,
             baseDelay: TimeSpan.FromSeconds(1),
             logger: _logger,
             providerName: Provider,
@@ -152,7 +181,7 @@ public sealed class AzureOpenAiClient : ILlmClient
 
             if (RetryPolicy.IsRetriableStatus(response.StatusCode))
             {
-                throw new TransientHttpException(statusCode, $"AzureOpenAI returned {statusCode}: {body}");
+                throw new TransientHttpException(statusCode, $"AzureOpenAI returned {statusCode}: {body}", ParseRetryAfter(response));
             }
 
             throw new LlmException(
@@ -189,6 +218,29 @@ public sealed class AzureOpenAiClient : ILlmClient
         {
             return "<unreadable>";
         }
+    }
+
+    /// <summary>Parse the <c>Retry-After</c> header (delta-seconds or HTTP-date) into a cooldown duration.</summary>
+    private static TimeSpan? ParseRetryAfter(HttpResponseMessage resp)
+    {
+        var ra = resp.Headers.RetryAfter;
+        if (ra is null)
+        {
+            return null;
+        }
+        if (ra.Delta is { } delta && delta > TimeSpan.Zero)
+        {
+            return delta;
+        }
+        if (ra.Date is { } date)
+        {
+            var diff = date - DateTimeOffset.UtcNow;
+            if (diff > TimeSpan.Zero)
+            {
+                return diff;
+            }
+        }
+        return null;
     }
 
     private static string ExtractText(ChatResponseDto dto)

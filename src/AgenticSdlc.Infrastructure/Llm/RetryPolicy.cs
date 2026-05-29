@@ -121,8 +121,12 @@ internal sealed class TransientHttpException : Exception
 {
     public int StatusCode { get; }
 
-    public TransientHttpException(int statusCode, string message) : base(message)
+    /// <summary>The provider's <c>Retry-After</c> hint, when present (parsed from the 429 response).</summary>
+    public TimeSpan? RetryAfter { get; }
+
+    public TransientHttpException(int statusCode, string message, TimeSpan? retryAfter = null) : base(message)
     {
         StatusCode = statusCode;
+        RetryAfter = retryAfter;
     }
 }

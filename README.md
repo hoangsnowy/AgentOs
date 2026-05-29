@@ -142,6 +142,24 @@ Per-agent provider/model mapping (`appsettings.json`):
 LLM keys, the forced provider, and the GitHub integration can also be set at runtime from the
 **Settings** app in AgentOS.
 
+#### Multiple keys + rate-limit failover
+
+Give a provider a pool of keys and the gateway round-robins across them, cooling any key that
+returns HTTP 429 (honoring `Retry-After`) and routing to the next — so one key hitting its limit
+doesn't stall the pipeline:
+
+```json
+{
+  "Llm": {
+    "Claude":      { "ApiKeys": ["sk-ant-a", "sk-ant-b", "sk-ant-c"] },
+    "AzureOpenAI": { "ApiKeys": ["key-east", "key-west"] }
+  }
+}
+```
+
+The pool combines `ApiKeys` with the single `ApiKey` and any runtime Settings override (deduped).
+Azure keys in a pool share the one configured endpoint.
+
 ### Optional: persistence
 
 Provide a connection string to enable EF Core / Postgres (otherwise the app runs stateless):

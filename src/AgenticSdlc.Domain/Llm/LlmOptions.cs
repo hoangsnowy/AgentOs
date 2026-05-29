@@ -37,6 +37,13 @@ public sealed class ClaudeOptions
     /// <summary>API key (set via user-secrets or env var, do NOT commit).</summary>
     public string ApiKey { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Optional pool of API keys for round-robin + rate-limit failover. When a key returns HTTP 429 the
+    /// router cools it down and routes to the next key. Combined with <see cref="ApiKey"/> (and any runtime
+    /// override) into one distinct pool. Example: <c>"Llm:Claude:ApiKeys": ["sk-ant-a","sk-ant-b"]</c>.
+    /// </summary>
+    public System.Collections.Generic.List<string> ApiKeys { get; set; } = new();
+
     /// <summary>Base URL of the Anthropic API.</summary>
     public string Endpoint { get; set; } = "https://api.anthropic.com";
 
@@ -58,6 +65,12 @@ public sealed class AzureOpenAiOptions
 {
     /// <summary>Azure OpenAI API key.</summary>
     public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional pool of API keys for round-robin + rate-limit failover (e.g. keys from several Azure
+    /// resources/regions). On HTTP 429 a key is cooled down and traffic routes to the next.
+    /// </summary>
+    public System.Collections.Generic.List<string> ApiKeys { get; set; } = new();
 
     /// <summary>Azure OpenAI endpoint (for example <c>https://my-resource.openai.azure.com</c>).</summary>
     public string Endpoint { get; set; } = string.Empty;

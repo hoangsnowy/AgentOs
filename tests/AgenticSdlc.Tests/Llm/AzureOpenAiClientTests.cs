@@ -32,7 +32,7 @@ public class AzureOpenAiClientTests
                 TimeoutSeconds = 60,
             },
         });
-        var client = new AzureOpenAiClient(http, opts, new RuntimeOverrides(), NullLogger<AzureOpenAiClient>.Instance);
+        var client = new AzureOpenAiClient(http, opts, new RuntimeOverrides(), new ApiKeyRouter(TimeProvider.System), NullLogger<AzureOpenAiClient>.Instance);
         return (client, handler);
     }
 

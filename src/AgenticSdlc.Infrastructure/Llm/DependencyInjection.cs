@@ -6,6 +6,7 @@ using AgenticSdlc.Application.Configuration;
 using AgenticSdlc.Domain.Llm;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace AgenticSdlc.Infrastructure.Llm;
@@ -33,6 +34,11 @@ public static class LlmGatewayServiceCollectionExtensions
         services.AddOptions<LlmOptions>()
             .Bind(configuration.GetSection(LlmOptions.SectionName))
             .ValidateOnStart();
+
+        // Multi-key router — round-robin + rate-limit (429) failover across each provider's key pool.
+        // Singleton so cooldown state is shared across the transient client instances.
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<ApiKeyRouter>();
 
         // Named HttpClient — IHttpClientFactory to avoid socket exhaustion.
         services.AddHttpClient(ClaudeClient.HttpClientName, (sp, http) =>
@@ -67,8 +73,9 @@ public static class LlmGatewayServiceCollectionExtensions
             var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(ClaudeClient.HttpClientName);
             var opts = sp.GetRequiredService<IOptions<LlmOptions>>();
             var overrides = sp.GetRequiredService<IRuntimeOverrides>();
+            var router = sp.GetRequiredService<ApiKeyRouter>();
             var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ClaudeClient>>();
-            return new ClaudeClient(http, opts, overrides, logger);
+            return new ClaudeClient(http, opts, overrides, router, logger);
         });
 
         services.AddTransient<AzureOpenAiClient>(sp =>
@@ -76,8 +83,9 @@ public static class LlmGatewayServiceCollectionExtensions
             var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(AzureOpenAiClient.HttpClientName);
             var opts = sp.GetRequiredService<IOptions<LlmOptions>>();
             var overrides = sp.GetRequiredService<IRuntimeOverrides>();
+            var router = sp.GetRequiredService<ApiKeyRouter>();
             var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AzureOpenAiClient>>();
-            return new AzureOpenAiClient(http, opts, overrides, logger);
+            return new AzureOpenAiClient(http, opts, overrides, router, logger);
         });
 
         services.AddTransient<MockLlmClient>();

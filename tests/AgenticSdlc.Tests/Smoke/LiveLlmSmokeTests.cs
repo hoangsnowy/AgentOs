@@ -39,7 +39,7 @@ public class LiveLlmSmokeTests
                 MaxRetries = 1,
             },
         });
-        var client = new ClaudeClient(http, opts, new RuntimeOverrides(), NullLogger<ClaudeClient>.Instance);
+        var client = new ClaudeClient(http, opts, new RuntimeOverrides(), new ApiKeyRouter(TimeProvider.System), NullLogger<ClaudeClient>.Instance);
 
         var request = new LlmRequest(
             SystemPrompt: "You are a concise assistant. Reply in one sentence.",
@@ -80,7 +80,7 @@ public class LiveLlmSmokeTests
                 MaxRetries = 1,
             },
         });
-        var client = new AzureOpenAiClient(http, opts, new RuntimeOverrides(), NullLogger<AzureOpenAiClient>.Instance);
+        var client = new AzureOpenAiClient(http, opts, new RuntimeOverrides(), new ApiKeyRouter(TimeProvider.System), NullLogger<AzureOpenAiClient>.Instance);
 
         var request = new LlmRequest(
             SystemPrompt: "You are a concise assistant. Reply in one sentence.",

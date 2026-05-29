@@ -2,7 +2,9 @@
 // Sprint 1 — Anthropic Messages API client (raw HttpClient, no SDK).
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -28,20 +30,22 @@ public sealed class ClaudeClient : ILlmClient
     private readonly HttpClient _http;
     private readonly ClaudeOptions _options;
     private readonly IRuntimeOverrides _overrides;
+    private readonly ApiKeyRouter _router;
     private readonly ILogger<ClaudeClient> _logger;
 
     /// <inheritdoc />
     public string Provider => "Claude";
 
     /// <summary>Initializes the client. <paramref name="http"/> should be resolved via <see cref="IHttpClientFactory"/>.
-    /// The API key is read at request time from <paramref name="overrides"/> (runtime, Settings UI) with the
-    /// <c>Llm:Claude:ApiKey</c> appsettings value as fallback — so swapping a key in the UI takes effect immediately.</summary>
-    public ClaudeClient(HttpClient http, IOptions<LlmOptions> options, IRuntimeOverrides overrides, ILogger<ClaudeClient> logger)
+    /// API keys are resolved per request from <paramref name="overrides"/> (runtime, Settings UI) + the configured
+    /// pool, and handed out by <paramref name="router"/> with round-robin + rate-limit failover.</summary>
+    public ClaudeClient(HttpClient http, IOptions<LlmOptions> options, IRuntimeOverrides overrides, ApiKeyRouter router, ILogger<ClaudeClient> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _options = options.Value?.Claude ?? new ClaudeOptions();
         _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
+        _router = router ?? throw new ArgumentNullException(nameof(router));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         ConfigureHttpClient();
@@ -67,9 +71,19 @@ public sealed class ClaudeClient : ILlmClient
         }
     }
 
-    /// <summary>Resolve the effective API key: runtime override (Settings UI) wins; falls back to appsettings.</summary>
-    private string EffectiveApiKey()
-        => !string.IsNullOrWhiteSpace(_overrides.AnthropicApiKey) ? _overrides.AnthropicApiKey! : _options.ApiKey;
+    /// <summary>Build the distinct key pool: runtime override (Settings UI) first, then the configured
+    /// <c>ApiKeys</c> list, then the single <c>ApiKey</c> fallback.</summary>
+    private List<string> EffectiveApiKeys()
+    {
+        var keys = new List<string>();
+        if (!string.IsNullOrWhiteSpace(_overrides.AnthropicApiKey)) { keys.Add(_overrides.AnthropicApiKey!); }
+        foreach (var k in _options.ApiKeys)
+        {
+            if (!string.IsNullOrWhiteSpace(k)) { keys.Add(k); }
+        }
+        if (!string.IsNullOrWhiteSpace(_options.ApiKey)) { keys.Add(_options.ApiKey); }
+        return keys.Distinct(StringComparer.Ordinal).ToList();
+    }
 
     /// <inheritdoc />
     public async Task<LlmResponse> SendAsync(LlmRequest request, CancellationToken cancellationToken = default)
@@ -77,12 +91,12 @@ public sealed class ClaudeClient : ILlmClient
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
 
-        var apiKey = EffectiveApiKey();
-        if (string.IsNullOrWhiteSpace(apiKey))
+        var keys = EffectiveApiKeys();
+        if (keys.Count == 0)
         {
             throw new LlmException(
-                "Anthropic API key not configured. Set it on the Settings page, or 'Llm:Claude:ApiKey' (user-secrets or env), "
-                + "or set 'Llm:ForceProvider=AzureOpenAI' to run the whole pipeline on Azure only.",
+                "Anthropic API key not configured. Set it on the Settings page, or 'Llm:Claude:ApiKey' / 'Llm:Claude:ApiKeys' "
+                + "(user-secrets or env), or set 'Llm:ForceProvider=AzureOpenAI' to run the whole pipeline on Azure only.",
                 Provider);
         }
 
@@ -100,9 +114,26 @@ public sealed class ClaudeClient : ILlmClient
             },
         };
 
+        // One attempt per key at minimum, so a pool can fully fail over on repeated 429s.
+        var maxRetries = Math.Max(_options.MaxRetries, keys.Count - 1);
         var dto = await RetryPolicy.ExecuteAsync(
-            async ct => await PostOnceAsync(payload, apiKey, ct).ConfigureAwait(false),
-            maxRetries: _options.MaxRetries,
+            async ct =>
+            {
+                var apiKey = _router.Acquire(Provider, keys)!;
+                try
+                {
+                    return await PostOnceAsync(payload, apiKey, ct).ConfigureAwait(false);
+                }
+                catch (TransientHttpException ex) when (ex.StatusCode == 429)
+                {
+                    _router.Penalize(Provider, apiKey, ex.RetryAfter);
+                    _logger.LogWarning(
+                        "[Claude] API key rate-limited (429); {Available}/{Total} keys still available — failing over.",
+                        _router.AvailableCount(Provider, keys), keys.Count);
+                    throw;
+                }
+            },
+            maxRetries: maxRetries,
             baseDelay: TimeSpan.FromSeconds(1),
             logger: _logger,
             providerName: Provider,
@@ -144,7 +175,7 @@ public sealed class ClaudeClient : ILlmClient
 
             if (RetryPolicy.IsRetriableStatus(response.StatusCode))
             {
-                throw new TransientHttpException(statusCode, $"Claude API returned {statusCode}: {body}");
+                throw new TransientHttpException(statusCode, $"Claude API returned {statusCode}: {body}", ParseRetryAfter(response));
             }
 
             throw new LlmException(
@@ -181,6 +212,29 @@ public sealed class ClaudeClient : ILlmClient
         {
             return "<unreadable>";
         }
+    }
+
+    /// <summary>Parse the <c>Retry-After</c> header (delta-seconds or HTTP-date) into a cooldown duration.</summary>
+    private static TimeSpan? ParseRetryAfter(HttpResponseMessage resp)
+    {
+        var ra = resp.Headers.RetryAfter;
+        if (ra is null)
+        {
+            return null;
+        }
+        if (ra.Delta is { } delta && delta > TimeSpan.Zero)
+        {
+            return delta;
+        }
+        if (ra.Date is { } date)
+        {
+            var diff = date - DateTimeOffset.UtcNow;
+            if (diff > TimeSpan.Zero)
+            {
+                return diff;
+            }
+        }
+        return null;
     }
 
     private static string ExtractText(ClaudeResponseDto dto)
