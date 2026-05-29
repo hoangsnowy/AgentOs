@@ -1,19 +1,27 @@
-# Multi-stage Dockerfile for AgentOs.Api (.NET 10, Phase 6).
-# Build: docker build -t agentic-sdlc-net:latest .
-# Run:   docker run -p 8080:8080 -e Llm__Anthropic__ApiKey=sk-... agentic-sdlc-net:latest
+# Multi-stage Dockerfile for AgentOs.Api (.NET 10, modular monolith).
+# Build: docker build -t agentos-api:latest .
+# Run:   docker run -p 8080:8080 -e Llm__Claude__ApiKey=sk-ant-... agentos-api:latest
 
 # ---- Stage 1: build ----
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy csproj + restore (cache layer)
+# Copy csproj graph + restore (cache layer). All 9 modules + 2 hosts + ServiceDefaults are pulled
+# in by the Api csproj; copying every csproj first keeps the restore layer cached across source-only
+# edits.
 COPY global.json Directory.Build.props Directory.Packages.props ./
-COPY AgentOs.sln ./
-COPY src/AgentOs.Domain/AgentOs.Domain.csproj            src/AgentOs.Domain/
-COPY src/AgentOs.Application/AgentOs.Application.csproj  src/AgentOs.Application/
-COPY src/AgentOs.Infrastructure/AgentOs.Infrastructure.csproj src/AgentOs.Infrastructure/
-COPY src/AgentOs.Api/AgentOs.Api.csproj                  src/AgentOs.Api/
-COPY tests/AgentOs.Tests/AgentOs.Tests.csproj            tests/AgentOs.Tests/
+COPY AgentOs.slnx ./
+COPY src/AgentOs.Domain/AgentOs.Domain.csproj                       src/AgentOs.Domain/
+COPY src/AgentOs.SharedKernel/AgentOs.SharedKernel.csproj           src/AgentOs.SharedKernel/
+COPY src/AgentOs.Modules.AppConfig/AgentOs.Modules.AppConfig.csproj src/AgentOs.Modules.AppConfig/
+COPY src/AgentOs.Modules.Llm/AgentOs.Modules.Llm.csproj             src/AgentOs.Modules.Llm/
+COPY src/AgentOs.Modules.Pipeline/AgentOs.Modules.Pipeline.csproj   src/AgentOs.Modules.Pipeline/
+COPY src/AgentOs.Modules.Identity/AgentOs.Modules.Identity.csproj   src/AgentOs.Modules.Identity/
+COPY src/AgentOs.Modules.Tenants/AgentOs.Modules.Tenants.csproj     src/AgentOs.Modules.Tenants/
+COPY src/AgentOs.Modules.Integration/AgentOs.Modules.Integration.csproj src/AgentOs.Modules.Integration/
+COPY src/AgentOs.Modules.RemoteAgent/AgentOs.Modules.RemoteAgent.csproj src/AgentOs.Modules.RemoteAgent/
+COPY src/AgentOs.ServiceDefaults/AgentOs.ServiceDefaults.csproj     src/AgentOs.ServiceDefaults/
+COPY src/AgentOs.Api/AgentOs.Api.csproj                             src/AgentOs.Api/
 RUN dotnet restore src/AgentOs.Api/AgentOs.Api.csproj
 
 # Copy source + publish Release
@@ -28,7 +36,7 @@ RUN dotnet publish src/AgentOs.Api/AgentOs.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# The aspnet:10.0 base image already includes a non-root user 'app' (uid 1654) — do not recreate it.
+# The aspnet:10.0 base image already includes a non-root user 'app' (uid 1654).
 COPY --from=build --chown=app:app /app/publish .
 USER app
 

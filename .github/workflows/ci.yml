@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, 'refactor/**' ]
   pull_request:
     branches: [ main ]
 
@@ -24,14 +24,14 @@ jobs:
         run: dotnet --info
 
       - name: Restore
-        run: dotnet restore AgentOs.sln
+        run: dotnet restore AgentOs.slnx
 
       - name: Build (Release)
-        run: dotnet build AgentOs.sln --configuration Release --no-restore
+        run: dotnet build AgentOs.slnx --configuration Release --no-restore
 
       - name: Test
         run: |
-          dotnet test AgentOs.sln \
+          dotnet test AgentOs.slnx \
             --configuration Release \
             --no-build \
             --logger "trx;LogFileName=test_results.trx" \

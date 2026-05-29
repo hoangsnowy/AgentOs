@@ -2,7 +2,7 @@
 # azd config — deploys the Aspire app model (API + Web + managed Postgres) to Azure Container Apps.
 # Provision + deploy:  azd up
 # CI setup:            azd pipeline config   (wires OIDC + a GitHub Actions workflow)
-name: agentic-sdlc-net
+name: agentos
 
 services:
   app:
