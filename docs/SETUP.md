@@ -92,26 +92,35 @@ The CI workflow reads these secrets for the experimental tests that call a real 
 - ☑ Require status checks to pass before merging — select `Build & Test`
 - ☑ Require linear history (rebase / squash merge only)
 
-## 8. Keycloak (multi-tenant auth — optional, Epic D)
+## 8. One-shot local dev — Aspire AppHost (Postgres + Keycloak + API + Web)
 
-`docker compose up -d` also starts **Keycloak** (dev mode) and auto-imports the `agentic` realm from
-`infra/keycloak/agentic-realm.json`:
+`AgenticSdlc.AppHost` is an Aspire AppHost: one `dotnet run` brings up every dev dependency in
+containers (Postgres + Keycloak) and starts the API + Blazor Web alongside them, with connection
+strings + the OIDC authority wired across via Aspire service discovery — no docker-compose, no
+hand-edited env vars.
 
-- Admin console: `http://localhost:8080` (admin / admin)
+```bash
+dotnet run --project src/AgenticSdlc.AppHost
+```
+
+Open the Aspire dashboard URL printed in the console for live logs, traces, and the resource
+graph (api, web, postgres, keycloak). Data volumes persist across restarts.
+
+**Keycloak (Epic D — multi-tenant auth)** auto-imports the `agentic` realm from
+`infra/keycloak/agentic-realm.json` on first start:
+
+- Admin console: the URL Aspire prints for the `keycloak` resource (admin / admin)
 - Realm `agentic` — user registration enabled; clients `agentic-web` (auth-code) + `agentic-api`
   (bearer-only); realm roles `admin` / `member`; a `tenant` claim from the user attribute
 - Seed user: `operator` / `operator` (tenant `default`, role `admin`)
 
-Auth is gated by `Auth:Mode` — `operator` (default, the Phase-8 single-operator path) or `keycloak`.
-Switch on Keycloak per host:
+`Auth__Mode=keycloak` + `Auth__Keycloak__Authority` are injected by the AppHost, so the API runs
+as an OIDC resource server out of the box. If you run the API directly (without the AppHost),
+set `Auth:Mode=operator` (the Phase-8 HS256 path) or point `Auth:Keycloak:Authority` at any
+reachable Keycloak realm.
 
-```bash
-$env:Auth__Mode = "keycloak"     # PowerShell
-export Auth__Mode="keycloak"      # bash
-```
-
-Production runs Keycloak with an external DB and `start` (not `start-dev`); the dev compose uses an
-embedded store for zero-config local runs.
+Production runs Keycloak with an external DB and `start` (not `start-dev`); for that, point the
+API/Web at a managed OIDC IdP and skip the AppHost-hosted Keycloak.
 
 ---
 

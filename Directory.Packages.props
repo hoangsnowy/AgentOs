@@ -62,12 +62,15 @@
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
 
-    <!-- Aspire orchestration + service defaults (.NET 10) -->
-    <PackageVersion Include="Aspire.Hosting" Version="13.3.2" />
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.3.2" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.3.2" />
-    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.3.2" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.3.2" />
+    <!-- Aspire orchestration + service defaults (.NET 10). Stable 13.3.3 for the core stack; the
+         Keycloak integration ships preview-only on the 13.3.x line, so it stays on the matching
+         preview tag (its >=13.3.3 floor is satisfied by the stable 13.3.3 above). -->
+    <PackageVersion Include="Aspire.Hosting" Version="13.3.3" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.3.3" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.3.3" />
+    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.3.3" />
+    <PackageVersion Include="Aspire.Hosting.Keycloak" Version="13.3.3-preview.1.26264.13" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.3.3" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.6.0" />
 
     <!-- OpenTelemetry (instrumentation pinned to 1.15.x line) -->

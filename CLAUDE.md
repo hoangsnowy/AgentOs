@@ -29,8 +29,10 @@ dotnet user-secrets set "Llm:AzureOpenAI:ApiKey" "..."
 # Run the Web (Blazor "Agent Studio") locally
 dotnet run --project src/AgenticSdlc.Web
 
-# Local Postgres (optional persistence) + connection string
-docker compose up -d
+# One-shot local dev — Aspire AppHost wires Postgres + Keycloak + API + Web
+dotnet run --project src/AgenticSdlc.AppHost
+
+# Direct API run without Aspire — provide a Postgres connection string yourself
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=agentic_sdlc;Username=postgres;Password=postgres"
 
 # Generate a new EF migration (Infrastructure is its own startup project for this)

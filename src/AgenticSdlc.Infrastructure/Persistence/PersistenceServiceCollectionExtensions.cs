@@ -43,8 +43,8 @@ public static class PersistenceServiceCollectionExtensions
         {
             throw new System.InvalidOperationException(
                 "ConnectionStrings:DefaultConnection is empty but Persistence:RequireDatabase is true. " +
-                "Start Postgres (docker compose up -d) and configure the connection string, or set " +
-                "Persistence:RequireDatabase=false to opt into the legacy no-op repositories.");
+                "Run the AppHost (dotnet run --project src/AgenticSdlc.AppHost) so Aspire wires Postgres, " +
+                "or set Persistence:RequireDatabase=false to opt into the legacy no-op repositories.");
         }
 
         services.AddSingleton<IPipelineRunRepository, NullPipelineRunRepository>();

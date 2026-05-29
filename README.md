@@ -170,10 +170,16 @@ Azure keys in a pool share the one configured endpoint.
 
 ### Optional: persistence
 
-Provide a connection string to enable EF Core / Postgres (otherwise the app runs stateless):
+Run the Aspire AppHost — it wires Postgres + Keycloak + API + Web in one shot and injects the
+connection string + OIDC authority into the API and Web hosts:
 
 ```bash
-docker compose up -d
+dotnet run --project src/AgenticSdlc.AppHost
+```
+
+If you prefer to run the API directly without Aspire, point it at any reachable Postgres:
+
+```bash
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" \
   "Host=localhost;Port=5432;Database=agentic_sdlc;Username=postgres;Password=postgres"
 ```
