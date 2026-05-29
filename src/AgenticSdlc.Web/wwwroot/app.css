@@ -1289,6 +1289,52 @@ select {
     overflow: hidden;
     animation: sm-open-up .14s ease-out;
 }
+
+/* Dock-anchored flat launcher (replaces the deleted cascade) */
+.start-menu.start-menu-dock {
+    bottom: 86px; top: auto;
+    left: 50%; transform: translateX(-50%);
+    width: 280px;
+    padding: var(--space-2) 0;
+    background: var(--bg-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-4);
+    animation: sm-open-up var(--duration-base) var(--ease-standard);
+    overflow: hidden;
+    z-index: 1000;
+}
+.start-menu.start-menu-dock .sm-header {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-3); margin: 0 0 var(--space-1);
+    background: var(--bg-titlebar);
+    border-bottom: 1px solid var(--border-subtle);
+}
+.start-menu.start-menu-dock .sm-brand-mark {
+    width: 28px; height: 28px;
+    display: grid; place-items: center;
+    background: var(--accent); color: var(--txt-on-accent);
+    border-radius: var(--radius-sm);
+}
+.start-menu.start-menu-dock .sm-brand-title { font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.start-menu.start-menu-dock .sm-brand-sub { font-size: var(--fs-xs); color: var(--text-tertiary); margin-top: 1px; }
+.start-menu.start-menu-dock .sm-section {
+    font-size: var(--fs-xs); font-weight: var(--fw-semibold); letter-spacing: .08em;
+    color: var(--text-tertiary); padding: var(--space-2) var(--space-3) 2px;
+    text-transform: uppercase;
+}
+.start-menu.start-menu-dock .sm-item {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: 7px var(--space-3); width: 100%;
+    background: transparent; border: 0; cursor: pointer; text-align: left;
+    font-family: inherit; font-size: var(--fs-sm); color: var(--text-primary);
+    text-decoration: none;
+}
+.start-menu.start-menu-dock .sm-item:hover { background: var(--accent-soft); color: var(--accent); }
+.start-menu.start-menu-dock .sm-item:focus-visible { outline: none; box-shadow: var(--focus-ring) inset; }
+.start-menu.start-menu-dock .sm-ic { width: 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); }
+.start-menu.start-menu-dock .sm-item:hover .sm-ic { color: var(--accent); }
+.start-menu.start-menu-dock .sm-sep { height: 1px; background: var(--border-subtle); margin: var(--space-2) 0; }
 @keyframes sm-open-up { from { transform: translate(-50%, 6px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
 @keyframes sm-open-up { from { transform: translateY(4px); opacity: .7; } to { transform: translateY(0); opacity: 1; } }
 

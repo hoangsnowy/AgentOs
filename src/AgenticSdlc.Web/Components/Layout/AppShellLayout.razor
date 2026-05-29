@@ -1,4 +1,7 @@
 @inherits LayoutComponentBase
+@inject Microsoft.JSInterop.IJSRuntime JS
+@inject NavigationManager Nav
+@inject AgenticSdlc.Web.Services.WindowManagerService WM
 
 <LoginOverlay />
 
@@ -17,9 +20,49 @@
     </div>
 </div>
 
-@* The cascading Start menu was removed in C5 — Desktop tiles + Taskbar dock cover app launch, TopBar covers session. The Start chip in the Taskbar still toggles _startOpen as a hook for a future Krunner-style search overlay. *@
+@* ===== Start menu — flat launcher anchored above the dock ===== *@
+@if (_startOpen)
+{
+    <div class="start-menu-backdrop" @onclick="CloseStart" @oncontextmenu="CloseStart" @oncontextmenu:preventDefault="true"></div>
+    <div class="start-menu start-menu-dock" @onclick:stopPropagation="true" role="menu" aria-label="Start menu">
+        <div class="sm-header">
+            <div class="sm-brand-mark"><Icon Name="diamond" Size="14" /></div>
+            <div>
+                <div class="sm-brand-title">AgentOS</div>
+                <div class="sm-brand-sub">v1.0 · open source</div>
+            </div>
+        </div>
 
-@* ===== About dialog (anchored to the TopBar logo for now) ===== *@
+        <div class="sm-section">Apps</div>
+        <button class="sm-item" @onclick="@(() => OpenApp("pipeline", "Pipeline", "play"))">
+            <span class="sm-ic"><Icon Name="play" Size="14" /></span> Pipeline
+        </button>
+        <button class="sm-item" @onclick="@(() => OpenApp("workflow", "Workflow", "graph", 1080, 660))">
+            <span class="sm-ic"><Icon Name="graph" Size="14" /></span> Workflow
+        </button>
+        <button class="sm-item" @onclick="@(() => OpenApp("settings", "Settings", "gear", 720, 600))">
+            <span class="sm-ic"><Icon Name="gear" Size="14" /></span> Settings
+        </button>
+        <button class="sm-item" @onclick="@(() => OpenApp("system", "System", "wrench", 760, 600))">
+            <span class="sm-ic"><Icon Name="wrench" Size="14" /></span> System
+        </button>
+
+        <div class="sm-sep"></div>
+
+        <div class="sm-section">Session</div>
+        <button class="sm-item" @onclick="ShowAbout">
+            <span class="sm-ic"><Icon Name="info" Size="14" /></span> About AgentOS
+        </button>
+        <a class="sm-item" href="https://github.com/hoangsnowy/agentic-sdlc-net" target="_blank" @onclick="CloseStart">
+            <span class="sm-ic"><Icon Name="arrow-square-out" Size="14" /></span> GitHub repo
+        </a>
+        <button class="sm-item sm-danger" @onclick="Lock">
+            <span class="sm-ic"><Icon Name="lock" Size="14" /></span> Lock screen
+        </button>
+    </div>
+}
+
+@* ===== About dialog ===== *@
 <Dialog Show="_aboutOpen" Title="About — AgentOS" Width="440" OnClose="@(() => _aboutOpen = false)">
     <ChildContent>
         <h3 class="about-h">AgentOS</h3>
@@ -43,4 +86,24 @@
     private bool _aboutOpen;
 
     private void ToggleStart() => _startOpen = !_startOpen;
+    private void CloseStart() => _startOpen = false;
+
+    private void OpenApp(string key, string title, string icon, int w = 920, int h = 620)
+    {
+        WM.OpenApp(key, title, icon, w, h);
+        _startOpen = false;
+    }
+
+    private void ShowAbout()
+    {
+        _aboutOpen = true;
+        _startOpen = false;
+    }
+
+    private async Task Lock()
+    {
+        _startOpen = false;
+        await JS.InvokeVoidAsync("localStorage.removeItem", "agentic-signed-in");
+        Nav.NavigateTo(Nav.Uri, forceLoad: true);
+    }
 }
