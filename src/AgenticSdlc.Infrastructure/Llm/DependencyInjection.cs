@@ -87,6 +87,9 @@ public static class LlmGatewayServiceCollectionExtensions
         // Runtime overrides (in-memory) — settable from the Settings UI; take precedence over LlmOptions.
         services.AddSingleton<IRuntimeOverrides, RuntimeOverrides>();
 
+        // Tenant context (Epic D) — default single-tenant ("default") until OIDC wires a claims-based one.
+        services.TryAddScoped<AgenticSdlc.Application.Identity.ITenantContext, Identity.DefaultTenantContext>();
+
         // Factory + default ILlmClient.
         services.AddSingleton<ILlmClientFactory, LlmClientFactory>();
         services.AddTransient<ILlmClient>(sp => sp.GetRequiredService<ILlmClientFactory>().CreateDefault());

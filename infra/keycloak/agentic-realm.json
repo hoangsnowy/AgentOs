@@ -1,0 +1,91 @@
+{
+  "realm": "agentic",
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "accessTokenLifespan": 1800,
+  "sslRequired": "external",
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "Tenant administrator" },
+      { "name": "member", "description": "Tenant member" }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "tenant",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "tenant",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "tenant",
+            "claim.name": "tenant",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": ["tenant"],
+  "clients": [
+    {
+      "clientId": "agentic-web",
+      "name": "AgentOS Web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "agentic-web-dev-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:5180/*"],
+      "webOrigins": ["http://localhost:5180"],
+      "defaultClientScopes": ["openid", "profile", "email", "roles", "tenant"],
+      "protocolMappers": [
+        {
+          "name": "audience-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "agentic-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "agentic-api",
+      "name": "AgentOS API",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false
+    }
+  ],
+  "users": [
+    {
+      "username": "operator",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "operator@agentic.local",
+      "firstName": "Default",
+      "lastName": "Operator",
+      "attributes": { "tenant": ["default"] },
+      "credentials": [
+        { "type": "password", "value": "operator", "temporary": false }
+      ],
+      "realmRoles": ["admin"]
+    }
+  ]
+}

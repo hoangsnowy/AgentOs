@@ -21,5 +21,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # Keycloak — identity provider for multi-tenant auth (Epic D). Dev mode (embedded store) with the
+  # `agentic` realm auto-imported from ./infra/keycloak. Admin console: http://localhost:8080 (admin/admin).
+  # Production uses an external DB + `start` (not start-dev); see docs/SETUP.md.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: agentic-sdlc-kc
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infra/keycloak:/opt/keycloak/data/import:ro
+      - agentic_kcdata:/opt/keycloak/data
+
 volumes:
   agentic_pgdata:
+  agentic_kcdata:

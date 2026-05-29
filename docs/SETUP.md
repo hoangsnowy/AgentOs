@@ -92,6 +92,27 @@ The CI workflow reads these secrets for the experimental tests that call a real 
 - ☑ Require status checks to pass before merging — select `Build & Test`
 - ☑ Require linear history (rebase / squash merge only)
 
+## 8. Keycloak (multi-tenant auth — optional, Epic D)
+
+`docker compose up -d` also starts **Keycloak** (dev mode) and auto-imports the `agentic` realm from
+`infra/keycloak/agentic-realm.json`:
+
+- Admin console: `http://localhost:8080` (admin / admin)
+- Realm `agentic` — user registration enabled; clients `agentic-web` (auth-code) + `agentic-api`
+  (bearer-only); realm roles `admin` / `member`; a `tenant` claim from the user attribute
+- Seed user: `operator` / `operator` (tenant `default`, role `admin`)
+
+Auth is gated by `Auth:Mode` — `operator` (default, the Phase-8 single-operator path) or `keycloak`.
+Switch on Keycloak per host:
+
+```bash
+$env:Auth__Mode = "keycloak"     # PowerShell
+export Auth__Mode="keycloak"      # bash
+```
+
+Production runs Keycloak with an external DB and `start` (not `start-dev`); the dev compose uses an
+embedded store for zero-config local runs.
+
 ---
 
 Once set up, see the [README](../README.md) for running the API, the AgentOS desktop, and the pipeline.
