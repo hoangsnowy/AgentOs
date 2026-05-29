@@ -32,7 +32,7 @@ Postgres schema, so any one of them can later ship as a standalone NuGet package
   the whole platform with a single `services.AddModulesFromAssemblies(cfg, …)` call; no module
   references another's runtime types — only contracts in `Domain` / `SharedKernel`.
 - **Provider-agnostic LLM gateway.** Claude (Anthropic.SDK), Azure OpenAI (`Azure.AI.OpenAI`),
-  Mock, MAF (Microsoft Agent Framework), and a remote dev-IDE agent all register as keyed
+  MAF (Microsoft Agent Framework), and a remote dev-IDE agent all register as keyed
   `ILlmClient` under their canonical name. Swap a provider in `appsettings.json`; no code change.
 - **Multi-tenant from day one.** Row-level isolation via EF Core global query filters; a
   Keycloak-backed OIDC `tenant` claim drives `ITenantContext`. An operator mode keeps a single
@@ -99,8 +99,8 @@ QA scores the triple and decides "ship it" or "iterate" (capped by `NMax`).
 ## Quick start
 
 Prerequisites: **.NET 10 SDK** (pinned via `global.json`). For the multi-tenant smoke also
-Docker (used by Aspire to run Postgres + Keycloak). LLM keys are optional — the in-process Mock
-provider runs the pipeline offline.
+Docker (used by Aspire to run Postgres + Keycloak). An Anthropic and/or Azure OpenAI key is
+required for live runs.
 
 ```bash
 git clone https://github.com/hoangsnowy/AgentOs.git
@@ -136,8 +136,8 @@ curl -X POST http://localhost:5080/pipeline \
   -d '{"userStory":"An admin can create, view, edit and delete products; users browse by category.","nMax":3}'
 ```
 
-> No API keys handy? The Agent Studio (Web) ships a fully offline pipeline backed by
-> `MockLlmClient` — drop a fixture in `tests/fixtures/llm/<hash>.json` to get deterministic output.
+> The pair `RemoteAgent` provider can dispatch LLM calls to a dev-machine agent at zero API cost
+> when a remote agent is paired (see [Modules](#modules)).
 
 ## Modules
 
@@ -160,7 +160,6 @@ implementation registered under its canonical name. Supported provider keys:
 |---|---|---|
 | `Claude` | Anthropic.SDK (pooled over multi-key) | `Modules.Llm` |
 | `AzureOpenAI` | `Azure.AI.OpenAI` (pooled over multi-key) | `Modules.Llm` |
-| `Mock` | Fixture replay (`tests/fixtures/llm/<hash>.json`) | `Modules.Llm` |
 | `MAF` | Microsoft Agent Framework over Azure OpenAI | `Modules.Llm` |
 | `RemoteAgent` | SignalR-dispatched dev-machine agent | `Modules.RemoteAgent` |
 
@@ -300,7 +299,7 @@ endpoints require a JWT bearer token. `POST /auth/token` exchanges operator cred
 ### Add a pipeline agent
 
 Use the bundled `agent-scaffold` skill (`/agent-scaffold {Name}`) — it generates the contract,
-implementation, DI registration, xUnit stubs, and a Mock fixture.
+implementation, DI registration, and xUnit stubs.
 
 ### Add a module
 
