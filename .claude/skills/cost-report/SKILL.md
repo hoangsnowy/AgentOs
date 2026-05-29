@@ -2,8 +2,8 @@
 name: cost-report
 description: >
   Aggregate LLM cost from AgentOs structured logs into a markdown + xlsx report grouped by
-  agent / provider / model / date. Use when user says "cost report", "báo cáo chi phí",
-  "/cost-report week", "tổng cost tháng này", "so sánh Claude vs Azure".
+  agent / provider / model / date. Use when the user says "cost report", "/cost-report week",
+  "weekly cost", "monthly burn", "compare Claude vs Azure spend".
 ---
 
 Aggregate LLM gateway cost from logs into a table + chart.

@@ -3,8 +3,8 @@ name: prompt-tune
 description: >
   Tune the system prompt of one AgentOs pipeline agent via batch eval: send N fixture inputs
   through two prompt variants, score outputs (pass-rate, JSON-valid, token diff), and pick a
-  winner. Use when user says "tune prompt for X agent", "tối ưu prompt",
-  "/prompt-tune RequirementAgent", "đổi prompt thử".
+  winner. Use when the user says "tune prompt for X agent", "optimize prompt",
+  "/prompt-tune RequirementAgent", "try a different prompt".
 ---
 
 A/B-test an agent's system prompt with a fixture eval set.

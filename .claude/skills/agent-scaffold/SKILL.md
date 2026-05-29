@@ -2,10 +2,10 @@
 name: agent-scaffold
 description: >
   Scaffold a new pipeline agent in AgentOs.Modules.Pipeline following the modular monolith
-  layout: contract + impl in the same module, keyed ILlmClient consumption via
-  ILlmClientFactory (Domain), DI registration via PipelineModule.AddAgents, xUnit test stub,
-  MockLlmClient fixture stub. Use when user says "scaffold agent X", "add agent X",
-  "new agent", "tạo agent mới", "/agent-scaffold X".
+  layout: contract + impl in the same module, ILlmClient consumption via ILlmClientFactory
+  (Domain), DI registration via PipelineModule.AddAgents, xUnit test stub, MockLlmClient
+  fixture stub. Use when the user says "scaffold agent X", "add agent X", "new agent",
+  or invokes "/agent-scaffold X".
 ---
 
 Scaffold one pipeline agent end-to-end inside `AgentOs.Modules.Pipeline`.
