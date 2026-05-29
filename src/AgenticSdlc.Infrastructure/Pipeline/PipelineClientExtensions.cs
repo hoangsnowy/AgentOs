@@ -31,7 +31,9 @@ public static class PipelineClientExtensions
     /// <summary>
     /// Registers the HTTP pipeline client. Use on the Web host when it should call the API over the
     /// network. Reads <c>Api:BaseUrl</c> from configuration; falls back to <c>http://localhost:5080/</c>
-    /// for dev mode.
+    /// for dev mode. <c>Api:BearerToken</c>, if set, is sent as the static <c>Authorization</c> header
+    /// on every request (Phase 8.2). Phase 8.3 replaces this with a delegating handler that pulls the
+    /// token from the per-circuit session cookie.
     /// </summary>
     public static IServiceCollection AddHttpPipelineClient(this IServiceCollection services, IConfiguration config)
     {
@@ -46,10 +48,16 @@ public static class PipelineClientExtensions
         {
             baseUrl += "/";
         }
+        var bearerToken = config["Api:BearerToken"];
         services.AddHttpClient(HttpPipelineClient.HttpClientName, c =>
         {
             c.BaseAddress = new Uri(baseUrl);
             c.Timeout = TimeSpan.FromMinutes(10); // pipelines can take minutes when NMax > 1
+            if (!string.IsNullOrWhiteSpace(bearerToken))
+            {
+                c.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
+            }
         });
         services.AddSingleton<IPipelineClient, HttpPipelineClient>();
         return services;

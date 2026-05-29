@@ -31,7 +31,8 @@ public static class PipelineEndpoints
         })
         .WithName("Requirement")
         .WithSummary("KC1 — Analyze user story → structured requirement spec")
-        .WithTags("Agents");
+        .WithTags("Agents")
+        .RequireAuthorization();
 
         app.MapPost("/code", async (CodeRequest body, ICodingAgent agent, CancellationToken ct) =>
         {
@@ -40,7 +41,8 @@ public static class PipelineEndpoints
         })
         .WithName("Code")
         .WithSummary("KC2 — Generate C# Clean Architecture source code from the spec")
-        .WithTags("Agents");
+        .WithTags("Agents")
+        .RequireAuthorization();
 
         app.MapPost("/test", async (TestRequest body, ITestingAgent agent, CancellationToken ct) =>
         {
@@ -49,7 +51,8 @@ public static class PipelineEndpoints
         })
         .WithName("Test")
         .WithSummary("KC3 — Generate xUnit tests (happy/edge/error)")
-        .WithTags("Agents");
+        .WithTags("Agents")
+        .RequireAuthorization();
 
         app.MapPost("/qa", async (QaRequest body, IQaAgent agent, CancellationToken ct) =>
         {
@@ -58,7 +61,8 @@ public static class PipelineEndpoints
         })
         .WithName("Qa")
         .WithSummary("KC5 — Assess requirement-code-test consistency")
-        .WithTags("Agents");
+        .WithTags("Agents")
+        .RequireAuthorization();
 
         app.MapPost("/pipeline", async (UserStory body, IOrchestratorAgent orchestrator, CancellationToken ct) =>
         {
@@ -68,7 +72,8 @@ public static class PipelineEndpoints
         })
         .WithName("Pipeline")
         .WithSummary("KC4 — End-to-end pipeline with QA loop (≤ NMax iterations)")
-        .WithTags("Agents");
+        .WithTags("Agents")
+        .RequireAuthorization();
 
         // Phase 8 — Server-Sent Events stream of progress + final result.
         // Wire shape per event:   event: progress|result|error \n data: {json}\n\n
@@ -95,7 +100,8 @@ public static class PipelineEndpoints
         })
         .WithName("PipelineStream")
         .WithSummary("KC4 — Streamed pipeline run. SSE events: progress | result | error")
-        .WithTags("Agents");
+        .WithTags("Agents")
+        .RequireAuthorization();
 
         app.MapGet("/runs", async (IPipelineRunRepository repo, CancellationToken ct) =>
         {
@@ -104,7 +110,8 @@ public static class PipelineEndpoints
         })
         .WithName("Runs")
         .WithSummary("Most recent pipeline run history (summary)")
-        .WithTags("History");
+        .WithTags("History")
+        .RequireAuthorization();
 
         app.MapGet("/runs/{id:guid}", async (Guid id, IPipelineRunRepository repo, CancellationToken ct) =>
         {
@@ -115,7 +122,8 @@ public static class PipelineEndpoints
         })
         .WithName("RunById")
         .WithSummary("Details of a single pipeline run (full artifact + metrics)")
-        .WithTags("History");
+        .WithTags("History")
+        .RequireAuthorization();
 
         return app;
     }

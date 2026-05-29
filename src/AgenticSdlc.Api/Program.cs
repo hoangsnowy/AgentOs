@@ -1,6 +1,7 @@
 // AgenticSdlc.Api/Program.cs
 // Phase 4 — Compose: LLM Gateway + Agents + Pipeline endpoints + Scalar UI.
 
+using AgenticSdlc.Api.Auth;
 using AgenticSdlc.Api.Endpoints;
 using AgenticSdlc.Infrastructure.Agents;
 using AgenticSdlc.Infrastructure.Llm;
@@ -54,7 +55,14 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNEC
 // OpenAPI (.NET 10 native) + Scalar UI
 builder.Services.AddOpenApi();
 
+// Phase 8 — JWT bearer auth. Required on every /pipeline*, /requirement, /code, /test, /qa,
+// /runs* endpoint. /health and / stay public.
+builder.Services.AddJwtAuth(builder.Configuration);
+
 var app = builder.Build();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Apply EF migration at startup (no-op if the DB is not configured yet).
 await app.Services.InitializePersistenceAsync();
@@ -103,6 +111,7 @@ app.MapGet("/health", (Microsoft.Extensions.Options.IOptions<AgenticSdlc.Domain.
    .WithSummary("Liveness probe + LLM provider readiness")
    .WithTags("Meta");
 
+app.MapAuthEndpoints();
 app.MapPipelineEndpoints();
 
 app.Run();
