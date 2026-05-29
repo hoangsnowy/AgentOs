@@ -18,7 +18,7 @@
             <DesktopIcon Title="Settings" Icon="gear" Caption="LLM keys, GitHub integration"
                          OnClick="@(() => WM.OpenApp("settings", "Settings", "gear", w: 720, h: 600))" />
             <DesktopIcon Title="System" Icon="wrench" Caption="OS-level settings + about"
-                         OnClick="@(() => WM.OpenApp("system", "System", "wrench", w: 540, h: 520))" />
+                         OnClick="@(() => WM.OpenApp("system", "System", "wrench", w: 760, h: 600))" />
         </div>
     </div>
 
@@ -44,7 +44,7 @@
     <button class="ctx-item" @onclick="Refresh">
         <span class="ctx-ic"><Icon Name="arrow-clockwise" Size="14" /></span> Refresh
     </button>
-    <button class="ctx-item" @onclick="@(() => Launch("system", "System", "wrench", 540, 520))">
+    <button class="ctx-item" @onclick="@(() => Launch("system", "System", "wrench", 760, 600))">
         <span class="ctx-ic"><Icon Name="wrench" Size="14" /></span> System settings
     </button>
     <button class="ctx-item" @onclick="@(() => Launch("settings", "Settings", "gear", 720, 600))">
