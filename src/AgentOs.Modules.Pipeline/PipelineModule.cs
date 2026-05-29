@@ -62,7 +62,7 @@ public sealed class PipelineModule : IModule, IEndpointModule, IInitializableMod
             {
                 throw new InvalidOperationException(
                     "ConnectionStrings:DefaultConnection is empty but Persistence:RequireDatabase is true. "
-                    + "Run the AppHost (dotnet run --project src/AgentOs.AppHost) so Aspire wires Postgres, "
+                    + "Run the AppHost (dotnet run --project infra/AgentOs.AppHost) so Aspire wires Postgres, "
                     + "or set Persistence:RequireDatabase=false to opt into the legacy no-op repositories.");
             }
             services.AddSingleton<IPipelineRunRepository, NullPipelineRunRepository>();

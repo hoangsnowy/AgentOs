@@ -120,7 +120,7 @@ dotnet run --project src/AgentOs.Api
 Or run the whole stack — Aspire wires Postgres + Keycloak + Api + Web and forwards env vars:
 
 ```bash
-dotnet run --project src/AgentOs.AppHost
+dotnet run --project infra/AgentOs.AppHost
 ```
 
 Drive the end-to-end pipeline:
@@ -253,7 +253,7 @@ export Persistence__RequireDatabase=false      # bash
 | `keycloak` | `HttpTenantContext` → reads `tenant` claim + realm roles | RS256 validated against Keycloak JWKS | `POST /tenants` provisions a tenant + admin user via `IKeycloakAdminClient` |
 
 The Aspire AppHost runs Keycloak with an auto-imported `agentic` realm (`infra/keycloak/`), so a
-full Keycloak-mode smoke is one `dotnet run --project src/AgentOs.AppHost` away.
+full Keycloak-mode smoke is one `dotnet run --project infra/AgentOs.AppHost` away.
 
 Row-level isolation: `PipelineRun`, `RunMetric`, `Orchestration`, and `AppConfig` rows carry a
 `TenantId` column and a global EF query filter that reads `ITenantContext.TenantId`. Writes stamp

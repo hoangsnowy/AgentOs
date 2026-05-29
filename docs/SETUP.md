@@ -100,7 +100,7 @@ strings + the OIDC authority wired across via Aspire service discovery — no do
 hand-edited env vars.
 
 ```bash
-dotnet run --project src/AgentOs.AppHost
+dotnet run --project infra/AgentOs.AppHost
 ```
 
 Open the Aspire dashboard URL printed in the console for live logs, traces, and the resource

@@ -6,7 +6,6 @@
   </Configurations>
   <Folder Name="/src/">
     <Project Path="src/AgentOs.Api/AgentOs.Api.csproj" />
-    <Project Path="src/AgentOs.AppHost/AgentOs.AppHost.csproj" />
     <Project Path="src/AgentOs.Domain/AgentOs.Domain.csproj" />
     <Project Path="src/AgentOs.Modules.AppConfig/AgentOs.Modules.AppConfig.csproj" />
     <Project Path="src/AgentOs.Modules.Identity/AgentOs.Modules.Identity.csproj" />
@@ -19,6 +18,9 @@
     <Project Path="src/AgentOs.ServiceDefaults/AgentOs.ServiceDefaults.csproj" />
     <Project Path="src/AgentOs.SharedKernel/AgentOs.SharedKernel.csproj" />
     <Project Path="src/AgentOs.Web/AgentOs.Web.csproj" />
+  </Folder>
+  <Folder Name="/infra/">
+    <Project Path="infra/AgentOs.AppHost/AgentOs.AppHost.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AgentOs.E2E.Tests/AgentOs.E2E.Tests.csproj" />

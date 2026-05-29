@@ -1,6 +1,6 @@
 <!--
   Directory.Build.props — common settings for every project in the solution.
-  .NET 10 LTS, C# 14, nullable + warnings as errors, modern analyzers.
+  .NET 10, C# 14, nullable + warnings as errors, modern analyzers.
 -->
 <Project>
   <PropertyGroup>
@@ -14,26 +14,25 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <DebugType>portable</DebugType>
     <DebugSymbols>true</DebugSymbols>
-    <!-- Sprint 1: temporarily suppress CA1848 (LoggerMessage delegates) + CA1873 (lazy eval) for the prototype.
-         Switch back to false or remove after Sprint 5 when refactoring to source-generated LoggerMessage. -->
+    <!-- CA1848 (LoggerMessage delegates) + CA1873 (lazy eval) — revisit once the logging hot paths
+         migrate to source-generated LoggerMessage. -->
     <NoWarn>$(NoWarn);CA1848;CA1873</NoWarn>
   </PropertyGroup>
 
-  <!-- Test projects: suppress analyzer warnings not appropriate for test code.
-       CA1816: Dispose() in a test fixture does not need GC.SuppressFinalize.
-       CA1859: the micro ServiceProvider return type does not need optimizing in a test helper.
-       xUnit1051: TestContext.Current.CancellationToken only exists in the xUnit v3 framework runner;
-                  Sprint 1 uses a simple CancellationToken.None, refactor later when cancellation tests are needed. -->
+  <!-- Test projects only: relax analyzers that don't apply to xUnit fixtures.
+       CA1707: underscores in test names (MethodName_StateUnderTest_ExpectedBehavior).
+       CA1816: Dispose() in a test fixture doesn't need GC.SuppressFinalize.
+       CA1859: micro ServiceProvider return type doesn't need optimizing in helpers.
+       xUnit1051: TestContext.Current.CancellationToken is xUnit-v3 only — adopt when migrating tests. -->
   <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
-    <NoWarn>$(NoWarn);CA1816;CA1859;xUnit1051</NoWarn>
+    <NoWarn>$(NoWarn);CA1707;CA1816;CA1859;xUnit1051</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>
-    <Authors>Nguyen Minh Hoang</Authors>
-    <Company>HUBT — Hanoi University of Business and Technology</Company>
-    <Product>Agentic SDLC (.NET)</Product>
-    <Copyright>© 2026 Nguyen Minh Hoang. MIT License.</Copyright>
-    <RepositoryUrl>https://github.com/&lt;your-org-or-user&gt;/agentos</RepositoryUrl>
+    <Product>AgentOs</Product>
+    <RepositoryUrl>https://github.com/hoangsnowy/AgentOs</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/hoangsnowy/AgentOs</PackageProjectUrl>
   </PropertyGroup>
 </Project>

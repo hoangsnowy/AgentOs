@@ -30,7 +30,7 @@ dotnet user-secrets set "Llm:AzureOpenAI:ApiKey" "..."
 dotnet run --project src/AgentOs.Web
 
 # One-shot local dev — Aspire AppHost wires Postgres + Keycloak + API + Web
-dotnet run --project src/AgentOs.AppHost
+dotnet run --project infra/AgentOs.AppHost
 
 # Direct API run without Aspire — provide a Postgres connection string yourself
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=agentos;Username=postgres;Password=postgres"
