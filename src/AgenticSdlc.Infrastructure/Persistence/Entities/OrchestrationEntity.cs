@@ -5,6 +5,9 @@ internal sealed class OrchestrationEntity
 {
     public string Id { get; set; } = string.Empty;
 
+    /// <summary>Owning tenant — stamped on insert from <c>ITenantContext.TenantId</c>.</summary>
+    public string TenantId { get; set; } = AgenticSdlc.Application.Identity.ITenantContext.DefaultTenantId;
+
     public string Name { get; set; } = string.Empty;
 
     public string? Description { get; set; }

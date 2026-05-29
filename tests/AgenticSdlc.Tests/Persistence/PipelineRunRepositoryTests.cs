@@ -7,6 +7,7 @@ using AgenticSdlc.Domain.Pipeline;
 using AgenticSdlc.Domain.Qa;
 using AgenticSdlc.Domain.Requirements;
 using AgenticSdlc.Domain.Testing;
+using AgenticSdlc.Infrastructure.Identity;
 using AgenticSdlc.Infrastructure.Persistence;
 using AgenticSdlc.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,11 @@ public sealed class PipelineRunRepositoryTests
             .UseInMemoryDatabase($"runs-{Guid.NewGuid()}")
             .Options;
 
+    private static readonly DefaultTenantContext Tenant = new();
+
+    private static AgenticSdlcDbContext NewDb(DbContextOptions<AgenticSdlcDbContext> options) =>
+        new(options, Tenant);
+
     [Fact]
     public async Task SaveAsync_ThenGetAsync_RoundTripsResultAndMetrics()
     {
@@ -29,14 +35,14 @@ public sealed class PipelineRunRepositoryTests
         var runId = Guid.NewGuid();
         var record = SampleRecord(runId);
 
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            await new PipelineRunRepository(db).SaveAsync(record);
+            await new PipelineRunRepository(db, Tenant).SaveAsync(record);
         }
 
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            var got = await new PipelineRunRepository(db).GetAsync(runId);
+            var got = await new PipelineRunRepository(db, Tenant).GetAsync(runId);
 
             got.ShouldNotBeNull();
             got.Id.ShouldBe(runId);
@@ -52,8 +58,8 @@ public sealed class PipelineRunRepositoryTests
     [Fact]
     public async Task GetAsync_UnknownId_ReturnsNull()
     {
-        await using var db = new AgenticSdlcDbContext(NewOptions());
-        var got = await new PipelineRunRepository(db).GetAsync(Guid.NewGuid());
+        await using var db = NewDb(NewOptions());
+        var got = await new PipelineRunRepository(db, Tenant).GetAsync(Guid.NewGuid());
         got.ShouldBeNull();
     }
 
@@ -61,16 +67,16 @@ public sealed class PipelineRunRepositoryTests
     public async Task ListAsync_ReturnsSummariesNewestFirst_RespectingLimit()
     {
         var options = NewOptions();
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            var repo = new PipelineRunRepository(db);
+            var repo = new PipelineRunRepository(db, Tenant);
             await repo.SaveAsync(SampleRecord(Guid.NewGuid(), createdAt: DateTimeOffset.UtcNow.AddMinutes(-10)));
             await repo.SaveAsync(SampleRecord(Guid.NewGuid(), createdAt: DateTimeOffset.UtcNow.AddMinutes(-1)));
         }
 
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            var list = await new PipelineRunRepository(db).ListAsync(limit: 1);
+            var list = await new PipelineRunRepository(db, Tenant).ListAsync(limit: 1);
 
             list.Count.ShouldBe(1);
             list[0].Status.ShouldBe(nameof(PipelineStatus.Done));

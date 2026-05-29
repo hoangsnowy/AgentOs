@@ -6,6 +6,10 @@ internal sealed class RunMetricEntity
 {
     public long Id { get; set; }
 
+    /// <summary>Owning tenant — stamped on insert; denormalized from the parent run for analytics
+    /// queries that group cost by tenant without joining pipeline_runs.</summary>
+    public string TenantId { get; set; } = AgenticSdlc.Application.Identity.ITenantContext.DefaultTenantId;
+
     public Guid RunId { get; set; }
 
     public string KcId { get; set; } = string.Empty;

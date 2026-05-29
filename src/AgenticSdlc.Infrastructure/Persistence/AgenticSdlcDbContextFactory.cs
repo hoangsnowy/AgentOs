@@ -1,5 +1,7 @@
-// Design-time factory for `dotnet ef migrations add`. NOT used at runtime.
-// The connection string comes from env (CI/local) or defaults to localhost for generating migrations.
+// Design-time factory for `dotnet ef migrations add`. NOT used at runtime. Passes a stub
+// ITenantContext so the DbContext ctor — which now requires one for global query filters — can be
+// instantiated by the EF tooling without spinning the full DI graph.
+using AgenticSdlc.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -17,6 +19,6 @@ internal sealed class AgenticSdlcDbContextFactory : IDesignTimeDbContextFactory<
             .UseNpgsql(connectionString)
             .Options;
 
-        return new AgenticSdlcDbContext(options);
+        return new AgenticSdlcDbContext(options, new DefaultTenantContext());
     }
 }

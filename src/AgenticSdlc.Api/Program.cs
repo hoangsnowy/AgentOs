@@ -138,6 +138,7 @@ app.MapGet("/health", (Microsoft.Extensions.Options.IOptions<AgenticSdlc.Domain.
 app.MapAuthEndpoints();
 app.MapPipelineEndpoints();
 app.MapSettingsEndpoints();
+app.MapTenantEndpoints();
 app.MapHub<AgenticSdlc.Api.RemoteAgent.RemoteAgentHub>(AgenticSdlc.Api.RemoteAgent.RemoteAgentHub.Path);
 
 // Settings "Test connection" — probe the configured provider with a minimal call. Uses the

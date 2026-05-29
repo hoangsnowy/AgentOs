@@ -1,6 +1,10 @@
 // AgenticSdlc.Infrastructure/Configuration/EfAppConfigStore.cs
-// Phase 8.4b — persistent IAppConfigStore. Values are DataProtection-encrypted at rest in the
-// app_config table. A 15-second read cache keeps the LLM hot path off the DB on every call.
+// EF-backed, DataProtection-encrypted IAppConfigStore. Keyed by (TenantId, Key) so each tenant
+// owns its own LLM keys / GitHub PAT / etc. Singleton; per-op DI scope is created here and the
+// tenant id is read out of the OUTER request scope via the captured IServiceProvider (the inner
+// scope is a fresh container without an HttpContext). A 15-second read cache keeps the LLM hot
+// path off the DB on every call; cache keys include the tenant so tenants never see each other's
+// values from cache.
 
 using System;
 using System.Collections.Concurrent;
@@ -9,6 +13,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgenticSdlc.Application.Configuration;
+using AgenticSdlc.Application.Identity;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,23 +24,23 @@ using AgenticSdlc.Infrastructure.Persistence.Entities;
 namespace AgenticSdlc.Infrastructure.Configuration;
 
 /// <summary>
-/// EF-backed, DataProtection-encrypted <see cref="IAppConfigStore"/>. Singleton; opens a DbContext
-/// scope per operation. Read path is cached for <see cref="CacheTtl"/> so the per-call LLM lookup
-/// does not hit Postgres on every request.
+/// EF-backed, DataProtection-encrypted <see cref="IAppConfigStore"/>, scoped by tenant. Singleton;
+/// resolves the current <see cref="ITenantContext"/> from the ambient request scope on every call.
 /// </summary>
 public sealed class EfAppConfigStore : IAppConfigStore
 {
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(15);
 
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IServiceProvider _rootProvider;
     private readonly IDataProtector _protector;
     private readonly ILogger<EfAppConfigStore> _logger;
     private readonly ConcurrentDictionary<string, CacheEntry> _cache = new(StringComparer.Ordinal);
 
-    /// <summary>Construct with a scope factory, a DataProtection provider, and a logger.</summary>
-    public EfAppConfigStore(IServiceScopeFactory scopeFactory, IDataProtectionProvider dp, ILogger<EfAppConfigStore> logger)
+    /// <summary>Construct with the root service provider (for scoped DI), a DataProtection provider,
+    /// and a logger.</summary>
+    public EfAppConfigStore(IServiceProvider rootProvider, IDataProtectionProvider dp, ILogger<EfAppConfigStore> logger)
     {
-        _scopeFactory = scopeFactory;
+        _rootProvider = rootProvider;
         _protector = dp.CreateProtector("AgenticSdlc.AppConfig.v1");
         _logger = logger;
     }
@@ -43,16 +48,20 @@ public sealed class EfAppConfigStore : IAppConfigStore
     /// <inheritdoc />
     public async ValueTask<string?> GetAsync(string key, CancellationToken cancellationToken = default)
     {
-        if (_cache.TryGetValue(key, out var hit) && hit.FetchedUtc + CacheTtl > DateTime.UtcNow)
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
+        var cacheKey = CacheKey(tenantId, key);
+        if (_cache.TryGetValue(cacheKey, out var hit) && hit.FetchedUtc + CacheTtl > DateTime.UtcNow)
         {
             return hit.Value;
         }
 
-        await using var scope = _scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticSdlcDbContext>();
-        var row = await db.AppConfig.AsNoTracking().FirstOrDefaultAsync(x => x.Key == key, cancellationToken).ConfigureAwait(false);
+        var row = await db.AppConfig.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Key == key, cancellationToken)
+            .ConfigureAwait(false);
         var value = row is null ? null : TryUnprotect(row.EncryptedValue);
-        _cache[key] = new CacheEntry(value, DateTime.UtcNow);
+        _cache[cacheKey] = new CacheEntry(value, DateTime.UtcNow);
         return value;
     }
 
@@ -62,13 +71,16 @@ public sealed class EfAppConfigStore : IAppConfigStore
         ArgumentException.ThrowIfNullOrEmpty(key);
         ArgumentNullException.ThrowIfNull(value);
 
-        await using var scope = _scopeFactory.CreateAsyncScope();
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
         var db = scope.ServiceProvider.GetRequiredService<AgenticSdlcDbContext>();
         var cipher = _protector.Protect(value);
-        var row = await db.AppConfig.FirstOrDefaultAsync(x => x.Key == key, cancellationToken).ConfigureAwait(false);
+        var row = await db.AppConfig
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Key == key, cancellationToken)
+            .ConfigureAwait(false);
         if (row is null)
         {
-            db.AppConfig.Add(new AppConfigEntity { Key = key, EncryptedValue = cipher, UpdatedAtUtc = DateTime.UtcNow });
+            db.AppConfig.Add(new AppConfigEntity { TenantId = tenantId, Key = key, EncryptedValue = cipher, UpdatedAtUtc = DateTime.UtcNow });
         }
         else
         {
@@ -76,35 +88,41 @@ public sealed class EfAppConfigStore : IAppConfigStore
             row.UpdatedAtUtc = DateTime.UtcNow;
         }
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        _cache[key] = new CacheEntry(value, DateTime.UtcNow);
+        _cache[CacheKey(tenantId, key)] = new CacheEntry(value, DateTime.UtcNow);
     }
 
     /// <inheritdoc />
     public async ValueTask DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
         var db = scope.ServiceProvider.GetRequiredService<AgenticSdlcDbContext>();
-        var row = await db.AppConfig.FirstOrDefaultAsync(x => x.Key == key, cancellationToken).ConfigureAwait(false);
+        var row = await db.AppConfig
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Key == key, cancellationToken)
+            .ConfigureAwait(false);
         if (row is not null)
         {
             db.AppConfig.Remove(row);
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        _cache.TryRemove(key, out _);
+        _cache.TryRemove(CacheKey(tenantId, key), out _);
     }
 
     /// <inheritdoc />
     public async ValueTask<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
         var db = scope.ServiceProvider.GetRequiredService<AgenticSdlcDbContext>();
         var keys = await db.AppConfig.AsNoTracking()
-            .Where(x => x.Key.StartsWith(prefix))
+            .Where(x => x.TenantId == tenantId && x.Key.StartsWith(prefix))
             .Select(x => x.Key)
             .OrderBy(k => k)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         return keys;
     }
+
+    private static string CacheKey(string tenantId, string key) => $"{tenantId}:{key}";
 
     private string? TryUnprotect(string cipher)
     {

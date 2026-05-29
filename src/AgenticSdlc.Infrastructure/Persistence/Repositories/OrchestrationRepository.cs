@@ -1,11 +1,13 @@
-// EF Core impl for Agent Studio orchestration CRUD.
+// EF Core impl for Agent Studio orchestration CRUD. Writes stamp TenantId; reads filtered by the
+// DbContext global query filter so each tenant only sees its own graphs.
+using AgenticSdlc.Application.Identity;
 using AgenticSdlc.Application.Persistence;
 using AgenticSdlc.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgenticSdlc.Infrastructure.Persistence.Repositories;
 
-internal sealed class OrchestrationRepository(AgenticSdlcDbContext db) : IOrchestrationRepository
+internal sealed class OrchestrationRepository(AgenticSdlcDbContext db, ITenantContext tenant) : IOrchestrationRepository
 {
     public async Task<IReadOnlyList<OrchestrationRecord>> ListAsync(CancellationToken ct = default)
     {
@@ -31,6 +33,7 @@ internal sealed class OrchestrationRepository(AgenticSdlcDbContext db) : IOrches
             db.Orchestrations.Add(new OrchestrationEntity
             {
                 Id = record.Id,
+                TenantId = tenant.TenantId,
                 Name = record.Name,
                 Description = record.Description,
                 DefinitionJson = record.DefinitionJson,

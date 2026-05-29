@@ -1,5 +1,8 @@
 // EF Core impl: saves PipelineResult (jsonb) + RunMetric rows, reads back + lists summaries.
+// Writes stamp TenantId from ITenantContext; reads are filtered by the DbContext's global query
+// filter so a request only ever sees its own tenant's runs.
 using System.Text.Json;
+using AgenticSdlc.Application.Identity;
 using AgenticSdlc.Application.Metrics;
 using AgenticSdlc.Application.Persistence;
 using AgenticSdlc.Domain.Pipeline;
@@ -8,16 +11,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgenticSdlc.Infrastructure.Persistence.Repositories;
 
-internal sealed class PipelineRunRepository(AgenticSdlcDbContext db) : IPipelineRunRepository
+internal sealed class PipelineRunRepository(AgenticSdlcDbContext db, ITenantContext tenant) : IPipelineRunRepository
 {
     public async Task SaveAsync(PipelineRunRecord record, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(record);
         var result = record.Result;
+        var tenantId = tenant.TenantId;
 
         var entity = new PipelineRunEntity
         {
             Id = record.Id,
+            TenantId = tenantId,
             UserStoryText = result.UserStory.Description,
             Status = result.Status.ToString(),
             TotalCostUsd = result.TotalMetrics.CostUsd,
@@ -34,6 +39,7 @@ internal sealed class PipelineRunRepository(AgenticSdlcDbContext db) : IPipeline
             entity.Metrics.Add(new RunMetricEntity
             {
                 RunId = record.Id,
+                TenantId = tenantId,
                 KcId = m.KcId,
                 Iteration = m.Iteration,
                 AgentName = m.AgentName,

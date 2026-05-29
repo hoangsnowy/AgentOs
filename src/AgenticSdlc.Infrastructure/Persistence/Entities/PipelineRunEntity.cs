@@ -1,10 +1,15 @@
 // Persistence entity for a single pipeline run. Relational columns for querying (analytics) +
-// the jsonb ResultJson column holding the full serialized PipelineResult.
+// the jsonb ResultJson column holding the full serialized PipelineResult. TenantId scopes the
+// row to a Keycloak tenant; the DbContext applies a global query filter so a request only ever
+// sees its own tenant's runs (see Epic D row-level isolation).
 namespace AgenticSdlc.Infrastructure.Persistence.Entities;
 
 internal sealed class PipelineRunEntity
 {
     public Guid Id { get; set; }
+
+    /// <summary>Owning tenant — stamped on insert from <c>ITenantContext.TenantId</c>.</summary>
+    public string TenantId { get; set; } = AgenticSdlc.Application.Identity.ITenantContext.DefaultTenantId;
 
     public string UserStoryText { get; set; } = string.Empty;
 

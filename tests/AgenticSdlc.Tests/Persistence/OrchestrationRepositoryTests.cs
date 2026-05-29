@@ -1,5 +1,6 @@
 // Tests OrchestrationRepository (CRUD) with EF Core InMemory.
 using AgenticSdlc.Application.Persistence;
+using AgenticSdlc.Infrastructure.Identity;
 using AgenticSdlc.Infrastructure.Persistence;
 using AgenticSdlc.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -15,20 +16,25 @@ public sealed class OrchestrationRepositoryTests
             .UseInMemoryDatabase($"orch-{Guid.NewGuid()}")
             .Options;
 
+    private static readonly DefaultTenantContext Tenant = new();
+
+    private static AgenticSdlcDbContext NewDb(DbContextOptions<AgenticSdlcDbContext> options) =>
+        new(options, Tenant);
+
     [Fact]
     public async Task UpsertAsync_Insert_ThenGet_ReturnsRecord()
     {
         var options = NewOptions();
         var record = new OrchestrationRecord("g1", "Pipeline", "desc", "{\"nodes\":[]}", DateTimeOffset.UtcNow);
 
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            await new OrchestrationRepository(db).UpsertAsync(record);
+            await new OrchestrationRepository(db, Tenant).UpsertAsync(record);
         }
 
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            var got = await new OrchestrationRepository(db).GetAsync("g1");
+            var got = await new OrchestrationRepository(db, Tenant).GetAsync("g1");
             got.ShouldNotBeNull();
             got.Name.ShouldBe("Pipeline");
             got.DefinitionJson.ShouldBe("{\"nodes\":[]}");
@@ -39,16 +45,16 @@ public sealed class OrchestrationRepositoryTests
     public async Task UpsertAsync_ExistingId_UpdatesInPlace()
     {
         var options = NewOptions();
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            var repo = new OrchestrationRepository(db);
+            var repo = new OrchestrationRepository(db, Tenant);
             await repo.UpsertAsync(new OrchestrationRecord("g1", "Old", null, "{}", DateTimeOffset.UtcNow));
             await repo.UpsertAsync(new OrchestrationRecord("g1", "New", "updated", "{\"x\":1}", DateTimeOffset.UtcNow));
         }
 
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            var all = await new OrchestrationRepository(db).ListAsync();
+            var all = await new OrchestrationRepository(db, Tenant).ListAsync();
             all.Count.ShouldBe(1);
             all[0].Name.ShouldBe("New");
             all[0].Description.ShouldBe("updated");
@@ -59,20 +65,20 @@ public sealed class OrchestrationRepositoryTests
     public async Task DeleteAsync_RemovesRecord()
     {
         var options = NewOptions();
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            await new OrchestrationRepository(db).UpsertAsync(
+            await new OrchestrationRepository(db, Tenant).UpsertAsync(
                 new OrchestrationRecord("g1", "Pipeline", null, "{}", DateTimeOffset.UtcNow));
         }
 
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            await new OrchestrationRepository(db).DeleteAsync("g1");
+            await new OrchestrationRepository(db, Tenant).DeleteAsync("g1");
         }
 
-        await using (var db = new AgenticSdlcDbContext(options))
+        await using (var db = NewDb(options))
         {
-            var got = await new OrchestrationRepository(db).GetAsync("g1");
+            var got = await new OrchestrationRepository(db, Tenant).GetAsync("g1");
             got.ShouldBeNull();
         }
     }
