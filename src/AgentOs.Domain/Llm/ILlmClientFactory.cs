@@ -5,7 +5,7 @@ namespace AgentOs.Domain.Llm;
 
 /// <summary>
 /// Factory that selects the <see cref="ILlmClient"/> impl based on <see cref="LlmOptions.Provider"/>.
-/// Supported providers (case-insensitive): <c>Claude</c>, <c>AzureOpenAI</c>, <c>Mock</c>, <c>MAF</c>,
+/// Supported providers (case-insensitive): <c>Claude</c>, <c>AzureOpenAI</c>, <c>MAF</c>,
 /// <c>RemoteAgent</c>. Implementations register a keyed <see cref="ILlmClient"/> per provider.
 /// </summary>
 public interface ILlmClientFactory

@@ -11,7 +11,7 @@ namespace AgentOs.Tests.Pipeline;
 
 /// <summary>
 /// An ILlmClient for integration tests: takes a queue of (model, content) at construction and returns
-/// responses in call order. Unlike MockLlmClient (hash-based) — it simplifies E2E tests
+/// responses in call order. It simplifies E2E tests
 /// where hash-driven fixtures are brittle.
 /// </summary>
 public sealed class SequencedLlmClient : ILlmClient

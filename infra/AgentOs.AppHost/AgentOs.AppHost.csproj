@@ -19,8 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AgentOs.Api\AgentOs.Api.csproj" IsAspireProjectResource="true" />
-    <ProjectReference Include="..\AgentOs.Web\AgentOs.Web.csproj" IsAspireProjectResource="true" />
+    <ProjectReference Include="..\..\src\AgentOs.Api\AgentOs.Api.csproj" IsAspireProjectResource="true" />
+    <ProjectReference Include="..\..\src\AgentOs.Web\AgentOs.Web.csproj" IsAspireProjectResource="true" />
   </ItemGroup>
 
 </Project>

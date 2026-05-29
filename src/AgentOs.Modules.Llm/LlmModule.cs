@@ -1,5 +1,5 @@
 // Module entry: binds LlmOptions, registers the key-pool router + every keyed ILlmClient this
-// module owns (Claude, AzureOpenAI, Mock, MAF), wires the factory + default ILlmClient, then runs
+// module owns (Claude, AzureOpenAI, MAF), wires the factory + default ILlmClient, then runs
 // HydrateRuntimeOverridesAsync at startup so the persisted Settings overrides survive a restart.
 // The RemoteAgent provider lives in Modules.RemoteAgent and registers ITSELF as keyed "RemoteAgent".
 
@@ -32,8 +32,7 @@ public sealed class LlmModule : IModule, IInitializableModule
         services.AddSingleton<ApiKeyRouter>();
         services.AddSingleton<IRuntimeOverrides, RuntimeOverrides>();
 
-        // Mock + MAF — keyed ILlmClient under canonical names.
-        services.AddKeyedTransient<ILlmClient, MockLlmClient>("Mock");
+        // MAF — keyed ILlmClient under canonical name.
         services.AddKeyedTransient<ILlmClient, MafChatClient>("MAF");
 
         // Claude (Anthropic.SDK) + Azure OpenAI (Azure.AI.OpenAI) — pooled keyed clients with

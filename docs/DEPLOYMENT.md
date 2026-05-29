@@ -11,7 +11,7 @@ GitHub Actions uses an OIDC token (NO client secret stored in GH).
 
 ```bash
 # Create the Azure AD application
-APP_ID=$(az ad app create --display-name "agentic-sdlc-net-github" --query appId -o tsv)
+APP_ID=$(az ad app create --display-name "agentos-github" --query appId -o tsv)
 SP_ID=$(az ad sp create --id "$APP_ID" --query id -o tsv)
 
 # Assign the Contributor role on the subscription (or the resource group for a narrower scope)
@@ -22,7 +22,7 @@ az role assignment create --role Contributor --assignee "$APP_ID" --scope "/subs
 az ad app federated-credential create --id "$APP_ID" --parameters '{
   "name": "github-main",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:<your-org>/agentic-sdlc-net:ref:refs/heads/main",
+  "subject": "repo:<your-org>/agentos:ref:refs/heads/main",
   "audiences": ["api://AzureADTokenExchange"]
 }'
 

@@ -1,5 +1,5 @@
 // AgentOs.Tests/EndToEnd/Kc1RequirementTests.cs
-// Sprint 4 — KC1 RequirementAgent bench n=10 (deterministic Mock).
+// KC1 RequirementAgent bench n=10 (NSubstitute stub for deterministic output).
 
 using System.Threading;
 using System.Threading.Tasks;

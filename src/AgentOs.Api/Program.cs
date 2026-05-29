@@ -64,7 +64,7 @@ if (!app.Environment.IsProduction())
 
 app.MapGet("/", () => Results.Ok(new
 {
-    name = "agentic-sdlc-net",
+    name = "agentos",
     version = "0.5.0-modular",
     status = "pipeline-ready"
 }))

@@ -1,6 +1,0 @@
-{
-  "_comment": "Sample fixture for KC1 — Requirement Agent with a simple input. To make the file hash-lookable, rename it to <hash>.json (see MockLlmClient.ComputeHash).",
-  "content": "{\n  \"functionalRequirements\": [\n    {\n      \"id\": \"FR-001\",\n      \"description\": \"User can register an account with email and password.\",\n      \"priority\": \"high\"\n    },\n    {\n      \"id\": \"FR-002\",\n      \"description\": \"User can log in with registered credentials.\",\n      \"priority\": \"high\"\n    }\n  ],\n  \"nonFunctionalRequirements\": [\n    { \"id\": \"NFR-001\", \"description\": \"Login response time < 1s.\", \"priority\": \"medium\" }\n  ],\n  \"acceptanceCriteria\": [\n    \"Registration form validates email format.\",\n    \"Password must be at least 8 characters.\"\n  ]\n}",
-  "inputTokens": 120,
-  "outputTokens": 280
-}

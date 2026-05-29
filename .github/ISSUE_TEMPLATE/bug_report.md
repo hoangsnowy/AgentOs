@@ -24,7 +24,7 @@ What you expected instead.
 - OS:
 - .NET SDK (`dotnet --version`):
 - Host: API / AgentOS Web / AppHost
-- Provider: Claude / AzureOpenAI / Mock / RemoteAgent
+- Provider: Claude / AzureOpenAI / RemoteAgent
 
 ## Logs / screenshots
 

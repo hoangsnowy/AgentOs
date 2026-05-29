@@ -23,7 +23,7 @@ A/B-test an agent's system prompt with a fixture eval set.
    - **A** (current): read `SystemPrompt` const from `src/AgentOs.Modules.Pipeline/Agents/{Name}Agent.cs`.
    - **B** (proposed): user-supplied string, or read from `docs/prompts/{Name}-v2.md`.
 3. **Eval set**: path to a JSON array of `{input, expected}` cases. Default `tests/fixtures/eval/{Name}.json`.
-4. **Provider**: `Mock` is fast but useless for real comparison — use `Claude`/`AzureOpenAI` for actual tuning.
+4. **Provider**: use `Claude` / `AzureOpenAI` — `prompt-tune` only meaningful against a real provider.
 5. **N runs per case**: default `3` (reduce sampling variance).
 
 ## Steps
@@ -114,7 +114,6 @@ Delete `tools/eval/PromptEval.cs` (ephemeral). Keep the eval fixture (`tests/fix
 - **Cost**: 60 cases × 2 variants × N=3 = 360 calls. Pre-estimate with `CostCalculator`. Warn if > $2.
 - **Determinism**: force `Temperature = 0` during eval; record `Seed` when the provider supports it.
 - **PII**: eval fixtures must contain no PII / secrets.
-- **Mock**: never tune against `MockLlmClient` — fixture hits make metrics meaningless. Force a real provider.
 
 ## Out of scope
 

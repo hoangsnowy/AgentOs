@@ -6,7 +6,7 @@ namespace AgentOs.Domain;
 /// <summary>
 /// Common metric embedded in every agent result — used for KC1-KC5 benchmarks and cost reporting.
 /// </summary>
-/// <param name="Provider">Name of the provider that was called (Claude / AzureOpenAI / Mock).</param>
+/// <param name="Provider">Name of the provider that was called (Claude / AzureOpenAI).</param>
 /// <param name="Model">Model alias that was used.</param>
 /// <param name="InputTokens">Input tokens consumed.</param>
 /// <param name="OutputTokens">Output tokens generated.</param>

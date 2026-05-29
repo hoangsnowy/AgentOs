@@ -4,8 +4,7 @@ Custom skills shipped with the repo. Loaded automatically by every Claude Code s
 
 | Skill | Trigger | When |
 |---|---|---|
-| **agent-scaffold** | `/agent-scaffold X`, "scaffold agent X" | Add a new pipeline agent (`AgentOs.Modules.Pipeline.Agents.{Name}Agent`). Generates contract + impl + DI registration + xUnit test + fixture stub. |
-| **fixture-record** | `/fixture-record`, "record fixture for X" | Freeze a real LLM response into `tests/fixtures/llm/<hash>.json` for `MockLlmClient`. |
+| **agent-scaffold** | `/agent-scaffold X`, "scaffold agent X" | Add a new pipeline agent (`AgentOs.Modules.Pipeline.Agents.{Name}Agent`). Generates contract + impl + DI registration + xUnit test stub. |
 | **prompt-tune** | `/prompt-tune {Name}Agent`, "tune prompt for X" | A/B-test prompt variants over an eval fixture set. Reports pass-rate / JSON-valid / token diff. |
 | **cost-report** | `/cost-report week`, "weekly cost" | Aggregate structured logs → xlsx + markdown cost report grouped by agent / provider / model / date. |
 

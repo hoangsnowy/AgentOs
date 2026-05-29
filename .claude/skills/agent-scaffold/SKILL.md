@@ -3,8 +3,8 @@ name: agent-scaffold
 description: >
   Scaffold a new pipeline agent in AgentOs.Modules.Pipeline following the modular monolith
   layout: contract + impl in the same module, ILlmClient consumption via ILlmClientFactory
-  (Domain), DI registration via PipelineModule.AddAgents, xUnit test stub, MockLlmClient
-  fixture stub. Use when the user says "scaffold agent X", "add agent X", "new agent",
+  (Domain), DI registration via PipelineModule.AddAgents, xUnit test stub with NSubstitute
+  ILlmClient mock. Use when the user says "scaffold agent X", "add agent X", "new agent",
   or invokes "/agent-scaffold X".
 ---
 
@@ -13,7 +13,7 @@ Scaffold one pipeline agent end-to-end inside `AgentOs.Modules.Pipeline`.
 ## Input
 
 1. **Name** (PascalCase, no `Agent` suffix). Ex: `Security`, `Doc`, `Reviewer`.
-2. **Provider**: `Claude` | `AzureOpenAI` | `Mock` | `MAF` | `RemoteAgent`.
+2. **Provider**: `Claude` | `AzureOpenAI` | `MAF` | `RemoteAgent`.
 3. **Model**: e.g. `claude-sonnet-4-20250514`, `gpt-4.1`.
 4. **Input + Output shape**: records. JSON output → declare schema.
 5. **System prompt** (or `TODO` stub).
@@ -119,11 +119,7 @@ public class {Name}AgentTests
 }
 ```
 
-### 6. Fixture `tests/fixtures/llm/<hash>.json`
-
-Hash = `MockLlmClient.ComputeHash(new LlmRequest(SystemPrompt, sampleUser, Model))`. Generate 1-2 happy-path fixtures via the `fixture-record` skill.
-
-### 7. (Optional) Endpoint in `src/AgentOs.Modules.Pipeline/Endpoints/PipelineEndpoints.cs`
+### 6. (Optional) Endpoint in `src/AgentOs.Modules.Pipeline/Endpoints/PipelineEndpoints.cs`
 
 ```csharp
 app.MapPost("/{name}", async (I{Name}Agent agent, {Name}Input input, CancellationToken ct)

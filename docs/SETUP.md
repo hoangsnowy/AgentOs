@@ -1,6 +1,6 @@
 # Setup & First Run
 
-A step-by-step guide to build, run, and push the `agentic-sdlc-net` repo to GitHub.
+A step-by-step guide to build, run, and push the `agentos` repo to GitHub.
 
 ## 1. Install the .NET 10 SDK
 
@@ -65,8 +65,8 @@ git commit -m "chore: phase 1 — initial scaffold (.NET 10 solution + CI)"
 git branch -M main
 
 # Create the repo on GitHub (via the web or the gh CLI):
-#   gh repo create agentic-sdlc-net --public --description "A .NET-native multi-agent AI platform for the SDLC"
-git remote add origin https://github.com/<your-username>/agentic-sdlc-net.git
+#   gh repo create agentos --public --description "A .NET-native multi-agent AI platform for the SDLC"
+git remote add origin https://github.com/<your-username>/agentos.git
 git push -u origin main
 ```
 
@@ -100,7 +100,7 @@ strings + the OIDC authority wired across via Aspire service discovery — no do
 hand-edited env vars.
 
 ```bash
-dotnet run --project src/AgentOs.AppHost
+dotnet run --project infra/AgentOs.AppHost
 ```
 
 Open the Aspire dashboard URL printed in the console for live logs, traces, and the resource

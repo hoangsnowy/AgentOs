@@ -11,7 +11,7 @@ namespace AgentOs.Modules.Pipeline.Metrics;
 /// <param name="Iteration">QA loop iteration number (1..NMax), 0 for requirement (runs once).</param>
 /// <param name="AgentName">RequirementAgent / CodingAgent / TestingAgent / QaAgent.</param>
 /// <param name="Model">Model used (e.g. "claude-sonnet-4-5", "gpt-4.1").</param>
-/// <param name="Provider">Provider (Claude / AzureOpenAI / Mock).</param>
+/// <param name="Provider">Provider (Claude / AzureOpenAI).</param>
 /// <param name="TokensIn">Input tokens.</param>
 /// <param name="TokensOut">Output tokens.</param>
 /// <param name="LatencyMs">Total wall time of the LLM call (ms).</param>

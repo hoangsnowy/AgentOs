@@ -12,7 +12,7 @@ namespace AgentOs.Domain.Llm;
 /// <param name="CostUsd">Estimated cost in USD (computed by <c>CostCalculator</c>).</param>
 /// <param name="Latency">End-to-end time (measured with <see cref="System.Diagnostics.Stopwatch"/> in the client).</param>
 /// <param name="Model">Name of the model that actually generated the response (the provider may alias it).</param>
-/// <param name="Provider">Provider name: <c>"Claude"</c>, <c>"AzureOpenAI"</c>, or <c>"Mock"</c>.</param>
+/// <param name="Provider">Provider name: <c>"Claude"</c>, <c>"AzureOpenAI"</c>, or <c>"MAF"</c>.</param>
 public sealed record LlmResponse(
     string Content,
     int InputTokens,

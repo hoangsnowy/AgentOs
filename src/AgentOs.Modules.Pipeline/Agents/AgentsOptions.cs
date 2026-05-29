@@ -30,7 +30,7 @@ public sealed class AgentsOptions
 /// <summary>Configuration for a single agent.</summary>
 public sealed class AgentOptions
 {
-    /// <summary>Provider name: <c>Anthropic</c> / <c>AzureOpenAI</c> / <c>Mock</c>.</summary>
+    /// <summary>Provider name: <c>Anthropic</c> / <c>AzureOpenAI</c>.</summary>
     public string Provider { get; set; } = "Anthropic";
 
     /// <summary>Model alias.</summary>

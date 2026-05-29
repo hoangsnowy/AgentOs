@@ -23,7 +23,7 @@ public class MetricsCollectorTests
             Iteration: iter,
             AgentName: agent,
             Model: "mock-model",
-            Provider: "Mock",
+            Provider: "Test",
             TokensIn: 100,
             TokensOut: 50,
             LatencyMs: 234.56,
@@ -83,7 +83,7 @@ public class MetricsCollectorTests
         var resp = new global::AgentOs.Domain.Llm.LlmResponse(
             Content: "{}", InputTokens: 10, OutputTokens: 5,
             CostUsd: 0.0001m, Latency: TimeSpan.FromMilliseconds(99),
-            Model: "m", Provider: "Mock");
+            Model: "m", Provider: "Test");
         var rm = RunMetricFactory.From(resp, "RequirementAgent", success: true, errorMessage: null);
         rm.RunId.ShouldBe("run-xyz");
         rm.KcId.ShouldBe("KC3");

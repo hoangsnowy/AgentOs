@@ -87,7 +87,7 @@ jobs:
             exit 1
           fi
           echo "Got JWT, length=${#TOKEN}"
-          # POST a tiny user story; provider should be Mock in staging so cost = $0.
+          # POST a tiny user story; staging should target a cost-bounded provider/model.
           STATUS=$(curl -s -o /tmp/pipeline.json -w '%{http_code}' -X POST "$API_URL/pipeline" \
             -H 'Content-Type: application/json' \
             -H "Authorization: Bearer $TOKEN" \

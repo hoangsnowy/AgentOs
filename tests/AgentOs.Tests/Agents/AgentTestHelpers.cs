@@ -36,7 +36,7 @@ internal static class AgentTestHelpers
             CostUsd: 0.0001m,
             Latency: TimeSpan.FromMilliseconds(123),
             Model: "mock-model",
-            Provider: "Mock");
+            Provider: "Test");
 
     public static IOptions<AgentsOptions> OptionsWith(AgentsOptions opts) => Options.Create(opts);
 

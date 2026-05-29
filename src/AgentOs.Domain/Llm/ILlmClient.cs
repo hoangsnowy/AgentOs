@@ -4,7 +4,7 @@
 namespace AgentOs.Domain.Llm;
 
 /// <summary>
-/// Abstraction for every LLM provider (Claude, Azure OpenAI, Mock, ...).
+/// Abstraction for every LLM provider (Claude, Azure OpenAI, MAF, RemoteAgent, …).
 /// The 5 agents (Requirement / Coding / Testing / QA / Orchestrator) depend on this interface — NOT on a
 /// concrete client — following the Dependency Inversion Principle (thesis Section 2.4.2).
 /// </summary>

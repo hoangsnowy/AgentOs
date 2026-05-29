@@ -18,7 +18,7 @@ namespace AgentOs.Modules.Integration;
 /// <inheritdoc cref="IGitHubPrService"/>
 public sealed class GitHubPrService : IGitHubPrService
 {
-    private const string UserAgent = "agentic-sdlc-net";
+    private const string UserAgent = "agentos";
 
     private readonly IRuntimeOverrides _overrides;
     private readonly ILogger<GitHubPrService> _logger;

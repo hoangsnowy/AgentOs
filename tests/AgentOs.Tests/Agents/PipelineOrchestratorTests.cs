@@ -145,19 +145,19 @@ public class PipelineOrchestratorTests
         Entities: [new EntityDescriptor("E", [])],
         Endpoints: [new EndpointDescriptor("GET", "/", "root")],
         AcceptanceCriteria: ["a"],
-        Metrics: new AgentMetrics("Mock", "m", 10, 5, 0.0001m, System.TimeSpan.FromMilliseconds(50)));
+        Metrics: new AgentMetrics("Test", "m", 10, 5, 0.0001m, System.TimeSpan.FromMilliseconds(50)));
 
     private static CodeArtifact StubCode() => new(
         ProjectName: "P", Architecture: "Clean Architecture",
         Files: [new CodeFile("src/E.cs", "namespace P;")],
         Notes: null,
-        Metrics: new AgentMetrics("Mock", "m", 20, 10, 0.0002m, System.TimeSpan.FromMilliseconds(80)));
+        Metrics: new AgentMetrics("Test", "m", 20, 10, 0.0002m, System.TimeSpan.FromMilliseconds(80)));
 
     private static TestArtifact StubTests() => new(
         Framework: "xUnit",
         Files: [new CodeFile("tests/ETests.cs", "namespace T;")],
         HappyPathCount: 1, EdgeCaseCount: 1, ErrorCaseCount: 1, EstimatedCoveragePercent: 60,
-        Metrics: new AgentMetrics("Mock", "m", 15, 8, 0.00015m, System.TimeSpan.FromMilliseconds(70)));
+        Metrics: new AgentMetrics("Test", "m", 15, 8, 0.00015m, System.TimeSpan.FromMilliseconds(70)));
 
     private static QaReport StubQa(bool isConsistent) => new(
         Score: isConsistent ? 0.9 : 0.6,
@@ -165,5 +165,5 @@ public class PipelineOrchestratorTests
         IterationNeeded: !isConsistent,
         Issues: isConsistent ? [] : [new QaIssue("Major", "TestCoverage", "missing edge")],
         Recommendations: isConsistent ? [] : ["add edge test"],
-        Metrics: new AgentMetrics("Mock", "m", 12, 6, 0.0001m, System.TimeSpan.FromMilliseconds(40)));
+        Metrics: new AgentMetrics("Test", "m", 12, 6, 0.0001m, System.TimeSpan.FromMilliseconds(40)));
 }

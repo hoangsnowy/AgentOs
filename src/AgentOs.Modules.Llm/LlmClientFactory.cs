@@ -1,4 +1,4 @@
-// Resolves ILlmClient by provider name via keyed services. Every provider (Claude/AzureOpenAI/Mock/
+// Resolves ILlmClient by provider name via keyed services. Every provider (Claude/AzureOpenAI/
 // MAF/RemoteAgent) registers as a keyed ILlmClient under its canonical name; the factory just
 // normalizes the requested name and does a keyed lookup. Effective provider honors runtime
 // ForceProvider (Settings UI) and the LlmOptions.ForceProvider config value.
@@ -44,7 +44,7 @@ public sealed class LlmClientFactory : ILlmClientFactory
         var client = _services.GetKeyedService<ILlmClient>(key)
             ?? throw new LlmException(
                 $"LLM provider '{providerName}' (resolved to '{key}') is not registered. "
-                + "Expected: Claude | AzureOpenAI | Mock | MAF | RemoteAgent. "
+                + "Expected: Claude | AzureOpenAI | MAF | RemoteAgent. "
                 + "Check that the corresponding module is loaded.");
         return client;
     }
@@ -53,9 +53,8 @@ public sealed class LlmClientFactory : ILlmClientFactory
     {
         "CLAUDE" or "ANTHROPIC" => "Claude",
         "AZUREOPENAI" or "AZURE" or "OPENAI" => "AzureOpenAI",
-        "MOCK" or "FAKE" or "STUB" => "Mock",
         "MAF" or "MAF-AZURE" or "AGENTFRAMEWORK" => "MAF",
         "REMOTEAGENT" or "REMOTE" or "IDE" => "RemoteAgent",
-        _ => throw new LlmException($"Unknown LLM provider: '{providerName}'. Expected Claude | AzureOpenAI | Mock | MAF | RemoteAgent."),
+        _ => throw new LlmException($"Unknown LLM provider: '{providerName}'. Expected Claude | AzureOpenAI | MAF | RemoteAgent."),
     };
 }

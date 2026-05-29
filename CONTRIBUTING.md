@@ -1,4 +1,4 @@
-# Contributing to agentic-sdlc-net
+# Contributing to agentos
 
 Thanks for your interest in contributing! This project is a .NET-native multi-agent platform
 for the software development lifecycle. Issues and pull requests are welcome.
@@ -6,15 +6,15 @@ for the software development lifecycle. Issues and pull requests are welcome.
 ## Getting started
 
 ```bash
-git clone https://github.com/hoangsnowy/agentic-sdlc-net.git
-cd agentic-sdlc-net
+git clone https://github.com/hoangsnowy/AgentOs.git
+cd agentos
 dotnet restore AgentOs.sln
 dotnet build   AgentOs.sln -c Release
 dotnet test    AgentOs.sln -c Release
 ```
 
 Prerequisites: the **.NET 10 SDK** (pinned via `global.json`). No API keys are required —
-the offline `MockLlmClient` path covers build, tests, and the AgentOS demo. See
+unit + integration tests rely on NSubstitute, no live API keys required. See
 [docs/SETUP.md](docs/SETUP.md) for secrets, local Postgres, and CI configuration.
 
 ## Development workflow

@@ -7,5 +7,5 @@ name: agentos
 services:
   app:
     language: dotnet
-    project: ./src/AgentOs.AppHost/AgentOs.AppHost.csproj
+    project: ./infra/AgentOs.AppHost/AgentOs.AppHost.csproj
     host: containerapp

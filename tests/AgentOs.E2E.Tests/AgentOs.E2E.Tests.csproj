@@ -5,13 +5,11 @@
     <AssemblyName>AgentOs.E2E.Tests</AssemblyName>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <!-- E2E uses underscores in test names (CA1707) like the unit tests. -->
-    <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- Reference the AppHost so Aspire generates Projects.AgentOs_AppHost for the test harness. -->
-    <ProjectReference Include="..\..\src\AgentOs.AppHost\AgentOs.AppHost.csproj" />
+    <ProjectReference Include="..\..\infra\AgentOs.AppHost\AgentOs.AppHost.csproj" />
   </ItemGroup>
 
   <ItemGroup>

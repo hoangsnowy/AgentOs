@@ -15,7 +15,7 @@
 Use the `/kc-bench` skill:
 
 ```
-/kc-bench all              # all 5 KC, default provider Mock
+/kc-bench all              # all 5 KC scenarios
 /kc-bench KC4              # only KC4 (pipeline)
 /kc-bench KC1,KC4 --real   # run live with Claude+Azure (cost warning)
 ```
@@ -30,7 +30,7 @@ The skill automatically:
 
 KC2/KC3/KC5 need output from a previous KC (e.g. KC2 needs the `RequirementSpec` from KC1).
 The `specFixture`, `codeFixture`, `testsFixture` fields point to a recorded snapshot fixture
-(the `/fixture-record` skill generates these files).
+(record real LLM responses to refresh these stub files).
 
 If a fixture does not yet exist, the bench skill automatically skips the case and reports the reason.
 

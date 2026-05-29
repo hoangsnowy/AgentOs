@@ -12,10 +12,10 @@ public class SmokeTest
     public void TestRunner_Should_Be_Wired_Up()
     {
         // Arrange
-        const string expected = "agentic-sdlc-net";
+        const string expected = "agentos";
 
         // Act
-        var actual = "agentic-sdlc-net";
+        var actual = "agentos";
 
         // Assert
         actual.ShouldBe(expected);

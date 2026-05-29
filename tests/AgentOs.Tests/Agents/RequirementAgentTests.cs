@@ -49,7 +49,7 @@ public class RequirementAgentTests
         spec.Entities[0].Name.ShouldBe("Product");
         spec.Endpoints[0].AuthRequired.ShouldBeTrue();
         spec.AcceptanceCriteria.Count.ShouldBe(3);
-        spec.Metrics.Provider.ShouldBe("Mock");
+        spec.Metrics.Provider.ShouldBe("Test");
         spec.Metrics.InputTokens.ShouldBe(100);
     }
 
@@ -113,7 +113,7 @@ public class RequirementAgentTests
 
         var opts = new AgentsOptions
         {
-            Requirement = new AgentOptions { Provider = "Mock", Model = "claude-test-1", Temperature = 0.42, MaxTokens = 999 },
+            Requirement = new AgentOptions { Provider = "Test", Model = "claude-test-1", Temperature = 0.42, MaxTokens = 999 },
         };
         var agent = new RequirementAgent(AgentTestHelpers.FactoryReturning(llm), AgentTestHelpers.OptionsWith(opts), AgentTestHelpers.Validator, AgentTestHelpers.NewCollector(), NullLogger<RequirementAgent>.Instance);
 

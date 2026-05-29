@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please do **not** open a public issue for security vulnerabilities. Instead, report privately via
-[GitHub Security Advisories](https://github.com/hoangsnowy/agentic-sdlc-net/security/advisories/new)
+[GitHub Security Advisories](https://github.com/hoangsnowy/AgentOs/security/advisories/new)
 or email the maintainer. We aim to acknowledge reports within a few days.
 
 When reporting, include: affected component, reproduction steps, and impact.

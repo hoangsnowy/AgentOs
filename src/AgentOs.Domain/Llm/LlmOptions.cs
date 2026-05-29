@@ -11,8 +11,8 @@ public sealed class LlmOptions
     /// <summary>Section name used for <c>Configuration.GetSection(...)</c>.</summary>
     public const string SectionName = "Llm";
 
-    /// <summary>Default provider: <c>"Claude"</c>, <c>"AzureOpenAI"</c>, or <c>"Mock"</c>.</summary>
-    public string Provider { get; set; } = "Mock";
+    /// <summary>Default provider: <c>"Claude"</c>, <c>"AzureOpenAI"</c>, <c>"MAF"</c>, or <c>"RemoteAgent"</c>.</summary>
+    public string Provider { get; set; } = "Claude";
 
     /// <summary>
     /// Optional. When set (e.g. <c>"AzureOpenAI"</c>), every agent uses this provider regardless of its
@@ -26,9 +26,6 @@ public sealed class LlmOptions
 
     /// <summary>Azure OpenAI client configuration.</summary>
     public AzureOpenAiOptions AzureOpenAi { get; set; } = new();
-
-    /// <summary>Mock client configuration (fixture-based, used for offline testing).</summary>
-    public MockOptions Mock { get; set; } = new();
 }
 
 /// <summary>Options for Claude (Anthropic Messages API).</summary>
@@ -88,12 +85,3 @@ public sealed class AzureOpenAiOptions
     public int TimeoutSeconds { get; set; } = 60;
 }
 
-/// <summary>Options for the Mock client.</summary>
-public sealed class MockOptions
-{
-    /// <summary>Path (relative or absolute) to the folder containing the JSON fixtures.</summary>
-    public string FixturePath { get; set; } = "tests/fixtures/llm";
-
-    /// <summary>Simulated latency (ms) when returning a fixture, so downstream code does not assume zero latency.</summary>
-    public int SimulatedLatencyMs { get; set; } = 5;
-}

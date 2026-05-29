@@ -1,7 +1,4 @@
 using AgentOs.SharedKernel.Modularity;
-// AgentOs.Tests/Llm/LlmClientFactoryTests.cs
-// Sprint 1 — Unit tests for LlmClientFactory (resolve by provider name).
-
 using System;
 using AgentOs.Domain.Llm;
 using AgentOs.Modules.Llm;
@@ -23,8 +20,6 @@ public class LlmClientFactoryTests
             .AddInMemoryCollection(new System.Collections.Generic.Dictionary<string, string?>
             {
                 ["Llm:Provider"] = defaultProvider,
-                ["Llm:Mock:FixturePath"] = "tests/fixtures/llm",
-                ["Llm:Mock:SimulatedLatencyMs"] = "0",
                 ["Llm:Claude:ApiKey"] = "test",
                 ["Llm:Claude:Endpoint"] = "https://api.anthropic.test",
                 ["Llm:AzureOpenAi:ApiKey"] = "test",
@@ -38,35 +33,23 @@ public class LlmClientFactoryTests
     [Fact]
     public void Create_Claude_ReturnsClaudeProvider()
     {
-        var sp = BuildServices("Mock");
+        var sp = BuildServices("Claude");
         var factory = sp.GetRequiredService<ILlmClientFactory>();
 
         var client = factory.Create("Claude");
 
-        // SDK-based: a pooled IChatClient wrapper, identified by its provider tag.
         client.Provider.ShouldBe("Claude");
     }
 
     [Fact]
     public void Create_AzureOpenAI_ReturnsAzureProvider()
     {
-        var sp = BuildServices("Mock");
+        var sp = BuildServices("Claude");
         var factory = sp.GetRequiredService<ILlmClientFactory>();
 
         var client = factory.Create("AzureOpenAI");
 
         client.Provider.ShouldBe("AzureOpenAI");
-    }
-
-    [Fact]
-    public void Create_Mock_ReturnsMockClient()
-    {
-        var sp = BuildServices("Mock");
-        var factory = sp.GetRequiredService<ILlmClientFactory>();
-
-        var client = factory.Create("Mock");
-
-        client.ShouldBeOfType<MockLlmClient>();
     }
 
     [Fact]
@@ -83,7 +66,7 @@ public class LlmClientFactoryTests
     [Fact]
     public void Create_UnknownProvider_ThrowsLlmException()
     {
-        var sp = BuildServices("Mock");
+        var sp = BuildServices("Claude");
         var factory = sp.GetRequiredService<ILlmClientFactory>();
 
         Should.Throw<LlmException>(() => factory.Create("Bedrock"));
