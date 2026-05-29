@@ -7,11 +7,11 @@
 <div class="prefs">
     <aside class="prefs-side">
         <div class="prefs-side-head">Settings</div>
-        <button class="prefs-cat @(_tab == "status"   ? "active" : "")" @onclick="@(() => _tab = "status")"><span class="prefs-cat-ic">●</span> Status</button>
-        <button class="prefs-cat @(_tab == "providers"? "active" : "")" @onclick="@(() => _tab = "providers")"><span class="prefs-cat-ic">⚡</span> Providers</button>
-        <button class="prefs-cat @(_tab == "keys"     ? "active" : "")" @onclick="@(() => _tab = "keys")"><span class="prefs-cat-ic">🔑</span> API keys</button>
-        <button class="prefs-cat @(_tab == "github"   ? "active" : "")" @onclick="@(() => _tab = "github")"><span class="prefs-cat-ic">↗</span> GitHub</button>
-        <button class="prefs-cat @(_tab == "data"     ? "active" : "")" @onclick="@(() => _tab = "data")"><span class="prefs-cat-ic">🗄</span> Storage</button>
+        <button class="prefs-cat @(_tab == "status"   ? "active" : "")" @onclick="@(() => _tab = "status")"><span class="prefs-cat-ic"><Icon Name="circle-fill"        Size="12" /></span> Status</button>
+        <button class="prefs-cat @(_tab == "providers"? "active" : "")" @onclick="@(() => _tab = "providers")"><span class="prefs-cat-ic"><Icon Name="lightning"        Size="14" /></span> Providers</button>
+        <button class="prefs-cat @(_tab == "keys"     ? "active" : "")" @onclick="@(() => _tab = "keys")"><span class="prefs-cat-ic"><Icon Name="lock"             Size="14" /></span> API keys</button>
+        <button class="prefs-cat @(_tab == "github"   ? "active" : "")" @onclick="@(() => _tab = "github")"><span class="prefs-cat-ic"><Icon Name="arrow-square-out" Size="14" /></span> GitHub</button>
+        <button class="prefs-cat @(_tab == "data"     ? "active" : "")" @onclick="@(() => _tab = "data")"><span class="prefs-cat-ic"><Icon Name="floppy-disk"      Size="14" /></span> Storage</button>
     </aside>
 
     <div class="prefs-content">
@@ -205,6 +205,6 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
 
     private MarkupString KeyState(string key)
         => string.IsNullOrWhiteSpace(key)
-            ? new MarkupString("<span class=\"chip chip-err\">⊘ not set</span>")
-            : new MarkupString("<span class=\"chip chip-ok\">✓ set</span>");
+            ? new MarkupString("<span class=\"chip chip-err\">not set</span>")
+            : new MarkupString("<span class=\"chip chip-ok\">set</span>");
 }
