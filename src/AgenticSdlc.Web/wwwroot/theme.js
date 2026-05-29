@@ -49,3 +49,12 @@ window.agenticTheme = {
 
 // Apply persisted theming before Blazor mounts to avoid flash.
 window.agenticTheme.restoreAll();
+
+// Auth — Phase 8.3. Single place to clear every persisted auth key on logout/lock so a stale
+// JWT can't linger after sign-out.
+window.agenticAuth = {
+    AUTH_KEYS: ['agentic-jwt', 'agentic-user', 'agentic-jwt-exp', 'agentic-signed-in'],
+    signOut: function () {
+        this.AUTH_KEYS.forEach(function (k) { localStorage.removeItem(k); });
+    },
+};

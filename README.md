@@ -149,6 +149,19 @@ azd up   # provisions + deploys to Azure Container Apps via the Aspire AppHost
 
 The project is growing from a fixed 5-agent pipeline into a general, **governance-first** agentic platform: pluggable agent runtimes (incl. Semantic Kernel), MCP-based tool execution behind a sandbox + approval gate, an evidence/lineage store, and durable workflows — with the SDLC pipeline as the flagship example. Full plan in [docs/ROADMAP_PLATFORM_V2.md](docs/ROADMAP_PLATFORM_V2.md).
 
+## Phases
+
+| Phase | Title | Status |
+| --- | --- | --- |
+| 1 | Domain + LLM Gateway | done |
+| 2 | 5 agents + JSON schemas | done |
+| 3 | Pipeline orchestrator (Leader–Specialists–Quality Loop) | done |
+| 4 | Minimal API + Scalar | done |
+| 5 | Unit tests + KC1–KC5 benchmark harness | done |
+| 6 | Azure deploy IaC (Bicep + Container Apps) | done (no live deploy yet) |
+| 7 | Blazor Agent Studio + AgentOS desktop chrome | done |
+| **8** | **Web ↔ API production separation + auth + DB secrets** | **in progress (8.1 landed)** — see [docs/PHASE_8.md](docs/PHASE_8.md) |
+
 ## Contributing
 
 Issues and PRs are welcome. Build and test with `dotnet test AgenticSdlc.sln -c Release`; CI runs the same on every push and PR. Commits follow [Conventional Commits](https://www.conventionalcommits.org/). Code, comments and docs are English; `Nullable` and `TreatWarningsAsErrors` are enabled across the solution.

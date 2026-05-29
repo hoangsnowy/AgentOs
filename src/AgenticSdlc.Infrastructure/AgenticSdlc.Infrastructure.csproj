@@ -45,6 +45,8 @@
 
     <!-- Persistence: EF Core + Npgsql (Postgres) -->
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- Phase 8.4b — DataProtection to encrypt app_config values at rest -->
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

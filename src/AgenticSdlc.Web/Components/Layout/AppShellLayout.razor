@@ -2,6 +2,7 @@
 @inject Microsoft.JSInterop.IJSRuntime JS
 @inject NavigationManager Nav
 @inject AgenticSdlc.Web.Services.WindowManagerService WM
+@inject AgenticSdlc.Web.Services.AuthSession Auth
 
 <LoginOverlay />
 
@@ -103,7 +104,8 @@
     private async Task Lock()
     {
         _startOpen = false;
-        await JS.InvokeVoidAsync("localStorage.removeItem", "agentic-signed-in");
+        await JS.InvokeVoidAsync("agenticAuth.signOut");
+        Auth.Clear();
         Nav.NavigateTo(Nav.Uri, forceLoad: true);
     }
 }

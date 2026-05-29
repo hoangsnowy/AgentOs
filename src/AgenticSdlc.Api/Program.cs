@@ -1,13 +1,18 @@
 // AgenticSdlc.Api/Program.cs
 // Phase 4 — Compose: LLM Gateway + Agents + Pipeline endpoints + Scalar UI.
 
+using AgenticSdlc.Api.Auth;
 using AgenticSdlc.Api.Endpoints;
+using AgenticSdlc.Application.Configuration;
 using AgenticSdlc.Infrastructure.Agents;
+using AgenticSdlc.Infrastructure.Configuration;
 using AgenticSdlc.Infrastructure.Llm;
 using AgenticSdlc.Infrastructure.Metrics;
 using AgenticSdlc.Infrastructure.Persistence;
+using AgenticSdlc.Infrastructure.Pipeline;
 using AgenticSdlc.Infrastructure.Validation;
 using AgenticSdlc.ServiceDefaults;
+using Microsoft.Extensions.DependencyInjection;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,6 +42,10 @@ else
 }
 builder.Services.AddAgents(builder.Configuration);
 
+// Phase 8 — IPipelineClient (in-process, since the API owns the orchestrator) +
+// MutableSinkHolder so /pipeline/stream can route per-request channel sinks.
+builder.Services.AddInProcessPipelineClient();
+
 // Persistence (Postgres). Without ConnectionStrings:DefaultConnection → no-op repos.
 builder.Services.AddPersistence(builder.Configuration);
 
@@ -49,10 +58,26 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNEC
 // OpenAPI (.NET 10 native) + Scalar UI
 builder.Services.AddOpenApi();
 
+// Phase 8 — JWT bearer auth. Required on every /pipeline*, /requirement, /code, /test, /qa,
+// /runs* endpoint. /health and / stay public.
+builder.Services.AddJwtAuth(builder.Configuration);
+
+// Phase 8.4b — Runtime-mutable configuration store. EF + DataProtection-encrypted when a DB is
+// configured; in-memory fallback otherwise. DataProtection persists its key ring to the DataProtection
+// default location (over_ridable via env for multi-instance Container Apps).
+builder.Services.AddDataProtection();
+builder.Services.AddAppConfigStore(builder.Configuration);
+
 var app = builder.Build();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Apply EF migration at startup (no-op if the DB is not configured yet).
 await app.Services.InitializePersistenceAsync();
+
+// Phase 8.4b — hydrate runtime LLM/GitHub overrides from the persisted app_config table.
+await app.Services.HydrateRuntimeOverridesAsync();
 
 // Enable OpenAPI + Scalar UI in every env except Production (dev deploy runs the Staging env).
 if (!app.Environment.IsProduction())
@@ -98,6 +123,8 @@ app.MapGet("/health", (Microsoft.Extensions.Options.IOptions<AgenticSdlc.Domain.
    .WithSummary("Liveness probe + LLM provider readiness")
    .WithTags("Meta");
 
+app.MapAuthEndpoints();
 app.MapPipelineEndpoints();
+app.MapSettingsEndpoints();
 
 app.Run();

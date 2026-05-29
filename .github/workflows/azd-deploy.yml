@@ -51,3 +51,50 @@ jobs:
 
       - name: Provision + deploy
         run: azd up --no-prompt
+
+      - name: Smoke — API /health
+        id: smoke
+        run: |
+          # azd populates outputs for service URLs; fall back to a sentinel if missing.
+          API_URL=$(azd env get-values | grep '^SERVICES_API_URL=' | head -1 | sed 's/^SERVICES_API_URL=//; s/"//g')
+          if [ -z "$API_URL" ]; then
+            echo "::warning::SERVICES_API_URL not exported by azd. Skipping smoke."
+            exit 0
+          fi
+          echo "Probing $API_URL/health"
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -s -o /tmp/health.json -w '%{http_code}' "$API_URL/health" || echo "000")
+            if [ "$CODE" = "200" ]; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "attempt $i: $CODE — retrying in 15s"
+            sleep 15
+          done
+          echo "::error::API /health did not return 200 after 5 attempts"
+          exit 1
+
+      - name: Smoke — /auth/token + /pipeline (mock provider)
+        if: steps.smoke.outcome == 'success'
+        run: |
+          API_URL=$(azd env get-values | grep '^SERVICES_API_URL=' | head -1 | sed 's/^SERVICES_API_URL=//; s/"//g')
+          OP_PASS="${{ secrets.AZD_OPERATOR_PASSWORD || 'operator' }}"
+          TOKEN=$(curl -s -X POST "$API_URL/auth/token" \
+            -H 'Content-Type: application/json' \
+            -d "{\"user\":\"operator\",\"password\":\"$OP_PASS\"}" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("token",""))')
+          if [ -z "$TOKEN" ]; then
+            echo "::error::/auth/token did not return a JWT"
+            exit 1
+          fi
+          echo "Got JWT, length=${#TOKEN}"
+          # POST a tiny user story; provider should be Mock in staging so cost = $0.
+          STATUS=$(curl -s -o /tmp/pipeline.json -w '%{http_code}' -X POST "$API_URL/pipeline" \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $TOKEN" \
+            -d '{"description":"smoke test - one tiny story","nMax":1,"language":"en-US"}')
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::/pipeline returned $STATUS"
+            cat /tmp/pipeline.json
+            exit 1
+          fi
+          python3 -c 'import json;d=json.load(open("/tmp/pipeline.json"));assert d["status"] in ("Done","MaxIterationReached"),d["status"];print("status",d["status"],"iters",d.get("iterationCount"))'

@@ -1,8 +1,6 @@
-@using AgenticSdlc.Application.Agents
-@using Microsoft.Extensions.DependencyInjection
+@using AgenticSdlc.Application.Pipeline
 @using AgenticSdlc.Domain.Llm
-@inject IServiceProvider Sp
-@inject CircuitPipelineProgress Progress
+@inject IPipelineClient Pipeline
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
 @inject AgenticSdlc.Application.Integration.IGitHubPrService GitHubPr
@@ -442,18 +440,30 @@
         }
         ResetState();
         _running = true;
-        Progress.Listener = OnProgress;
         _cts = new CancellationTokenSource();
 
         try
         {
             var story = new UserStory(_description, _nmax, "en-US");
-            var orchestrator = Sp.GetRequiredService<IOrchestratorAgent>();
-            _result = await orchestrator.RunAsync(story, _cts.Token);
-            _finalStatus = _result.Status;
-            if (_finalStatus == PipelineStatus.Failed && _error is null)
+            await foreach (var evt in Pipeline.StreamAsync(story, _cts.Token))
             {
-                _error = "Pipeline failed — see the server log for details.";
+                switch (evt.Kind)
+                {
+                    case PipelineStreamEventKind.Progress when evt.Progress is not null:
+                        await InvokeAsync(() => { ApplyEvent(evt.Progress); StateHasChanged(); });
+                        break;
+                    case PipelineStreamEventKind.Result when evt.Result is not null:
+                        _result = evt.Result;
+                        _finalStatus = _result.Status;
+                        if (_finalStatus == PipelineStatus.Failed && _error is null)
+                        {
+                            _error = "Pipeline failed — see the server log for details.";
+                        }
+                        break;
+                    case PipelineStreamEventKind.Error:
+                        _error = evt.Error ?? "Pipeline error.";
+                        break;
+                }
             }
         }
         catch (OperationCanceledException)
@@ -467,23 +477,13 @@
         finally
         {
             _running = false;
-            Progress.Listener = null;
             _cts?.Dispose();
             _cts = null;
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
     private void Cancel() => _cts?.Cancel();
-
-    private async Task OnProgress(PipelineProgressEvent e)
-    {
-        await InvokeAsync(() =>
-        {
-            ApplyEvent(e);
-            StateHasChanged();
-        });
-    }
 
     private void ApplyEvent(PipelineProgressEvent e)
     {
@@ -568,7 +568,6 @@
 
     public void Dispose()
     {
-        Progress.Listener = null;
         _cts?.Dispose();
     }
 }

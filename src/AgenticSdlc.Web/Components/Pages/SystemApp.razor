@@ -4,6 +4,7 @@
 @inject ToastService Toasts
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject AuthSession Auth
 
 <div class="prefs">
     <aside class="prefs-side">
@@ -149,13 +150,15 @@
 
     private async Task Lock()
     {
-        await JS.InvokeVoidAsync("localStorage.removeItem", "agentic-signed-in");
+        await JS.InvokeVoidAsync("agenticAuth.signOut");
+        Auth.Clear();
         Nav.NavigateTo(Nav.Uri, forceLoad: true);
     }
 
     private async Task SignOut()
     {
-        await JS.InvokeVoidAsync("localStorage.removeItem", "agentic-signed-in");
+        await JS.InvokeVoidAsync("agenticAuth.signOut");
+        Auth.Clear();
         Toasts.Show("Signed out", "Refresh to sign in again.", ToastKind.Info);
     }
 }
