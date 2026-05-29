@@ -3,13 +3,16 @@
 
 using AgenticSdlc.Api.Auth;
 using AgenticSdlc.Api.Endpoints;
+using AgenticSdlc.Application.Configuration;
 using AgenticSdlc.Infrastructure.Agents;
+using AgenticSdlc.Infrastructure.Configuration;
 using AgenticSdlc.Infrastructure.Llm;
 using AgenticSdlc.Infrastructure.Metrics;
 using AgenticSdlc.Infrastructure.Persistence;
 using AgenticSdlc.Infrastructure.Pipeline;
 using AgenticSdlc.Infrastructure.Validation;
 using AgenticSdlc.ServiceDefaults;
+using Microsoft.Extensions.DependencyInjection;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -58,6 +61,9 @@ builder.Services.AddOpenApi();
 // Phase 8 — JWT bearer auth. Required on every /pipeline*, /requirement, /code, /test, /qa,
 // /runs* endpoint. /health and / stay public.
 builder.Services.AddJwtAuth(builder.Configuration);
+
+// Phase 8.4 — Runtime-mutable configuration store. In-memory until the EF entity ships.
+builder.Services.AddSingleton<IAppConfigStore, InMemoryAppConfigStore>();
 
 var app = builder.Build();
 
@@ -113,5 +119,6 @@ app.MapGet("/health", (Microsoft.Extensions.Options.IOptions<AgenticSdlc.Domain.
 
 app.MapAuthEndpoints();
 app.MapPipelineEndpoints();
+app.MapSettingsEndpoints();
 
 app.Run();

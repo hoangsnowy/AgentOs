@@ -48,9 +48,21 @@ Phase 8 closes those gaps.
 
 ## Sub-tasks
 
-### 8.1 — Web → API over HTTP (SSE streaming)
+### 8.1 — Web → API over HTTP (SSE streaming)  ✅
 
-**Status:** ✅ landed in this branch.
+### 8.2 — API JWT bearer auth                  ✅
+
+### 8.3 — Web auth + LoginOverlay              ✅ (token in localStorage; cookie variant deferred)
+
+### 8.4 — Runtime configuration store          🟡 (interface + in-memory + /settings endpoints; EF entity TODO)
+
+### 8.5 — Postgres required by default         ✅
+
+### 8.6 — KC live runner scripts               ✅ (live n=10 run still pending — needs real LLM creds)
+
+### 8.7 — CI/CD deploy smoke                   ✅
+
+### 8.8 — Docs sweep                           ✅
 
 - New `Application.Pipeline.IPipelineClient` port (`StreamAsync(UserStory, CancellationToken)` →
   `IAsyncEnumerable<PipelineStreamEvent>`).
