@@ -2,23 +2,23 @@
 
 :root[data-theme="dark"] {
     /* surfaces */
-    --syn-bg: #0c0f14;
-    --syn-bg-deep: #0a0d12;
-    --syn-panel: #151a22;
-    --syn-panel-2: #1a212b;
-    --syn-head: #11161e;
-    --syn-input-bg: #0c0f14;
-    --syn-border: #232b36;
-    --syn-border-2: #33414f;
+    --syn-bg: var(--bg-3, #0c0f14);
+    --syn-bg-deep: var(--bg-sunk, #0a0d12);
+    --syn-panel: var(--bg-2, #151a22);
+    --syn-panel-2: var(--bg-3, #1a212b);
+    --syn-head: var(--bg-titlebar, #11161e);
+    --syn-input-bg: var(--bg-sunk, #0c0f14);
+    --syn-border: var(--line, #232b36);
+    --syn-border-2: var(--line-strong, #33414f);
     /* text */
-    --syn-text: #c9d3df;
-    --syn-text-strong: #ffffff;
-    --syn-text-soft: #aeb8c6;
-    --syn-text-dim: #8893a3;
-    --syn-muted: #6b7888;
-    --syn-faint: #5b6675;
+    --syn-text: var(--txt, #c9d3df);
+    --syn-text-strong: var(--txt, #ffffff);
+    --syn-text-soft: var(--txt-soft, #aeb8c6);
+    --syn-text-dim: var(--txt-dim, #8893a3);
+    --syn-muted: var(--txt-dim, #6b7888);
+    --syn-faint: var(--txt-faint, #5b6675);
     /* accents */
-    --syn-blue: #5cc8ff;
+    --syn-blue: var(--accent, #5cc8ff);
     --syn-green: #22c55e;
     --syn-purple: #8b5cf6;
     --syn-agent: #2bd4a6;
@@ -40,21 +40,21 @@
 }
 
 :root {
-    --syn-bg: #f4f6f9;
-    --syn-bg-deep: #eef1f5;
-    --syn-panel: #ffffff;
-    --syn-panel-2: #eef2f7;
-    --syn-head: #f1f4f8;
-    --syn-input-bg: #ffffff;
-    --syn-border: #d7dde6;
-    --syn-border-2: #c2cbd6;
-    --syn-text: #2b3440;
-    --syn-text-strong: #0f1722;
-    --syn-text-soft: #475063;
-    --syn-text-dim: #5b6675;
-    --syn-muted: #7a8696;
-    --syn-faint: #97a1b0;
-    --syn-blue: #2563eb;
+    --syn-bg: var(--bg-3, #f4f6f9);
+    --syn-bg-deep: var(--bg-sunk, #eef1f5);
+    --syn-panel: var(--bg-2, #ffffff);
+    --syn-panel-2: var(--bg-3, #eef2f7);
+    --syn-head: var(--bg-titlebar, #f1f4f8);
+    --syn-input-bg: var(--bg-2, #ffffff);
+    --syn-border: var(--line, #d7dde6);
+    --syn-border-2: var(--line-strong, #c2cbd6);
+    --syn-text: var(--txt, #2b3440);
+    --syn-text-strong: var(--txt, #0f1722);
+    --syn-text-soft: var(--txt-soft, #475063);
+    --syn-text-dim: var(--txt-dim, #5b6675);
+    --syn-muted: var(--txt-dim, #7a8696);
+    --syn-faint: var(--txt-faint, #97a1b0);
+    --syn-blue: var(--accent, #3daee9);
     --syn-green: #16a34a;
     --syn-purple: #7c3aed;
     --syn-agent: #0d9488;

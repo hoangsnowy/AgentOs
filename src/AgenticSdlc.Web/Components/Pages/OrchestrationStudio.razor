@@ -71,10 +71,10 @@
             <CascadingValue Value="_diagram" IsFixed="false">
                 <DiagramCanvas @key="_graph.Id">
                     <Widgets>
-                        <GridWidget Size="26" Mode="GridMode.Point" BackgroundColor="#0c0f14" />
+                        @* BackgroundColor="transparent" lets .syn-canvas tokens win — auto-flip light/dark. *@
+                        <GridWidget Size="26" Mode="GridMode.Point" BackgroundColor="transparent" />
                         <SelectionBoxWidget />
                         <NavigatorWidget Width="190" Height="120"
-                                         ViewStrokeColor="#5cc8ff" NodeColor="#2bd4a6"
                                          Class="syn-navigator" Style="position:absolute; bottom:14px; right:14px;" />
                     </Widgets>
                 </DiagramCanvas>
