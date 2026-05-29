@@ -8,12 +8,20 @@
 [![CI](https://github.com/hoangsnowy/agentic-sdlc-net/actions/workflows/ci.yml/badge.svg)](https://github.com/hoangsnowy/agentic-sdlc-net/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 `agentic-sdlc-net` turns a plain-English user story into reviewed, test-backed C# scaffolding.
 Five agents collaborate under a central orchestrator; a QA agent scores requirement–code–test
 consistency and loops until it converges or hits an iteration cap. Built on **.NET 10** and
 **Clean Architecture**, with a provider-agnostic LLM gateway so you can mix vendors per agent —
 or swap them entirely — from config alone.
+
+> **Status:** pre-1.0, actively developed. The core pipeline, gateway, and AgentOS UI are working;
+> APIs may still change before a `v1.0` tag.
+
+**Contents:** [Features](#features) · [Agents](#agents) · [Architecture](#architecture) ·
+[Quick start](#quick-start) · [Configuration](#configuration) · [API](#api) · [Deploy](#deploy) ·
+[Contributing](#contributing)
 
 ## Features
 
@@ -199,10 +207,11 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full deployment guide and
 
 ## Contributing
 
-Issues and PRs are welcome. Build and test with `dotnet test AgenticSdlc.sln -c Release`; CI runs
-the same on every push and PR. Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
-Code, comments, and docs are English; `Nullable` and `TreatWarningsAsErrors` are enabled across the
-solution.
+Issues and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and
+conventions, and [SECURITY.md](SECURITY.md) for reporting vulnerabilities. Build and test with
+`dotnet test AgenticSdlc.sln -c Release`; CI runs the same on every push and PR. Commits follow
+[Conventional Commits](https://www.conventionalcommits.org/); `Nullable` and `TreatWarningsAsErrors`
+are enabled across the solution.
 
 ## License
 
