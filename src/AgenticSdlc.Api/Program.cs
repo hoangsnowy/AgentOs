@@ -1,28 +1,25 @@
-// AgenticSdlc.Api/Program.cs
-// Phase 4 — Compose: LLM Gateway + Agents + Pipeline endpoints + Scalar UI.
+// Composition root for the API host. All wiring is owned by the modules — this file is just an
+// assembly list + ASP.NET Core lifecycle: AddServiceDefaults, AddModulesFromAssemblies, then
+// MapModuleEndpoints + a couple of host-level health/meta routes.
 
-using AgenticSdlc.Api.Auth;
-using AgenticSdlc.Api.Endpoints;
-using AgenticSdlc.Application.Configuration;
 using AgenticSdlc.Domain.Llm;
-using AgenticSdlc.Infrastructure.Agents;
-using AgenticSdlc.Infrastructure.Configuration;
-using AgenticSdlc.Infrastructure.Identity;
-using AgenticSdlc.Infrastructure.Llm;
-using AgenticSdlc.Infrastructure.Metrics;
-using AgenticSdlc.Infrastructure.Persistence;
-using AgenticSdlc.Infrastructure.Pipeline;
-using AgenticSdlc.Infrastructure.Validation;
+using AgenticSdlc.Modules.AppConfig;
+using AgenticSdlc.Modules.Identity;
+using AgenticSdlc.Modules.Integration;
+using AgenticSdlc.Modules.Llm;
+using AgenticSdlc.Modules.Pipeline;
+using AgenticSdlc.Modules.RemoteAgent;
+using AgenticSdlc.Modules.Tenants;
 using AgenticSdlc.ServiceDefaults;
+using AgenticSdlc.SharedKernel.Modularity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Aspire service defaults: OpenTelemetry, health checks, service discovery, HTTP resilience.
 builder.AddServiceDefaults();
 
-// Logging
 builder.Logging.AddSimpleConsole(options =>
 {
     options.IncludeScopes = true;
@@ -30,71 +27,30 @@ builder.Logging.AddSimpleConsole(options =>
     options.TimestampFormat = "HH:mm:ss.fff ";
 });
 
-// LLM Gateway + 5 Agents + PipelineOrchestrator + JSON Schema validation + Metrics
-builder.Services.AddLlmGateway(builder.Configuration);
-builder.Services.AddValidation();
-var csvPath = builder.Configuration["Metrics:CsvPath"];
-if (!string.IsNullOrWhiteSpace(csvPath))
-{
-    builder.Services.AddCsvMetrics(csvPath);
-}
-else
-{
-    builder.Services.AddInMemoryMetrics();
-}
-builder.Services.AddAgents(builder.Configuration);
-
-// Phase 8 — IPipelineClient (in-process, since the API owns the orchestrator) +
-// MutableSinkHolder so /pipeline/stream can route per-request channel sinks.
-builder.Services.AddInProcessPipelineClient();
-
-// Persistence (Postgres). Without ConnectionStrings:DefaultConnection → no-op repos.
-builder.Services.AddPersistence(builder.Configuration);
-
-// Application Insights — only register when a connection string is present (Phase 6 Azure deploy)
+builder.Services.AddOpenApi();
+builder.Services.AddDataProtection();
 if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
 {
     builder.Services.AddApplicationInsightsTelemetry();
 }
 
-// OpenAPI (.NET 10 native) + Scalar UI
-builder.Services.AddOpenApi();
-
-// Phase 8 — JWT bearer auth. Required on every /pipeline*, /requirement, /code, /test, /qa,
-// /runs* endpoint. /health and / stay public. Auth:Mode = operator (HS256) | keycloak (OIDC).
-builder.Services.AddJwtAuth(builder.Configuration);
-
-// Keycloak mode: resolve the tenant from the OIDC token (overrides the default single-tenant context)
-// and register the admin REST client so /tenants endpoints can provision realm users.
-if (string.Equals(builder.Configuration["Auth:Mode"], "keycloak", StringComparison.OrdinalIgnoreCase))
-{
-    builder.Services.AddHttpContextAccessor();
-    builder.Services.AddScoped<AgenticSdlc.Application.Identity.ITenantContext, AgenticSdlc.Api.Auth.HttpTenantContext>();
-    builder.Services.AddKeycloakAdmin(builder.Configuration);
-}
-
-// Phase 8.4b — Runtime-mutable configuration store. EF + DataProtection-encrypted when a DB is
-// configured; in-memory fallback otherwise. DataProtection persists its key ring to the DataProtection
-// default location (over_ridable via env for multi-instance Container Apps).
-builder.Services.AddDataProtection();
-builder.Services.AddAppConfigStore(builder.Configuration);
-
-// Remote dev-IDE agent transport — SignalR hub + the broker->hub bridge (Increment 2).
-builder.Services.AddSignalR();
-builder.Services.AddHostedService<AgenticSdlc.Api.RemoteAgent.RemoteAgentTransport>();
+// Module discovery: each .Assembly contributes one IModule.
+builder.Services.AddModulesFromAssemblies(builder.Configuration,
+    typeof(AppConfigModule).Assembly,
+    typeof(LlmModule).Assembly,
+    typeof(IdentityModule).Assembly,
+    typeof(TenantsModule).Assembly,
+    typeof(PipelineModule).Assembly,
+    typeof(IntegrationModule).Assembly,
+    typeof(RemoteAgentModule).Assembly);
 
 var app = builder.Build();
+
+await app.Services.InitializeModulesAsync();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Apply EF migration at startup (no-op if the DB is not configured yet).
-await app.Services.InitializePersistenceAsync();
-
-// Phase 8.4b — hydrate runtime LLM/GitHub overrides from the persisted app_config table.
-await app.Services.HydrateRuntimeOverridesAsync();
-
-// Enable OpenAPI + Scalar UI in every env except Production (dev deploy runs the Staging env).
 if (!app.Environment.IsProduction())
 {
     app.MapOpenApi();
@@ -109,14 +65,14 @@ if (!app.Environment.IsProduction())
 app.MapGet("/", () => Results.Ok(new
 {
     name = "agentic-sdlc-net",
-    version = "0.4.0-phase4",
+    version = "0.5.0-modular",
     status = "pipeline-ready"
 }))
    .WithName("Root")
    .WithSummary("Service identity")
    .WithTags("Meta");
 
-app.MapGet("/health", (Microsoft.Extensions.Options.IOptions<AgenticSdlc.Domain.Llm.LlmOptions> llm) =>
+app.MapGet("/health", (IOptions<LlmOptions> llm) =>
 {
     var o = llm.Value;
     var claudeReady = !string.IsNullOrWhiteSpace(o.Claude.ApiKey);
@@ -138,15 +94,9 @@ app.MapGet("/health", (Microsoft.Extensions.Options.IOptions<AgenticSdlc.Domain.
    .WithSummary("Liveness probe + LLM provider readiness")
    .WithTags("Meta");
 
-app.MapAuthEndpoints();
-app.MapPipelineEndpoints();
-app.MapSettingsEndpoints();
-app.MapTenantEndpoints();
-app.MapHub<AgenticSdlc.Api.RemoteAgent.RemoteAgentHub>(AgenticSdlc.Api.RemoteAgent.RemoteAgentHub.Path);
+app.MapModuleEndpoints();
 
-// Settings "Test connection" — probe the configured provider with a minimal call. Uses the
-// Orchestrator agent's provider+model (a matched, cheap pair; Haiku by default). Returns ok/error
-// rather than throwing so the UI can show a clean result. Mock provider returns a stub → ok.
+// Settings "Test connection" — probe the configured provider with a minimal call.
 app.MapPost("/llm/test", async (ILlmClientFactory factory, IConfiguration cfg, CancellationToken ct) =>
 {
     var provider = cfg["Agents:Orchestrator:Provider"] ?? "Anthropic";

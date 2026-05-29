@@ -1,8 +1,7 @@
 // Tests OrchestrationRepository (CRUD) with EF Core InMemory.
-using AgenticSdlc.Application.Persistence;
-using AgenticSdlc.Infrastructure.Identity;
-using AgenticSdlc.Infrastructure.Persistence;
-using AgenticSdlc.Infrastructure.Persistence.Repositories;
+using AgenticSdlc.Modules.Pipeline.Persistence;
+using AgenticSdlc.Modules.Identity;
+using AgenticSdlc.Modules.Pipeline.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 using Xunit;
@@ -11,14 +10,14 @@ namespace AgenticSdlc.Tests.Persistence;
 
 public sealed class OrchestrationRepositoryTests
 {
-    private static DbContextOptions<AgenticSdlcDbContext> NewOptions() =>
-        new DbContextOptionsBuilder<AgenticSdlcDbContext>()
+    private static DbContextOptions<PipelineDbContext> NewOptions() =>
+        new DbContextOptionsBuilder<PipelineDbContext>()
             .UseInMemoryDatabase($"orch-{Guid.NewGuid()}")
             .Options;
 
     private static readonly DefaultTenantContext Tenant = new();
 
-    private static AgenticSdlcDbContext NewDb(DbContextOptions<AgenticSdlcDbContext> options) =>
+    private static PipelineDbContext NewDb(DbContextOptions<PipelineDbContext> options) =>
         new(options, Tenant);
 
     [Fact]

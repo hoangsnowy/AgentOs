@@ -5,8 +5,8 @@
 using System;
 using System.Threading.Tasks;
 using AgenticSdlc.Domain.Llm;
-using AgenticSdlc.Infrastructure.Llm;
-using AgenticSdlc.Infrastructure.RemoteAgent;
+using AgenticSdlc.Modules.Llm;
+using AgenticSdlc.Modules.RemoteAgent;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Xunit;

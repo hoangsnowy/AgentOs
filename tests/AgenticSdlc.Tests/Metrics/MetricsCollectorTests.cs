@@ -5,8 +5,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using AgenticSdlc.Application.Metrics;
-using AgenticSdlc.Infrastructure.Metrics;
+using AgenticSdlc.Modules.Pipeline.Metrics;
 using Shouldly;
 using Xunit;
 

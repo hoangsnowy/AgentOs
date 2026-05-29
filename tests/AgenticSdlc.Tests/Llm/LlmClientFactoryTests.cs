@@ -1,9 +1,10 @@
+using AgenticSdlc.SharedKernel.Modularity;
 // AgenticSdlc.Tests/Llm/LlmClientFactoryTests.cs
 // Sprint 1 — Unit tests for LlmClientFactory (resolve by provider name).
 
 using System;
 using AgenticSdlc.Domain.Llm;
-using AgenticSdlc.Infrastructure.Llm;
+using AgenticSdlc.Modules.Llm;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -30,7 +31,7 @@ public class LlmClientFactoryTests
                 ["Llm:AzureOpenAi:Endpoint"] = "https://test.openai.azure.com",
             })
             .Build();
-        services.AddLlmGateway(config);
+        services.AddModulesFromAssemblies(config, typeof(AgenticSdlc.Modules.Llm.LlmModule).Assembly, typeof(AgenticSdlc.Modules.AppConfig.AppConfigModule).Assembly);
         return services.BuildServiceProvider();
     }
 

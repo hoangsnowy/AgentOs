@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AgenticSdlc.Modules.Pipeline</RootNamespace>
+    <AssemblyName>AgenticSdlc.Modules.Pipeline</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgenticSdlc.Domain\AgenticSdlc.Domain.csproj" />
+    <ProjectReference Include="..\AgenticSdlc.SharedKernel\AgenticSdlc.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgenticSdlc.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-37gx-xxp4-5rgx" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-w3x6-4m5h-cxqf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" />
+    <PackageReference Include="Microsoft.Agents.AI" />
+    <PackageReference Include="Microsoft.Agents.AI.Workflows" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\schemas\requirement-spec.v1.json">
+      <LogicalName>AgenticSdlc.Modules.Pipeline.Schemas.requirement-spec.v1.json</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\docs\schemas\code-artifact.v1.json">
+      <LogicalName>AgenticSdlc.Modules.Pipeline.Schemas.code-artifact.v1.json</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\docs\schemas\test-artifact.v1.json">
+      <LogicalName>AgenticSdlc.Modules.Pipeline.Schemas.test-artifact.v1.json</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

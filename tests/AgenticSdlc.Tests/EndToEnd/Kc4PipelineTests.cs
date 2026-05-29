@@ -2,7 +2,7 @@
 // Sprint 4 — KC4 full pipeline bench n=10 (Requirement → Coding → Testing → QA).
 
 using System.Threading.Tasks;
-using AgenticSdlc.Application.Metrics;
+using AgenticSdlc.Modules.Pipeline.Metrics;
 using AgenticSdlc.Domain.Pipeline;
 using AgenticSdlc.Tests.Pipeline;
 using Shouldly;

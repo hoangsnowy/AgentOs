@@ -1,0 +1,132 @@
+// EF-backed, DataProtection-encrypted IAppConfigStore. Keyed by (TenantId, Key) so each tenant
+// owns its own LLM keys / GitHub PAT / etc. Singleton; per-op DI scope is created here and the
+// tenant id is read out of the OUTER request scope via the captured IServiceProvider. A 15-second
+// read cache keeps the LLM hot path off the DB on every call; cache keys include the tenant.
+
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using AgenticSdlc.Modules.AppConfig.Persistence;
+using AgenticSdlc.Modules.AppConfig.Persistence.Entities;
+using AgenticSdlc.SharedKernel.Identity;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+namespace AgenticSdlc.Modules.AppConfig;
+
+/// <summary>EF-backed, DataProtection-encrypted <see cref="IAppConfigStore"/>, scoped by tenant.</summary>
+public sealed class EfAppConfigStore : IAppConfigStore
+{
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(15);
+
+    private readonly IServiceProvider _rootProvider;
+    private readonly IDataProtector _protector;
+    private readonly ILogger<EfAppConfigStore> _logger;
+    private readonly ConcurrentDictionary<string, CacheEntry> _cache = new(StringComparer.Ordinal);
+
+    public EfAppConfigStore(IServiceProvider rootProvider, IDataProtectionProvider dp, ILogger<EfAppConfigStore> logger)
+    {
+        _rootProvider = rootProvider;
+        _protector = dp.CreateProtector("AgenticSdlc.AppConfig.v1");
+        _logger = logger;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<string?> GetAsync(string key, CancellationToken cancellationToken = default)
+    {
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
+        var cacheKey = CacheKey(tenantId, key);
+        if (_cache.TryGetValue(cacheKey, out var hit) && hit.FetchedUtc + CacheTtl > DateTime.UtcNow)
+        {
+            return hit.Value;
+        }
+
+        var db = scope.ServiceProvider.GetRequiredService<AppConfigDbContext>();
+        var row = await db.AppConfig.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Key == key, cancellationToken)
+            .ConfigureAwait(false);
+        var value = row is null ? null : TryUnprotect(row.EncryptedValue);
+        _cache[cacheKey] = new CacheEntry(value, DateTime.UtcNow);
+        return value;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask SetAsync(string key, string value, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(value);
+
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
+        var db = scope.ServiceProvider.GetRequiredService<AppConfigDbContext>();
+        var cipher = _protector.Protect(value);
+        var row = await db.AppConfig
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Key == key, cancellationToken)
+            .ConfigureAwait(false);
+        if (row is null)
+        {
+            db.AppConfig.Add(new AppConfigEntity { TenantId = tenantId, Key = key, EncryptedValue = cipher, UpdatedAtUtc = DateTime.UtcNow });
+        }
+        else
+        {
+            row.EncryptedValue = cipher;
+            row.UpdatedAtUtc = DateTime.UtcNow;
+        }
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _cache[CacheKey(tenantId, key)] = new CacheEntry(value, DateTime.UtcNow);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DeleteAsync(string key, CancellationToken cancellationToken = default)
+    {
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
+        var db = scope.ServiceProvider.GetRequiredService<AppConfigDbContext>();
+        var row = await db.AppConfig
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Key == key, cancellationToken)
+            .ConfigureAwait(false);
+        if (row is not null)
+        {
+            db.AppConfig.Remove(row);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        _cache.TryRemove(CacheKey(tenantId, key), out _);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
+    {
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
+        var db = scope.ServiceProvider.GetRequiredService<AppConfigDbContext>();
+        var keys = await db.AppConfig.AsNoTracking()
+            .Where(x => x.TenantId == tenantId && x.Key.StartsWith(prefix))
+            .Select(x => x.Key)
+            .OrderBy(k => k)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return keys;
+    }
+
+    private static string CacheKey(string tenantId, string key) => $"{tenantId}:{key}";
+
+    private string? TryUnprotect(string cipher)
+    {
+        try
+        {
+            return _protector.Unprotect(cipher);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to decrypt an app_config value; treating as unset");
+            return null;
+        }
+    }
+
+    private readonly record struct CacheEntry(string? Value, DateTime FetchedUtc);
+}

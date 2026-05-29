@@ -3,13 +3,12 @@
 // Verifies KC4 (the 5-agent pipeline flow + QA loop) runs correctly from UserStory → PipelineResult.
 
 using System.Threading.Tasks;
-using AgenticSdlc.Application.Agents;
-using AgenticSdlc.Application.Pipeline;
+using AgenticSdlc.Modules.Pipeline.Agents;
+using AgenticSdlc.Modules.Pipeline.Pipeline;
 using AgenticSdlc.Domain.Llm;
 using AgenticSdlc.Domain.Pipeline;
-using AgenticSdlc.Infrastructure.Agents;
-using AgenticSdlc.Infrastructure.Llm;
-using AgenticSdlc.Infrastructure.Orchestration;
+using AgenticSdlc.Modules.Llm;
+using AgenticSdlc.Modules.Pipeline.Orchestration;
 using AgenticSdlc.Tests.Agents;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

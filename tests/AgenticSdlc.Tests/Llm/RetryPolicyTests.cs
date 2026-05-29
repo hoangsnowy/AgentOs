@@ -6,7 +6,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using AgenticSdlc.Domain.Llm;
-using AgenticSdlc.Infrastructure.Llm;
+using AgenticSdlc.Modules.Llm;
 using Shouldly;
 using Xunit;
 

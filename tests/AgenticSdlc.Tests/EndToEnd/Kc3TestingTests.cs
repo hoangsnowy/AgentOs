@@ -3,7 +3,7 @@
 
 using System.Threading;
 using System.Threading.Tasks;
-using AgenticSdlc.Application.Metrics;
+using AgenticSdlc.Modules.Pipeline.Metrics;
 using AgenticSdlc.Domain;
 using AgenticSdlc.Domain.Code;
 using AgenticSdlc.Domain.Llm;

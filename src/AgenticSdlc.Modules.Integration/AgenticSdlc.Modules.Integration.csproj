@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AgenticSdlc.Modules.Integration</RootNamespace>
+    <AssemblyName>AgenticSdlc.Modules.Integration</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgenticSdlc.Domain\AgenticSdlc.Domain.csproj" />
+    <ProjectReference Include="..\AgenticSdlc.SharedKernel\AgenticSdlc.SharedKernel.csproj" />
+    <ProjectReference Include="..\AgenticSdlc.Modules.Llm\AgenticSdlc.Modules.Llm.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgenticSdlc.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Octokit" />
+  </ItemGroup>
+
+</Project>

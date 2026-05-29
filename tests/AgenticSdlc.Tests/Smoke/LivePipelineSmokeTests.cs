@@ -1,3 +1,4 @@
+using AgenticSdlc.SharedKernel.Modularity;
 // AgenticSdlc.Tests/Smoke/LivePipelineSmokeTests.cs
 // Sprint 6 — live end-to-end pipeline (Requirement → Coding → Testing → QA) calling the real LLM.
 // Skipped by default. Budget guard: max 5 LLM calls, max $0.50.
@@ -9,13 +10,11 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using AgenticSdlc.Application.Agents;
-using AgenticSdlc.Application.Metrics;
+using AgenticSdlc.Modules.Pipeline.Agents;
+using AgenticSdlc.Modules.Pipeline.Metrics;
 using AgenticSdlc.Domain.Pipeline;
-using AgenticSdlc.Infrastructure.Agents;
-using AgenticSdlc.Infrastructure.Llm;
-using AgenticSdlc.Infrastructure.Metrics;
-using AgenticSdlc.Infrastructure.Validation;
+using AgenticSdlc.Modules.Llm;
+using AgenticSdlc.Modules.Pipeline.Validation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -50,7 +49,7 @@ public class LivePipelineSmokeTests
         var sc = new ServiceCollection();
         sc.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
         sc.AddSingleton<IConfiguration>(cfg);
-        sc.AddLlmGateway(cfg);
+        sc.AddModulesFromAssemblies(cfg, typeof(AgenticSdlc.Modules.Llm.LlmModule).Assembly, typeof(AgenticSdlc.Modules.AppConfig.AppConfigModule).Assembly);
         sc.AddValidation();
         sc.AddInMemoryMetrics();
         sc.AddAgents(cfg);

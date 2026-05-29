@@ -1,15 +1,14 @@
 // Tests PipelineRunRepository with EF Core InMemory (the jsonb column type is ignored — enough to verify the repo logic).
-using AgenticSdlc.Application.Metrics;
-using AgenticSdlc.Application.Persistence;
+using AgenticSdlc.Modules.Pipeline.Metrics;
+using AgenticSdlc.Modules.Pipeline.Persistence;
 using AgenticSdlc.Domain;
 using AgenticSdlc.Domain.Code;
 using AgenticSdlc.Domain.Pipeline;
 using AgenticSdlc.Domain.Qa;
 using AgenticSdlc.Domain.Requirements;
 using AgenticSdlc.Domain.Testing;
-using AgenticSdlc.Infrastructure.Identity;
-using AgenticSdlc.Infrastructure.Persistence;
-using AgenticSdlc.Infrastructure.Persistence.Repositories;
+using AgenticSdlc.Modules.Identity;
+using AgenticSdlc.Modules.Pipeline.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 using Xunit;
@@ -18,14 +17,14 @@ namespace AgenticSdlc.Tests.Persistence;
 
 public sealed class PipelineRunRepositoryTests
 {
-    private static DbContextOptions<AgenticSdlcDbContext> NewOptions() =>
-        new DbContextOptionsBuilder<AgenticSdlcDbContext>()
+    private static DbContextOptions<PipelineDbContext> NewOptions() =>
+        new DbContextOptionsBuilder<PipelineDbContext>()
             .UseInMemoryDatabase($"runs-{Guid.NewGuid()}")
             .Options;
 
     private static readonly DefaultTenantContext Tenant = new();
 
-    private static AgenticSdlcDbContext NewDb(DbContextOptions<AgenticSdlcDbContext> options) =>
+    private static PipelineDbContext NewDb(DbContextOptions<PipelineDbContext> options) =>
         new(options, Tenant);
 
     [Fact]

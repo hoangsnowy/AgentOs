@@ -1,0 +1,79 @@
+// EF Core DbContext for the Pipeline module. Owns 3 tables under schema `pipeline`:
+// pipeline_runs (run + artifact jsonb), run_metrics (1 LLM call), orchestrations (Agent Studio
+// state). Every entity carries a TenantId column + a global query filter (reads ITenantContext)
+// so each request only ever sees rows owned by its own tenant.
+
+using AgenticSdlc.Modules.Pipeline.Persistence.Entities;
+using AgenticSdlc.SharedKernel.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace AgenticSdlc.Modules.Pipeline.Persistence;
+
+internal sealed class PipelineDbContext : DbContext
+{
+    private readonly ITenantContext _tenant;
+
+    public PipelineDbContext(DbContextOptions<PipelineDbContext> options, ITenantContext tenant)
+        : base(options)
+    {
+        _tenant = tenant;
+    }
+
+    public DbSet<PipelineRunEntity> PipelineRuns => Set<PipelineRunEntity>();
+
+    public DbSet<RunMetricEntity> RunMetrics => Set<RunMetricEntity>();
+
+    public DbSet<OrchestrationEntity> Orchestrations => Set<OrchestrationEntity>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
+        modelBuilder.HasDefaultSchema("pipeline");
+
+        modelBuilder.Entity<PipelineRunEntity>(e =>
+        {
+            e.ToTable("pipeline_runs");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TenantId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.UserStoryText).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+            e.Property(x => x.TotalCostUsd).HasPrecision(18, 6);
+            e.Property(x => x.ResultJson).HasColumnType("jsonb").IsRequired();
+            e.HasIndex(x => x.CreatedAtUtc);
+            e.HasIndex(x => x.TenantId);
+            e.HasMany(x => x.Metrics)
+             .WithOne()
+             .HasForeignKey(m => m.RunId)
+             .OnDelete(DeleteBehavior.Cascade);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        modelBuilder.Entity<RunMetricEntity>(e =>
+        {
+            e.ToTable("run_metrics");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TenantId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.KcId).HasMaxLength(32).IsRequired();
+            e.Property(x => x.AgentName).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Model).HasMaxLength(128).IsRequired();
+            e.Property(x => x.Provider).HasMaxLength(64).IsRequired();
+            e.Property(x => x.CostUsd).HasPrecision(18, 6);
+            e.HasIndex(x => x.RunId);
+            e.HasIndex(x => x.TenantId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        modelBuilder.Entity<OrchestrationEntity>(e =>
+        {
+            e.ToTable("orchestrations");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(128);
+            e.Property(x => x.TenantId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(256).IsRequired();
+            e.Property(x => x.DefinitionJson).HasColumnType("jsonb").IsRequired();
+            e.HasIndex(x => x.TenantId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+    }
+}

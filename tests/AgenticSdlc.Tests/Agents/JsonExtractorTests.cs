@@ -2,7 +2,7 @@
 // Phase 4 — JsonExtractor handles 3 forms: direct, fenced, prose-wrapped.
 
 using AgenticSdlc.Domain.Llm;
-using AgenticSdlc.Infrastructure.Agents;
+using AgenticSdlc.Modules.Pipeline.Agents;
 using Shouldly;
 using Xunit;
 

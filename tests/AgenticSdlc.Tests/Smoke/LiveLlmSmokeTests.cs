@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AgenticSdlc.Domain.Llm;
-using AgenticSdlc.Infrastructure.Llm;
+using AgenticSdlc.Modules.Llm;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Xunit;

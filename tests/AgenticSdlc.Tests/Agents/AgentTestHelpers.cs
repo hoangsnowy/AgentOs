@@ -2,13 +2,11 @@
 // Phase 4 — Helpers to build an LlmResponse stub + AgentsOptions with a single agent.
 
 using System;
-using AgenticSdlc.Application.Agents;
-using AgenticSdlc.Application.Metrics;
-using AgenticSdlc.Application.Validation;
+using AgenticSdlc.Modules.Pipeline.Agents;
+using AgenticSdlc.Modules.Pipeline.Metrics;
+using AgenticSdlc.Modules.Pipeline.Validation;
 using AgenticSdlc.Domain.Llm;
-using AgenticSdlc.Infrastructure.Llm;
-using AgenticSdlc.Infrastructure.Metrics;
-using AgenticSdlc.Infrastructure.Validation;
+using AgenticSdlc.Modules.Llm;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NSubstitute;

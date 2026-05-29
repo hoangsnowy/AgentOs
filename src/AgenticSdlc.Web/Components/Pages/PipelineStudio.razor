@@ -1,10 +1,10 @@
-@using AgenticSdlc.Application.Pipeline
+@using AgenticSdlc.Modules.Pipeline.Pipeline
 @using AgenticSdlc.Domain.Llm
 @inject IPipelineClient Pipeline
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
-@inject AgenticSdlc.Application.Integration.IGitHubPrService GitHubPr
-@inject AgenticSdlc.Application.Integration.IBuildVerifier BuildVerifier
+@inject AgenticSdlc.Modules.Integration.IGitHubPrService GitHubPr
+@inject AgenticSdlc.Modules.Integration.IBuildVerifier BuildVerifier
 @implements IDisposable
 
 <PageTitle>Pipeline — AgentOS</PageTitle>
@@ -377,7 +377,7 @@
 
     // Build verify state
     private bool _verifying;
-    private AgenticSdlc.Application.Integration.BuildVerifyResult? _buildResult;
+    private AgenticSdlc.Modules.Integration.BuildVerifyResult? _buildResult;
     private string? _buildError;
 
     private async Task VerifyBuildAsync()

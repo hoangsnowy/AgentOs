@@ -1,7 +1,7 @@
 // AgenticSdlc.Tests/Llm/CostCalculatorTests.cs
 // Sprint 1 — Unit tests for pricing of the 4 known models.
 
-using AgenticSdlc.Infrastructure.Llm;
+using AgenticSdlc.Modules.Llm;
 using Shouldly;
 using Xunit;
 

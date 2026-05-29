@@ -6,7 +6,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using AgenticSdlc.Application.Auth;
+using AgenticSdlc.SharedKernel.Identity;
 
 namespace AgenticSdlc.Web.Services;
 

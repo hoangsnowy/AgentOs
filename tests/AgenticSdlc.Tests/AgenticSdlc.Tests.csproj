@@ -5,33 +5,29 @@
     <AssemblyName>AgenticSdlc.Tests</AssemblyName>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <!-- Test method names follow the MethodName_StateUnderTest_ExpectedBehavior convention
-         (Microsoft's recommendation for unit tests) — naturally contain underscores.
-         Disable CA1707 for the test project. -->
     <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AgenticSdlc.Domain\AgenticSdlc.Domain.csproj" />
-    <ProjectReference Include="..\..\src\AgenticSdlc.Application\AgenticSdlc.Application.csproj" />
-    <ProjectReference Include="..\..\src\AgenticSdlc.Infrastructure\AgenticSdlc.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\AgenticSdlc.SharedKernel\AgenticSdlc.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\src\AgenticSdlc.Modules.AppConfig\AgenticSdlc.Modules.AppConfig.csproj" />
+    <ProjectReference Include="..\..\src\AgenticSdlc.Modules.Llm\AgenticSdlc.Modules.Llm.csproj" />
+    <ProjectReference Include="..\..\src\AgenticSdlc.Modules.Pipeline\AgenticSdlc.Modules.Pipeline.csproj" />
+    <ProjectReference Include="..\..\src\AgenticSdlc.Modules.Identity\AgenticSdlc.Modules.Identity.csproj" />
+    <ProjectReference Include="..\..\src\AgenticSdlc.Modules.Tenants\AgenticSdlc.Modules.Tenants.csproj" />
+    <ProjectReference Include="..\..\src\AgenticSdlc.Modules.Integration\AgenticSdlc.Modules.Integration.csproj" />
+    <ProjectReference Include="..\..\src\AgenticSdlc.Modules.RemoteAgent\AgenticSdlc.Modules.RemoteAgent.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Test runner -->
     <PackageReference Include="JsonSchema.Net" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
-
-    <!-- Mocking + assertions: use Shouldly (OSS) instead of FluentAssertions v8 (now commercial) -->
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Shouldly" />
-
-    <!-- Persistence test: EF Core InMemory (the jsonb column type is ignored — enough to test repo logic) -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
-
-    <!-- Coverage -->
     <PackageReference Include="coverlet.collector">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

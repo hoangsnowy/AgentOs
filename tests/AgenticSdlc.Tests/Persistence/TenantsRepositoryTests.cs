@@ -1,10 +1,11 @@
 // Smoke tests for the tenant registry — the table has no global filter, so admins see every
 // tenant across the realm.
 
-using AgenticSdlc.Application.Identity;
-using AgenticSdlc.Infrastructure.Identity;
-using AgenticSdlc.Infrastructure.Persistence;
-using AgenticSdlc.Infrastructure.Persistence.Repositories;
+using AgenticSdlc.SharedKernel.Identity;
+using AgenticSdlc.Modules.Identity;
+using AgenticSdlc.Modules.Tenants;
+using AgenticSdlc.Modules.Tenants.Persistence;
+using AgenticSdlc.Modules.Tenants.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 using Xunit;
@@ -13,16 +14,16 @@ namespace AgenticSdlc.Tests.Persistence;
 
 public sealed class TenantsRepositoryTests
 {
-    private static DbContextOptions<AgenticSdlcDbContext> NewOptions() =>
-        new DbContextOptionsBuilder<AgenticSdlcDbContext>()
+    private static DbContextOptions<TenantsDbContext> NewOptions() =>
+        new DbContextOptionsBuilder<TenantsDbContext>()
             .UseInMemoryDatabase($"tenants-{Guid.NewGuid()}")
             .Options;
 
     private static readonly DefaultTenantContext Tenant = new();
     private static readonly string[] ExpectedIds = ["acme", "globex"];
 
-    private static AgenticSdlcDbContext NewDb(DbContextOptions<AgenticSdlcDbContext> options) =>
-        new(options, Tenant);
+    private static TenantsDbContext NewDb(DbContextOptions<TenantsDbContext> options) =>
+        new(options);
 
     [Fact]
     public async Task AddAsync_Then_ListAsync_ReturnsRegisteredTenants()

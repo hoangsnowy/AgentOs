@@ -1,8 +1,7 @@
 // AgenticSdlc.Tests/Validation/JsonSchemaValidatorTests.cs
 // Sprint 3 — 3 pass + 3 fail per schema = 18 tests for JSON Schema validation.
 
-using AgenticSdlc.Application.Validation;
-using AgenticSdlc.Infrastructure.Validation;
+using AgenticSdlc.Modules.Pipeline.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;

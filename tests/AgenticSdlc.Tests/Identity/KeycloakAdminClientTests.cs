@@ -3,12 +3,13 @@
 // action are issued in the right order with the bearer header attached.
 
 using System.Net;
+using AgenticSdlc.Modules.Tenants.Keycloak;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using AgenticSdlc.Infrastructure.Identity;
+using AgenticSdlc.Modules.Identity;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Shouldly;

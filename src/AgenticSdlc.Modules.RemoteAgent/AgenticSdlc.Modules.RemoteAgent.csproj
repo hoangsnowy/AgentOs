@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AgenticSdlc.Modules.RemoteAgent</RootNamespace>
+    <AssemblyName>AgenticSdlc.Modules.RemoteAgent</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgenticSdlc.Domain\AgenticSdlc.Domain.csproj" />
+    <ProjectReference Include="..\AgenticSdlc.SharedKernel\AgenticSdlc.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgenticSdlc.Tests" />
+  </ItemGroup>
+
+</Project>

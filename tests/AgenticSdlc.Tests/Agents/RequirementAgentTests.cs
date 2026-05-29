@@ -3,10 +3,9 @@
 
 using System.Threading;
 using System.Threading.Tasks;
-using AgenticSdlc.Application.Agents;
+using AgenticSdlc.Modules.Pipeline.Agents;
 using AgenticSdlc.Domain.Llm;
 using AgenticSdlc.Domain.Pipeline;
-using AgenticSdlc.Infrastructure.Agents;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
