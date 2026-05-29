@@ -24,6 +24,14 @@
         </span>
         <span class="tb-sep"></span>
 
+        <button class="tb-trigger tb-icon-btn" @onclick="ToggleTheme"
+                title="@(_theme == "dark" ? "Switch to light theme" : "Switch to dark theme")"
+                aria-label="Toggle color theme">
+            <Icon Name="@(_theme == "dark" ? "sun" : "moon")" Size="15" />
+        </button>
+
+        <span class="tb-sep"></span>
+
         <button class="tb-trigger tb-clock @(_clockOpen ? "open" : "")" title="@_today"
                 @onclick="ToggleClock" @onclick:stopPropagation="true">
             @_now
@@ -72,6 +80,7 @@
 
     private bool _userOpen;
     private bool _clockOpen;
+    private string _theme = "light";
 
     private System.Threading.Timer? _timer;
 
@@ -104,10 +113,20 @@
             try
             {
                 _user = await JS.InvokeAsync<string?>("localStorage.getItem", "agentic-signed-in");
+                _theme = await JS.InvokeAsync<string>("agenticTheme.getTheme");
                 StateHasChanged();
             }
             catch { }
         }
+    }
+
+    private async Task ToggleTheme()
+    {
+        try
+        {
+            _theme = await JS.InvokeAsync<string>("agenticTheme.toggleAppearance");
+        }
+        catch { /* JS unavailable (prerender) */ }
     }
 
     private void UpdateClock()

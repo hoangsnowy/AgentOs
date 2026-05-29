@@ -973,6 +973,13 @@ select {
     border-radius: var(--r-4);
     text-decoration: none;
     color: inherit;
+    /* Reset the UA <button> chrome — otherwise the default light grey leaks
+       through and white desktop text becomes unreadable in dark theme. */
+    background: transparent;
+    border: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    font-family: inherit;
     transition: background .12s, transform .12s;
     cursor: pointer;
 }
@@ -1023,19 +1030,34 @@ select {
 .login-overlay {
     position: fixed; inset: 0; z-index: 99999;
     display: grid; place-items: center;
-    background: rgba(10,22,40,.55);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    /* Lock screen: heavily frost the desktop behind, independent of the
+       glass slider (which defaults to 0). KDE / macOS lock-screen feel. */
+    background: rgba(10,22,40,.62);
+    backdrop-filter: blur(28px) saturate(120%) brightness(.92);
+    -webkit-backdrop-filter: blur(28px) saturate(120%) brightness(.92);
+    animation: login-fade var(--duration-slow) var(--ease-standard);
+}
+@keyframes login-fade { from { opacity: 0; } to { opacity: 1; } }
+:root[data-theme="dark"] .login-overlay {
+    background: rgba(4,8,14,.70);
+    backdrop-filter: blur(28px) saturate(110%) brightness(.78);
+    -webkit-backdrop-filter: blur(28px) saturate(110%) brightness(.78);
 }
 .login-card {
     width: 340px;
-    background: rgba(255,255,255,.85);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    border: 1px solid rgba(255,255,255,.50);
+    background: rgba(255,255,255,.92);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255,255,255,.55);
     border-radius: 14px;
     box-shadow: 0 30px 80px rgba(0,0,0,.50);
     padding: 22px 22px 18px;
+    animation: login-rise var(--duration-base) var(--ease-emphasized);
+}
+@keyframes login-rise { from { transform: translateY(10px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
+:root[data-theme="dark"] .login-card {
+    background: rgba(35,38,41,.92);
+    border-color: rgba(255,255,255,.10);
 }
 .login-brand {
     display: flex; align-items: center; gap: 12px;
@@ -1609,6 +1631,8 @@ select {
     opacity: .85;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     letter-spacing: .01em;
+    /* Label only — never intercept clicks meant for the buttons beside it. */
+    pointer-events: none;
 }
 .topbar .tb-logo {
     width: 20px; height: 20px;
@@ -1921,6 +1945,7 @@ select {
 .tb-trigger:hover { background: rgba(255,255,255,.10); }
 .tb-trigger.open  { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.22); }
 .tb-caret { font-size: 10px; opacity: .70; }
+.tb-icon-btn { padding: 4px 6px; line-height: 0; }
 
 /* =================================================================
    Prefs — macOS System Settings / GNOME-style category sidebar

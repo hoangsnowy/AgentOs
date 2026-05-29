@@ -31,8 +31,26 @@ window.agenticTheme = {
         return p;
     },
     toggleTheme: function () {
-        var next = this.getTheme() === 'light' ? 'dark' : 'light';
-        return this.applyTheme(next);
+        // Use the explicit reference, not `this` — Blazor's JS interop invokes this
+        // by dotted path without preserving the `agenticTheme` receiver.
+        var T = window.agenticTheme;
+        var next = T.getTheme() === 'light' ? 'dark' : 'light';
+        return T.applyTheme(next);
+    },
+
+    // One-click appearance toggle for the TopBar. Flips the theme and, when the
+    // wallpaper is one of the paired enterprise variants, flips it to match so the
+    // desktop stays coherent. Custom wallpapers (aurora/midnight/sunset) are left
+    // as the user chose them. Returns the new theme.
+    toggleAppearance: function () {
+        var T = window.agenticTheme;   // not `this` — see toggleTheme note.
+        var next = T.getTheme() === 'light' ? 'dark' : 'light';
+        T.applyTheme(next);
+        var w = T.getWallpaper();
+        if (w === 'enterprise-light' || w === 'enterprise-dark') {
+            T.applyWallpaper(next === 'dark' ? 'enterprise-dark' : 'enterprise-light');
+        }
+        return next;
     },
 
     // Back-compat with old call sites that used agenticTheme.apply / agenticTheme.toggle / agenticTheme.get
