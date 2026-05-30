@@ -108,17 +108,14 @@ public sealed class WorkspacesTests
         Should.Throw<InvalidOperationException>(() => resolver.Resolve(SourceProviderKind.AzureDevOps));
     }
 
-    // ---- AzureDevOpsSourceProvider: deterministic input guards (no network) ----
-    // The provider is live via the Azure DevOps SDK; behavior against a real org is covered by the
-    // AppHost smoke, not unit tests. These assert the cheap pre-flight guards that fail before any
-    // network call, so the suite stays fast + offline.
+    // ---- AzureDevOpsSourceProvider: wired but deferred (graceful + honest) ----
 
     [Fact]
-    public async Task AzureDevOps_Validate_WithoutProject_FailsWithMessage_NoNetwork()
+    public async Task AzureDevOps_Validate_FailsGracefullyWithMessage()
     {
         var ado = new AzureDevOpsSourceProvider();
         var d = new WorkspaceDescriptor(
-            Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "org", "repo", Project: null, "main", "pat");
+            Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "org", "repo", "proj", "main", "pat");
 
         var v = await ado.ValidateAsync(d, CancellationToken.None);
 
@@ -127,22 +124,15 @@ public sealed class WorkspacesTests
     }
 
     [Fact]
-    public async Task AzureDevOps_ListRepositories_WithoutOrg_ThrowsArgument()
+    public async Task AzureDevOps_ListAndReadContext_ThrowNotSupported()
     {
         var ado = new AzureDevOpsSourceProvider();
-        var creds = new ConnectionCredentials(SourceProviderKind.AzureDevOps, "pat", Owner: null);
-
-        await Should.ThrowAsync<ArgumentException>(() => ado.ListRepositoriesAsync(creds, CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task AzureDevOps_ReadRepoContext_WithoutProject_ThrowsInvalidOperation()
-    {
-        var ado = new AzureDevOpsSourceProvider();
+        var creds = new ConnectionCredentials(SourceProviderKind.AzureDevOps, "pat");
         var d = new WorkspaceDescriptor(
-            Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "org", "repo", Project: null, "main", "pat");
+            Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "org", "repo", "proj", "main", "pat");
 
-        await Should.ThrowAsync<InvalidOperationException>(() => ado.ReadRepoContextAsync(d, CancellationToken.None));
+        await Should.ThrowAsync<NotSupportedException>(() => ado.ListRepositoriesAsync(creds, CancellationToken.None));
+        await Should.ThrowAsync<NotSupportedException>(() => ado.ReadRepoContextAsync(d, CancellationToken.None));
     }
 
     [Fact]
