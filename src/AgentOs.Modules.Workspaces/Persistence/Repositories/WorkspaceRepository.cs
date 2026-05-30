@@ -59,6 +59,13 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
             .ConfigureAwait(false);
     }
 
+    public async Task AddForTenantAsync(WorkspaceEntity workspace, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        _db.Workspaces.Add(workspace);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
     public async Task<bool> RemoveAsync(Guid id, CancellationToken ct = default)
     {
         var row = await _db.Workspaces.FirstOrDefaultAsync(w => w.Id == id, ct).ConfigureAwait(false);

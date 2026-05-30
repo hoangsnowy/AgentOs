@@ -26,6 +26,9 @@ public sealed class WorkspacesModule : IModule, IEndpointModule, IInitializableM
 
         services.TryAddSingleton(TimeProvider.System);
 
+        // The connect flow is shared by the HTTP endpoint and the desktop Spine app (tenant-explicit).
+        services.AddScoped<IWorkspaceConnector, WorkspaceConnector>();
+
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         if (!string.IsNullOrWhiteSpace(connectionString))
         {

@@ -8,7 +8,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -53,66 +52,23 @@ internal static class WorkspaceEndpoints
 
     private static async Task<IResult> ConnectAsync(
         ConnectWorkspaceRequest request,
-        IWorkspaceRepository repo,
-        ISourceProviderResolver providers,
-        IAppConfigStore credentials,
+        IWorkspaceConnector connector,
         ITenantContext tenant,
-        TimeProvider clock,
         CancellationToken ct)
     {
-        if (request is null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.AccessToken))
+        if (request is null)
         {
-            return Results.BadRequest("Name and accessToken are required.");
-        }
-        if (!providers.TryResolve(request.Kind, out var provider) || provider is null)
-        {
-            return Results.BadRequest($"No source provider registered for '{request.Kind}'.");
+            return Results.BadRequest("A request body is required.");
         }
 
-        var id = Guid.NewGuid();
-        var requestedBranch = string.IsNullOrWhiteSpace(request.DefaultBranch) ? "main" : request.DefaultBranch!;
-        var descriptor = new WorkspaceDescriptor(
-            id, tenant.TenantId, request.Kind, request.Owner, request.Repo,
-            request.Project, requestedBranch, request.AccessToken, request.Host);
+        var input = new WorkspaceConnectInput(
+            request.Name, request.Kind, request.Owner, request.Repo,
+            request.Project, request.DefaultBranch, request.Host, request.AccessToken);
+        var result = await connector.ConnectAsync(tenant.TenantId, tenant.UserId, input, ct).ConfigureAwait(false);
 
-        try
-        {
-            descriptor.Validate();
-        }
-        catch (ArgumentException ex)
-        {
-            return Results.BadRequest(ex.Message);
-        }
-
-        var validation = await provider.ValidateAsync(descriptor, ct).ConfigureAwait(false);
-        if (!validation.Ok)
-        {
-            return Results.BadRequest(validation.Error ?? "Could not reach the repository with the supplied credentials.");
-        }
-
-        // Store the secret encrypted, keyed by the workspace; the row keeps only the reference.
-        var credentialRef = CredentialKey(id);
-        await credentials.SetAsync(credentialRef, request.AccessToken, ct).ConfigureAwait(false);
-
-        var entity = new WorkspaceEntity
-        {
-            Id = id,
-            TenantId = tenant.TenantId,
-            Name = request.Name,
-            Kind = request.Kind,
-            Owner = request.Owner,
-            Repo = request.Repo,
-            Project = request.Project,
-            DefaultBranch = validation.DefaultBranch ?? requestedBranch,
-            RemoteUrl = BuildRemoteUrl(request.Kind, request.Owner, request.Project, request.Repo, request.Host),
-            CredentialRef = credentialRef,
-            CreatedByUserId = tenant.UserId,
-            CreatedAtUtc = clock.GetUtcNow(),
-            Status = "Connected",
-        };
-        await repo.AddAsync(entity, ct).ConfigureAwait(false);
-
-        return Results.Created($"/workspaces/{id}", WorkspaceDto.From(entity));
+        return result.Ok && result.Workspace is not null
+            ? Results.Created($"/workspaces/{result.Workspace.Id}", WorkspaceDto.From(result.Workspace))
+            : Results.BadRequest(result.Error ?? "Could not connect the workspace.");
     }
 
     private static async Task<IResult> RemoveAsync(
@@ -179,20 +135,6 @@ internal static class WorkspaceEndpoints
             row.Project, row.DefaultBranch, token, null);
         var context = await provider.ReadRepoContextAsync(descriptor, ct).ConfigureAwait(false);
         return Results.Ok(context);
-    }
-
-    private static string CredentialKey(Guid id) =>
-        string.Create(CultureInfo.InvariantCulture, $"workspace/{id:N}/token");
-
-    private static string BuildRemoteUrl(SourceProviderKind kind, string owner, string? project, string repo, string? host)
-    {
-        var baseHost = string.IsNullOrWhiteSpace(host)
-            ? (kind == SourceProviderKind.AzureDevOps ? "https://dev.azure.com" : "https://github.com")
-            : host!.TrimEnd('/');
-
-        return kind == SourceProviderKind.AzureDevOps
-            ? string.Create(CultureInfo.InvariantCulture, $"{baseHost}/{owner}/{project}/_git/{repo}")
-            : string.Create(CultureInfo.InvariantCulture, $"{baseHost}/{owner}/{repo}");
     }
 }
 

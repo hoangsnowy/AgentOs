@@ -6,11 +6,14 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using AgentOs.Domain.Sessions
+@using AgentOs.Domain.Workspaces
+@using AgentOs.Modules.Workspaces
 @using AgentOs.Modules.Workspaces.Persistence
 @using AgentOs.Modules.Workspaces.Persistence.Entities
 @using AgentOs.Modules.Sessions.Persistence
 @using AgentOs.Modules.Sessions.Persistence.Entities
 @inject IWorkspaceRepository Workspaces
+@inject IWorkspaceConnector Connector
 @inject IRunnerRepository Runners
 @inject ISessionRepository Sessions
 @inject IRunnerPairingService Pairing
@@ -45,12 +48,45 @@
     }
     else if (_tab == Tab.Workspaces)
     {
+        <section class="admin-section">
+            <h2>Connect a repository</h2>
+            <div class="spine-form">
+                <Field Label="Provider">
+                    <select class="prefs-select" @bind="_wsKind">
+                        <option value="@SourceProviderKind.GitHub">GitHub</option>
+                        <option value="@SourceProviderKind.AzureDevOps">Azure DevOps</option>
+                    </select>
+                </Field>
+                <Field Label="Name">
+                    <input @bind="_wsName" placeholder="my-service" />
+                </Field>
+                <Field Label="@(_wsKind == SourceProviderKind.AzureDevOps ? "Organization" : "Owner")">
+                    <input @bind="_wsOwner" placeholder="octocat" />
+                </Field>
+                <Field Label="Repository">
+                    <input @bind="_wsRepo" placeholder="hello-world" />
+                </Field>
+                @if (_wsKind == SourceProviderKind.AzureDevOps)
+                {
+                    <Field Label="Project">
+                        <input @bind="_wsProject" placeholder="MyProject" />
+                    </Field>
+                }
+                <Field Label="Default branch">
+                    <input @bind="_wsBranch" placeholder="main" />
+                </Field>
+                <Field Label="Access token (PAT)">
+                    <input type="password" @bind="_wsToken" placeholder="ghp_… / Azure PAT" autocomplete="off" />
+                </Field>
+                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="ConnectWorkspace" Disabled="_busy">
+                    @(_busy ? "Connecting…" : "Connect")
+                </Btn>
+            </div>
+            <p class="muted spine-form-hint">The token is validated against the provider, then stored encrypted —
+                it is never shown again or kept on the workspace row.</p>
+        </section>
+
         @if (_workspaces is null) { <Spinner /> }
-        else if (_workspaces.Count == 0)
-        {
-            <div class="muted spine-empty">No workspaces connected. Connect a GitHub / Azure DevOps repo via the API
-                (<code>POST /workspaces</code>) — desktop connect lands next.</div>
-        }
         else
         {
             <table class="admin-tbl">
@@ -66,6 +102,7 @@
                             <td><Badge>@w.Status</Badge></td>
                         </tr>
                     }
+                    @if (_workspaces.Count == 0) { <tr><td colspan="5" class="muted">No workspaces yet — connect one above.</td></tr> }
                 </tbody>
             </table>
         }
@@ -201,6 +238,14 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
 
     private string _sessionWorkspaceId = "";
     private string _sessionTitle = "";
+
+    private SourceProviderKind _wsKind = SourceProviderKind.GitHub;
+    private string _wsName = "";
+    private string _wsOwner = "";
+    private string _wsRepo = "";
+    private string _wsProject = "";
+    private string _wsBranch = "";
+    private string _wsToken = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -349,6 +394,45 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         finally
         {
             _busyId = null;
+        }
+    }
+
+    private async Task ConnectWorkspace()
+    {
+        if (_busy) { return; }
+        if (string.IsNullOrWhiteSpace(_wsName) || string.IsNullOrWhiteSpace(_wsOwner)
+            || string.IsNullOrWhiteSpace(_wsRepo) || string.IsNullOrWhiteSpace(_wsToken))
+        {
+            Toasts.Show("Spine", "Name, owner, repository and token are required.", ToastKind.Err);
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var input = new WorkspaceConnectInput(
+                _wsName.Trim(), _wsKind, _wsOwner.Trim(), _wsRepo.Trim(),
+                string.IsNullOrWhiteSpace(_wsProject) ? null : _wsProject.Trim(),
+                string.IsNullOrWhiteSpace(_wsBranch) ? null : _wsBranch.Trim(),
+                null, _wsToken);
+            var result = await Connector.ConnectAsync(_tenantId, string.IsNullOrEmpty(_userId) ? null : _userId, input);
+            if (result.Ok)
+            {
+                Toasts.Show("Spine", $"Connected '{_wsName.Trim()}'.", ToastKind.Ok);
+                _wsName = _wsOwner = _wsRepo = _wsProject = _wsBranch = _wsToken = "";
+                _workspaces = await Workspaces.ListForTenantAsync(_tenantId);
+            }
+            else
+            {
+                Toasts.Show("Spine", result.Error ?? "Connect failed.", ToastKind.Err);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 }

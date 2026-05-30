@@ -41,6 +41,19 @@ public sealed class SpineAppTests : IClassFixture<AgentOsPageFixture>
         await Assertions.Expect(win.Locator(".spine-tab", new() { HasTextString = "Sessions" })).ToBeVisibleAsync();
     }
 
+    // The Workspaces tab shows the connect-a-repository form.
+    [Fact]
+    public async Task Spine_WorkspacesTab_ShowsConnectForm()
+    {
+        if (!AgentOsPageFixture.IsEnabled) { Assert.Skip(AgentOsPageFixture.SkipReason); }
+
+        var win = await OpenSpineAsync();
+        await win.Locator(".spine-tab", new() { HasTextString = "Workspaces" }).ClickAsync();
+
+        await Assertions.Expect(win.GetByPlaceholder("ghp_… / Azure PAT")).ToBeVisibleAsync();
+        await Assertions.Expect(win.GetByRole(AriaRole.Button, new() { Name = "Connect" })).ToBeVisibleAsync();
+    }
+
     // Register a runner and confirm the one-time pairing token (REMOTE_AGENT_ID/TOKEN) is shown.
     [Fact]
     public async Task Spine_RegisterRunner_ShowsOneTimePairingToken()

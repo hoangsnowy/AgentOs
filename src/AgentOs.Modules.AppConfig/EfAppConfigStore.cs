@@ -57,13 +57,17 @@ public sealed class EfAppConfigStore : IAppConfigStore
     }
 
     /// <inheritdoc />
-    public async ValueTask SetAsync(string key, string value, CancellationToken cancellationToken = default)
+    public ValueTask SetAsync(string key, string value, CancellationToken cancellationToken = default)
+        => SetForTenantAsync(ResolveTenant(), key, value, cancellationToken);
+
+    /// <inheritdoc />
+    public async ValueTask SetForTenantAsync(string tenantId, string key, string value, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrEmpty(tenantId);
         ArgumentException.ThrowIfNullOrEmpty(key);
         ArgumentNullException.ThrowIfNull(value);
 
         await using var scope = _rootProvider.CreateAsyncScope();
-        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
         var db = scope.ServiceProvider.GetRequiredService<AppConfigDbContext>();
         var cipher = _protector.Protect(value);
         var row = await db.AppConfig
@@ -83,10 +87,14 @@ public sealed class EfAppConfigStore : IAppConfigStore
     }
 
     /// <inheritdoc />
-    public async ValueTask DeleteAsync(string key, CancellationToken cancellationToken = default)
+    public ValueTask DeleteAsync(string key, CancellationToken cancellationToken = default)
+        => DeleteForTenantAsync(ResolveTenant(), key, cancellationToken);
+
+    /// <inheritdoc />
+    public async ValueTask DeleteForTenantAsync(string tenantId, string key, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrEmpty(tenantId);
         await using var scope = _rootProvider.CreateAsyncScope();
-        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
         var db = scope.ServiceProvider.GetRequiredService<AppConfigDbContext>();
         var row = await db.AppConfig
             .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Key == key, cancellationToken)
@@ -97,6 +105,12 @@ public sealed class EfAppConfigStore : IAppConfigStore
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         _cache.TryRemove(CacheKey(tenantId, key), out _);
+    }
+
+    private string ResolveTenant()
+    {
+        using var scope = _rootProvider.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
     }
 
     /// <inheritdoc />

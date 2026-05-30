@@ -25,4 +25,7 @@ internal sealed class NullWorkspaceRepository : IWorkspaceRepository
 
     public Task<IReadOnlyList<WorkspaceEntity>> ListForTenantAsync(string tenantId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<WorkspaceEntity>>(Array.Empty<WorkspaceEntity>());
+
+    public Task AddForTenantAsync(WorkspaceEntity workspace, CancellationToken ct = default)
+        => Task.CompletedTask;
 }

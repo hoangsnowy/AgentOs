@@ -2449,3 +2449,5 @@ input[type=range] { accent-color: var(--accent); }
 .spine-tab:hover { color: var(--text-primary); }
 .spine-tab.active { color: var(--text-primary); border-bottom-color: var(--accent, #3b82f6); }
 .spine-empty { padding: var(--space-4); }
+.spine-form { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+.spine-form-hint { margin-top: var(--space-2); }
