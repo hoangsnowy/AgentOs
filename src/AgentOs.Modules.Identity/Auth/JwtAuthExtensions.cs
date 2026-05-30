@@ -23,7 +23,9 @@ public static class JwtAuthExtensions
         var kc = config.GetSection("Auth:Keycloak");
         var authority = kc["Authority"] ?? "http://localhost:8080/realms/agentic";
         var audience = kc["Audience"] ?? "agentic-api";
-        var requireHttps = bool.TryParse(kc["RequireHttpsMetadata"], out var rh) && rh;
+        // Default true: when the setting is absent or unparseable, pick the secure value. Dev
+        // overrides explicitly via appsettings.Development.json / Aspire env injection.
+        var requireHttps = !bool.TryParse(kc["RequireHttpsMetadata"], out var rh) || rh;
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>

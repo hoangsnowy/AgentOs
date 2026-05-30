@@ -72,7 +72,7 @@
       "publicClient": false,
       "secret": "agentic-web-dev-secret",
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "redirectUris": ["http://localhost:5180/*"],
       "webOrigins": ["http://localhost:5180"],
       "defaultClientScopes": ["tenant"],

@@ -41,6 +41,16 @@ builder.Services.AddDataProtection();
 // HTTP requests; SaveTokens=true stores the access token in the auth cookie so circuit-scoped
 // AuthSession can forward it to outbound API calls when needed.
 var keycloak = builder.Configuration.GetSection("Auth:Keycloak");
+var keycloakClientSecret = keycloak["ClientSecret"];
+if (string.IsNullOrWhiteSpace(keycloakClientSecret) && !builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException(
+        "Auth:Keycloak:ClientSecret is required outside the Development environment. " +
+        "Set it via Aspire parameters, user-secrets, or an environment variable.");
+}
+// Default true: code that forgets to override picks the secure setting. Dev overrides via
+// appsettings.Development.json or the AppHost env injection.
+var requireHttps = !bool.TryParse(keycloak["RequireHttpsMetadata"], out var rh) || rh;
 builder.Services
     .AddAuthentication(options =>
     {
@@ -52,6 +62,11 @@ builder.Services
         options.Cookie.Name = "agentic.auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
+        // Always send the cookie over HTTPS in non-Development; in dev we may run plain http://
+        // (Aspire pins port 5180), so flex with the request scheme.
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
     })
@@ -59,12 +74,12 @@ builder.Services
     {
         options.Authority = keycloak["Authority"] ?? "http://localhost:8080/realms/agentic";
         options.ClientId = keycloak["ClientId"] ?? "agentic-web";
-        options.ClientSecret = keycloak["ClientSecret"] ?? "agentic-web-dev-secret";
+        options.ClientSecret = keycloakClientSecret ?? string.Empty;
         options.ResponseType = "code";
         options.UsePkce = true;
         options.SaveTokens = true;
         options.GetClaimsFromUserInfoEndpoint = true;
-        options.RequireHttpsMetadata = bool.TryParse(keycloak["RequireHttpsMetadata"], out var rh) && rh;
+        options.RequireHttpsMetadata = requireHttps;
         // Realm `agentic-web` client attaches `tenant` + `realm-roles` + `preferred-username` +
         // `email` claims via inline protocol mappers — we only request the `openid` base scope.
         options.Scope.Clear();

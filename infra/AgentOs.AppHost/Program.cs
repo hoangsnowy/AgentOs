@@ -6,9 +6,17 @@
 // it without any hardcoded URL. Web pins the HTTP endpoint to 5180 to match the realm's
 // `agentic-web` client redirectUris. MailHog catches all dev verification emails on UI port 8025;
 // Keycloak sends to it via the realm-level smtpServer config (host=mailhog port=1025).
+//
+// Secrets (Keycloak admin password + agentic-web client secret) are Aspire Parameters; their dev
+// defaults live in appsettings.json under "Parameters". Override per-environment via
+// `dotnet user-secrets`, `azd env set`, or environment variables — never edit the dev defaults.
 using Aspire.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
+
+var kcAdminUsername = builder.AddParameter("KeycloakAdminUsername");
+var kcAdminPassword = builder.AddParameter("KeycloakAdminPassword", secret: true);
+var kcWebClientSecret = builder.AddParameter("KeycloakWebClientSecret", secret: true);
 
 var db = builder.AddAzurePostgresFlexibleServer("postgres")
     .RunAsContainer(c => c.WithDataVolume())
@@ -21,13 +29,11 @@ var mailhog = builder.AddContainer("mailhog", "mailhog/mailhog")
     .WithHttpEndpoint(port: 8025, targetPort: 8025, name: "ui")
     .WithEndpoint(port: 1025, targetPort: 1025, name: "smtp", scheme: "tcp");
 
-// Force a deterministic admin user so the KeycloakAdminClient and the realm-provisioning flow
-// can rely on the master-realm `admin / admin` credentials in dev. Production uses a parameter.
 var keycloak = builder.AddKeycloak("keycloak", port: 8080)
     .WithDataVolume()
     .WithRealmImport("../../infra/keycloak")
-    .WithEnvironment("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
-    .WithEnvironment("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
+    .WithEnvironment("KC_BOOTSTRAP_ADMIN_USERNAME", kcAdminUsername)
+    .WithEnvironment("KC_BOOTSTRAP_ADMIN_PASSWORD", kcAdminPassword)
     .WaitFor(mailhog);
 
 builder.AddProject<Projects.AgentOs_Api>("api")
@@ -40,8 +46,8 @@ builder.AddProject<Projects.AgentOs_Api>("api")
     .WithEnvironment("Auth__Keycloak__Admin__BaseUrl",
         ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}"))
     .WithEnvironment("Auth__Keycloak__Admin__Realm", "agentic")
-    .WithEnvironment("Auth__Keycloak__Admin__Username", "admin")
-    .WithEnvironment("Auth__Keycloak__Admin__Password", "admin")
+    .WithEnvironment("Auth__Keycloak__Admin__Username", kcAdminUsername)
+    .WithEnvironment("Auth__Keycloak__Admin__Password", kcAdminPassword)
     .WithEnvironment("Auth__Keycloak__Admin__ClientId", "admin-cli");
 
 builder.AddProject<Projects.AgentOs_Web>("web")
@@ -52,13 +58,13 @@ builder.AddProject<Projects.AgentOs_Web>("web")
         ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}/realms/agentic"))
     .WithEnvironment("Auth__Keycloak__Audience", "agentic-api")
     .WithEnvironment("Auth__Keycloak__ClientId", "agentic-web")
-    .WithEnvironment("Auth__Keycloak__ClientSecret", "agentic-web-dev-secret")
+    .WithEnvironment("Auth__Keycloak__ClientSecret", kcWebClientSecret)
     // Web provisions Keycloak users for the public sign-up form, so it also needs admin creds.
     .WithEnvironment("Auth__Keycloak__Admin__BaseUrl",
         ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}"))
     .WithEnvironment("Auth__Keycloak__Admin__Realm", "agentic")
-    .WithEnvironment("Auth__Keycloak__Admin__Username", "admin")
-    .WithEnvironment("Auth__Keycloak__Admin__Password", "admin")
+    .WithEnvironment("Auth__Keycloak__Admin__Username", kcAdminUsername)
+    .WithEnvironment("Auth__Keycloak__Admin__Password", kcAdminPassword)
     .WithEnvironment("Auth__Keycloak__Admin__ClientId", "admin-cli");
 
 builder.Build().Run();
