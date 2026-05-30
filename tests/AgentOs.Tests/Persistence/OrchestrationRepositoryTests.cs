@@ -1,7 +1,7 @@
 // Tests OrchestrationRepository (CRUD) with EF Core InMemory.
 using AgentOs.Modules.Pipeline.Persistence;
-using AgentOs.Modules.Identity;
 using AgentOs.Modules.Pipeline.Persistence.Repositories;
+using AgentOs.Tests.Identity;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 using Xunit;
@@ -15,7 +15,7 @@ public sealed class OrchestrationRepositoryTests
             .UseInMemoryDatabase($"orch-{Guid.NewGuid()}")
             .Options;
 
-    private static readonly DefaultTenantContext Tenant = new();
+    private static readonly TestTenantContext Tenant = new();
 
     private static PipelineDbContext NewDb(DbContextOptions<PipelineDbContext> options) =>
         new(options, Tenant);

@@ -1,0 +1,34 @@
+@page "/login"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+
+<PageTitle>Sign in — AgentOS</PageTitle>
+
+<div class="login-card">
+    <div class="login-brand">
+        <div class="brand-mark"><Icon Name="diamond" Size="14" /></div>
+        <div>
+            <div class="brand-title">AgentOS</div>
+            <div class="brand-sub">.NET multi-agent framework</div>
+        </div>
+    </div>
+
+    <div class="login-form">
+        <a class="btn btn-primary login-btn" href="@LoginHref">
+            <span class="btn-ic"><Icon Name="lock" Size="14" /></span>
+            Sign in with Keycloak
+        </a>
+        <div class="login-hint">
+            Don't have an account?
+            <a href="/signup">Create one</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private string LoginHref => string.IsNullOrWhiteSpace(ReturnUrl)
+        ? "/account/login"
+        : $"/account/login?returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+}

@@ -9,7 +9,6 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using AgentOs.Modules.Identity;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Shouldly;

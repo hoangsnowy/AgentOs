@@ -1,56 +1,40 @@
-// AgentOs.Web/Services/AuthSession.cs
-// Phase 8.3 — Per-circuit auth state. Holds the JWT bearer token and the username after the
-// user has signed in via LoginOverlay. Registered as scoped so each Blazor circuit has its
-// own session; rehydrated from localStorage on circuit start.
+// Per-circuit auth state. Reads the signed-in identity from the OIDC cookie via IHttpContextAccessor;
+// HttpPipelineClient consumes the access token (cached at circuit init) when forwarding to a remote API.
 
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.SharedKernel.Identity;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 
 namespace AgentOs.Web.Services;
 
-/// <summary>Per-circuit auth state. Set by <c>LoginOverlay</c>; read by <c>HttpPipelineClient</c>.</summary>
+/// <summary>Per-circuit auth state surfaced to UI components and to <c>HttpPipelineClient</c>.</summary>
 public sealed class AuthSession : IAuthTokenProvider
 {
-    /// <summary>Current JWT bearer token, or <c>null</c> when anonymous.</summary>
-    public string? Token { get; private set; }
+    private readonly IHttpContextAccessor _accessor;
+    private string? _cachedToken;
+    private bool _tokenLoaded;
 
-    /// <summary>Username of the signed-in operator, or <c>null</c> when anonymous.</summary>
-    public string? Username { get; private set; }
+    public AuthSession(IHttpContextAccessor accessor) => _accessor = accessor;
 
-    /// <summary>Token expiry (UTC) — used to clear the session when the JWT lapses.</summary>
-    public DateTime? ExpiresAtUtc { get; private set; }
+    /// <summary>Username of the signed-in user, or <c>null</c> when anonymous.</summary>
+    public string? Username => _accessor.HttpContext?.User?.Identity?.Name;
 
-    /// <summary>Raised when <see cref="Token"/> changes — circuit observers re-render.</summary>
-    public event Action? Changed;
+    /// <summary>True when the current request principal is authenticated by the cookie scheme.</summary>
+    public bool IsAuthenticated => _accessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
 
-    /// <summary>True when a non-expired JWT is held.</summary>
-    public bool IsAuthenticated => !string.IsNullOrWhiteSpace(Token) && (ExpiresAtUtc is null || ExpiresAtUtc > DateTime.UtcNow);
-
-    /// <summary>Set the session after a successful login.</summary>
-    public void SetToken(string token, string username, DateTime? expiresAtUtc)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(token);
-        Token = token;
-        Username = username;
-        ExpiresAtUtc = expiresAtUtc;
-        Changed?.Invoke();
-    }
-
-    /// <summary>Drop the session (logout / lock screen).</summary>
-    public void Clear()
-    {
-        Token = null;
-        Username = null;
-        ExpiresAtUtc = null;
-        Changed?.Invoke();
-    }
+    /// <summary>Bearer access token captured from the OIDC cookie. <c>null</c> when anonymous or not yet loaded.</summary>
+    public string? Token => _cachedToken;
 
     /// <inheritdoc />
-    public ValueTask<string?> GetTokenAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<string?> GetTokenAsync(CancellationToken cancellationToken = default)
     {
-        if (!IsAuthenticated) { return ValueTask.FromResult<string?>(null); }
-        return ValueTask.FromResult<string?>(Token);
+        if (_tokenLoaded) { return _cachedToken; }
+        var ctx = _accessor.HttpContext;
+        if (ctx is null) { return null; }
+        _cachedToken = await ctx.GetTokenAsync("access_token").ConfigureAwait(false);
+        _tokenLoaded = true;
+        return _cachedToken;
     }
 }

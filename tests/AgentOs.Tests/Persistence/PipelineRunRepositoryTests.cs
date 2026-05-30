@@ -7,8 +7,8 @@ using AgentOs.Domain.Pipeline;
 using AgentOs.Domain.Qa;
 using AgentOs.Domain.Requirements;
 using AgentOs.Domain.Testing;
-using AgentOs.Modules.Identity;
 using AgentOs.Modules.Pipeline.Persistence.Repositories;
+using AgentOs.Tests.Identity;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 using Xunit;
@@ -22,7 +22,7 @@ public sealed class PipelineRunRepositoryTests
             .UseInMemoryDatabase($"runs-{Guid.NewGuid()}")
             .Options;
 
-    private static readonly DefaultTenantContext Tenant = new();
+    private static readonly TestTenantContext Tenant = new();
 
     private static PipelineDbContext NewDb(DbContextOptions<PipelineDbContext> options) =>
         new(options, Tenant);

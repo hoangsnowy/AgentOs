@@ -46,6 +46,7 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
         string tenantId,
         IReadOnlyList<string> realmRoles,
         bool sendVerifyEmail,
+        string? password = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
@@ -54,14 +55,35 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
 
         var token = await GetAdminTokenAsync(ct).ConfigureAwait(false);
 
-        var createBody = new
-        {
-            username,
-            email,
-            enabled = true,
-            emailVerified = false,
-            attributes = new Dictionary<string, string[]> { ["tenant"] = new[] { tenantId } },
-        };
+        // Keycloak's default user-profile config requires firstName + lastName for a "fully set up"
+        // account — without them the token endpoint rejects login with "Account is not fully set up".
+        // We don't ask for them on the sign-up form so fall back to the username for both.
+        object createBody = string.IsNullOrEmpty(password)
+            ? new
+            {
+                username,
+                email,
+                firstName = username,
+                lastName = username,
+                enabled = true,
+                emailVerified = false,
+                attributes = new Dictionary<string, string[]> { ["tenant"] = new[] { tenantId } },
+            }
+            : new
+            {
+                username,
+                email,
+                firstName = username,
+                lastName = username,
+                enabled = true,
+                // User just typed the password into the sign-up form → no email-verify hurdle.
+                emailVerified = true,
+                attributes = new Dictionary<string, string[]> { ["tenant"] = new[] { tenantId } },
+                credentials = new[]
+                {
+                    new { type = "password", value = password, temporary = false },
+                },
+            };
         using var create = BuildRequest(HttpMethod.Post, $"admin/realms/{_options.Realm}/users", token, createBody);
         using var createResp = await _http.SendAsync(create, ct).ConfigureAwait(false);
         if (!createResp.IsSuccessStatusCode)

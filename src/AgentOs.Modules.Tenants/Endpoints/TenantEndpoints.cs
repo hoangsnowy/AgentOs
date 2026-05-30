@@ -89,6 +89,61 @@ internal static class TenantEndpoints
         .WithTags("Tenants")
         .RequireAuthorization("Admin");
 
+        // Self-service sign-up: any anonymous caller may provision a new tenant + admin user. Open
+        // by design for OSS dev; production deployments should put this behind CAPTCHA / rate-limit
+        // or close it and rely on admin-driven /tenants instead.
+        app.MapPost("/tenants/register", async (
+            RegisterTenantRequest body,
+            ITenantsRepository repo,
+            IKeycloakAdminClient kc,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.TenantId) ||
+                string.IsNullOrWhiteSpace(body.Username) ||
+                string.IsNullOrWhiteSpace(body.Password))
+            {
+                return Results.BadRequest(new { error = "tenantId, username and password are required" });
+            }
+
+            var existing = await repo.GetAsync(body.TenantId, ct).ConfigureAwait(false);
+            if (existing is not null)
+            {
+                return Results.Conflict(new { error = $"Tenant '{body.TenantId}' already exists" });
+            }
+
+            var record = new TenantRecord(
+                body.TenantId,
+                string.IsNullOrWhiteSpace(body.TenantName) ? body.TenantId : body.TenantName,
+                DateTimeOffset.UtcNow);
+            await repo.AddAsync(record, ct).ConfigureAwait(false);
+
+            string keycloakUserId;
+            try
+            {
+                keycloakUserId = await kc.CreateUserAsync(
+                    username: body.Username,
+                    email: body.Email ?? string.Empty,
+                    tenantId: body.TenantId,
+                    realmRoles: AdminRole,
+                    sendVerifyEmail: false,
+                    password: body.Password,
+                    ct: ct).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Problem(
+                    title: "Keycloak provisioning failed",
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status502BadGateway);
+            }
+
+            return Results.Created($"/tenants/{body.TenantId}", new RegisteredTenantResponse(record, keycloakUserId));
+        })
+        .WithName("TenantsRegister")
+        .WithSummary("Self-service sign-up: create a tenant + admin user (public)")
+        .WithTags("Tenants")
+        .AllowAnonymous();
+
         app.MapPost("/tenants/{tenantId}/members", async (
             string tenantId,
             InviteMemberRequest body,
@@ -158,3 +213,14 @@ public sealed record InviteMemberRequest(string Username, string? Email, IReadOn
 
 /// <summary>Response for POST /tenants/{id}/members.</summary>
 public sealed record InvitedMemberResponse(string KeycloakUserId, string Username, IReadOnlyList<string> Roles);
+
+/// <summary>Body for POST /tenants/register.</summary>
+public sealed record RegisterTenantRequest(
+    string TenantId,
+    string? TenantName,
+    string Username,
+    string? Email,
+    string Password);
+
+/// <summary>Response for POST /tenants/register.</summary>
+public sealed record RegisteredTenantResponse(TenantRecord Tenant, string KeycloakUserId);

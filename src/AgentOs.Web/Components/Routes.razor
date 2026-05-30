@@ -1,6 +1,14 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
 <Router AppAssembly="@typeof(Program).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(AppShellLayout)" />
+        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(AppShellLayout)">
+            <NotAuthorized>
+                @{
+                    NavigationManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(NavigationManager.Uri)}", forceLoad: true);
+                }
+            </NotAuthorized>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
     <NotFound>
@@ -9,3 +17,7 @@
         </LayoutView>
     </NotFound>
 </Router>
+
+@code {
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+}

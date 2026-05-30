@@ -1,0 +1,131 @@
+@page "/signup"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+@using System.Text.RegularExpressions
+@using AgentOs.Modules.Tenants
+@using AgentOs.Modules.Tenants.Keycloak
+@inject AgentOs.Modules.Tenants.Keycloak.IKeycloakAdminClient Kc
+@inject AgentOs.Modules.Tenants.ITenantsRepository Repo
+@inject NavigationManager Nav
+
+<PageTitle>Create workspace — AgentOS</PageTitle>
+
+<div class="login-card login-card-wide">
+    <div class="login-brand">
+        <div class="brand-mark"><Icon Name="diamond" Size="14" /></div>
+        <div>
+            <div class="brand-title">Create workspace</div>
+            <div class="brand-sub">Provision a tenant + admin user</div>
+        </div>
+    </div>
+
+    <div class="login-form">
+        <Field Label="Workspace ID" Hint="lowercase / digits / dash · 3–32 chars">
+            <input type="text" @bind="_tenantId" placeholder="acme" autocomplete="off" />
+        </Field>
+        <Field Label="Workspace name (optional)">
+            <input type="text" @bind="_tenantName" placeholder="Acme Corp" autocomplete="organization" />
+        </Field>
+        <Field Label="Admin username">
+            <input type="text" @bind="_username" placeholder="alice" autocomplete="username" />
+        </Field>
+        <Field Label="Email">
+            <input type="email" @bind="_email" placeholder="alice@@acme.test" autocomplete="email" />
+        </Field>
+        <Field Label="Password" Hint="at least 8 characters">
+            <input type="password" @bind="_password" autocomplete="new-password" />
+        </Field>
+        <Field Label="Confirm password">
+            <input type="password" @bind="_confirm" autocomplete="new-password" />
+        </Field>
+        <Btn Variant="Btn.ButtonVariant.Primary" ExtraClass="login-btn" OnClick="Submit" Disabled="_busy">
+            @(_busy ? "Creating…" : "Create workspace")
+        </Btn>
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="login-error">@_error</div>
+        }
+        <div class="login-hint">
+            Already have an account? <a href="/login">Sign in</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _tenantId = "";
+    private string _tenantName = "";
+    private string _username = "";
+    private string _email = "";
+    private string _password = "";
+    private string _confirm = "";
+    private string _error = "";
+    private bool _busy;
+
+    private static readonly Regex SlugRegex = new("^[a-z0-9-]{3,32}$", RegexOptions.Compiled);
+    private static readonly string[] AdminRole = new[] { "admin" };
+
+    private async Task Submit()
+    {
+        if (_busy) { return; }
+        _busy = true;
+        _error = "";
+        try
+        {
+            if (!SlugRegex.IsMatch(_tenantId))
+            {
+                _error = "Workspace ID must be 3–32 chars, lowercase letters / digits / dash.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_username))
+            {
+                _error = "Admin username is required.";
+                return;
+            }
+            if (_password.Length < 8)
+            {
+                _error = "Password must be at least 8 characters.";
+                return;
+            }
+            if (!string.Equals(_password, _confirm, StringComparison.Ordinal))
+            {
+                _error = "Passwords do not match.";
+                return;
+            }
+
+            var existing = await Repo.GetAsync(_tenantId);
+            if (existing is not null)
+            {
+                _error = $"Workspace '{_tenantId}' already exists.";
+                return;
+            }
+
+            var record = new TenantRecord(
+                _tenantId,
+                string.IsNullOrWhiteSpace(_tenantName) ? _tenantId : _tenantName,
+                DateTimeOffset.UtcNow);
+            await Repo.AddAsync(record);
+
+            try
+            {
+                await Kc.CreateUserAsync(
+                    username: _username,
+                    email: _email,
+                    tenantId: _tenantId,
+                    realmRoles: AdminRole,
+                    sendVerifyEmail: false,
+                    password: _password);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _error = $"Provisioning failed: {ex.Message}";
+                return;
+            }
+
+            Nav.NavigateTo("/account/login", forceLoad: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

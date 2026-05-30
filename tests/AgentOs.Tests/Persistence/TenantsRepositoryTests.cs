@@ -2,8 +2,8 @@
 // tenant across the realm.
 
 using AgentOs.SharedKernel.Identity;
-using AgentOs.Modules.Identity;
 using AgentOs.Modules.Tenants;
+using AgentOs.Tests.Identity;
 using AgentOs.Modules.Tenants.Persistence;
 using AgentOs.Modules.Tenants.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +19,7 @@ public sealed class TenantsRepositoryTests
             .UseInMemoryDatabase($"tenants-{Guid.NewGuid()}")
             .Options;
 
-    private static readonly DefaultTenantContext Tenant = new();
+    private static readonly TestTenantContext Tenant = new();
     private static readonly string[] ExpectedIds = ["acme", "globex"];
 
     private static TenantsDbContext NewDb(DbContextOptions<TenantsDbContext> options) =>

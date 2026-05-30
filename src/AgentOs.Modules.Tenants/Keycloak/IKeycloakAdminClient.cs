@@ -11,13 +11,14 @@ namespace AgentOs.Modules.Tenants.Keycloak;
 public interface IKeycloakAdminClient
 {
     /// <summary>Create a user with username + email + a single <c>tenant</c> attribute, grant the
-    /// listed realm roles, and trigger Keycloak's reset-password email so the invitee picks the
-    /// initial password themselves. Returns the new Keycloak user id.</summary>
+    /// listed realm roles, and optionally seed a password or trigger Keycloak's reset-password
+    /// email so the invitee picks the initial password themselves. Returns the new Keycloak user id.</summary>
     Task<string> CreateUserAsync(
         string username,
         string email,
         string tenantId,
         IReadOnlyList<string> realmRoles,
         bool sendVerifyEmail,
+        string? password = null,
         CancellationToken ct = default);
 }

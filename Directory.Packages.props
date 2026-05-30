@@ -44,8 +44,9 @@
     <PackageVersion Include="Scalar.AspNetCore" Version="2.6.0" />
     <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
 
-    <!-- Phase 8 — JWT bearer auth -->
+    <!-- Phase 8 — JWT bearer auth (API host) + OpenID Connect cookie/code flow (Web host) -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.0" />
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.3.0" />
 
     <!-- Web host: Blazor diagram editor -->

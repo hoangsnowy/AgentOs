@@ -1,41 +1,27 @@
-// Module entry: wires JWT bearer auth + the appropriate ITenantContext (DefaultTenantContext for
-// operator mode, HttpTenantContext for Keycloak mode). Mounts /auth/token. No DbContext — auth
-// state is per-request claims; no DB tables.
+// Module entry: cross-cutting tenant context (claims-based) + Admin/Member policies. The auth
+// scheme itself is host-specific — the API host calls AddJwtAuth (Keycloak bearer) and the Web
+// host wires cookie + OIDC explicitly. No DbContext; tenant state lives in JWT/cookie claims.
 
 using System;
-using AgentOs.Modules.Identity.Auth;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Modularity;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace AgentOs.Modules.Identity;
 
-public sealed class IdentityModule : IModule, IEndpointModule
+public sealed class IdentityModule : IModule
 {
     public void AddServices(IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(configuration);
 
-        services.AddJwtAuth(configuration);
-
-        if (string.Equals(configuration["Auth:Mode"], "keycloak", StringComparison.OrdinalIgnoreCase))
+        services.AddHttpContextAccessor();
+        services.AddScoped<ITenantContext, HttpTenantContext>();
+        services.AddAuthorization(options =>
         {
-            services.AddHttpContextAccessor();
-            services.AddScoped<ITenantContext, HttpTenantContext>();
-        }
-        else
-        {
-            services.TryAddScoped<ITenantContext, DefaultTenantContext>();
-        }
-    }
-
-    public void MapEndpoints(IEndpointRouteBuilder endpoints)
-    {
-        ArgumentNullException.ThrowIfNull(endpoints);
-        endpoints.MapAuthEndpoints();
+            options.AddPolicy("Admin", policy => policy.RequireRole("admin"));
+            options.AddPolicy("Member", policy => policy.RequireRole("admin", "member"));
+        });
     }
 }

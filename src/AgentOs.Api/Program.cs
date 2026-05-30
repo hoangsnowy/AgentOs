@@ -5,6 +5,7 @@
 using AgentOs.Domain.Llm;
 using AgentOs.Modules.AppConfig;
 using AgentOs.Modules.Identity;
+using AgentOs.Modules.Identity.Auth;
 using AgentOs.Modules.Integration;
 using AgentOs.Modules.Llm;
 using AgentOs.Modules.Pipeline;
@@ -33,6 +34,9 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNEC
 {
     builder.Services.AddApplicationInsightsTelemetry();
 }
+
+// Auth scheme is host-specific: API hosts Keycloak JWT bearer (Web does cookie + OIDC).
+builder.Services.AddJwtAuth(builder.Configuration);
 
 // Module discovery: each .Assembly contributes one IModule.
 builder.Services.AddModulesFromAssemblies(builder.Configuration,

@@ -5,8 +5,6 @@
 @inject AgentOs.Web.Services.ToastService Toasts
 @inject AgentOs.Web.Services.AuthSession Auth
 
-<LoginOverlay />
-
 <TopBar />
 
 <div class="shell shell-deskmode">
@@ -164,7 +162,7 @@
     private List<DesktopApp> _recents = new();
     private List<DesktopApp> _results = new();
 
-    private async Task ToggleStart()
+    private Task ToggleStart()
     {
         _startOpen = !_startOpen;
         if (_startOpen)
@@ -172,12 +170,9 @@
             _query = "";
             RefreshRecents();
             _focusOnRender = true;
-            if (_user is null)
-            {
-                try { _user = await JS.InvokeAsync<string?>("localStorage.getItem", "agentic-signed-in"); }
-                catch { /* prerender / JS unavailable */ }
-            }
+            _user ??= Auth.Username;
         }
+        return Task.CompletedTask;
     }
 
     private void CloseStart() => _startOpen = false;
@@ -263,11 +258,9 @@
         _startOpen = false;
     }
 
-    private async Task Lock()
+    private void Lock()
     {
         _startOpen = false;
-        await JS.InvokeVoidAsync("agenticAuth.signOut");
-        Auth.Clear();
-        Nav.NavigateTo(Nav.Uri, forceLoad: true);
+        Nav.NavigateTo("/account/logout", forceLoad: true);
     }
 }
