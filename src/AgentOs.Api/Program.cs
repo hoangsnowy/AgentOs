@@ -71,7 +71,7 @@ if (!app.Environment.IsProduction())
     app.MapOpenApi();
     app.MapScalarApiReference(options =>
     {
-        options.WithTitle("Agentic SDLC API")
+        options.WithTitle("AgentOS API")
                .WithTheme(ScalarTheme.BluePlanet)
                .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });

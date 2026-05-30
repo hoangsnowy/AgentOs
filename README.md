@@ -2,7 +2,7 @@
 
 > A **modular .NET agentic platform** for software-delivery workflows. A central orchestrator
 > coordinates specialist agents — Requirements → Code → Tests → QA — over a provider-agnostic
-> LLM gateway, on a multi-tenant runtime with row-level isolation and a Blazor "Agent Studio" UI.
+> LLM gateway, on a multi-tenant runtime with row-level isolation and a Blazor AgentOS desktop UI.
 
 [![CI](https://github.com/hoangsnowy/AgentOs/actions/workflows/ci.yml/badge.svg)](https://github.com/hoangsnowy/AgentOs/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -43,7 +43,7 @@ Postgres schema, so any one of them can later ship as a standalone NuGet package
   backoff on transient failures.
 - **Cloud-ready out of the box.** A .NET Aspire AppHost wires Postgres + Keycloak + Api + Web; an
   `azd up` deploys to Azure Container Apps.
-- **Operator-friendly desktop.** A Blazor Server "Agent Studio" — windowed UI with a Start menu,
+- **Operator-friendly desktop.** A Blazor Server AgentOS desktop — windowed UI with a Start menu,
   dock, light/dark themes, live pipeline runner, drag-and-drop workflow editor, and runtime
   settings to rotate LLM keys without a redeploy.
 

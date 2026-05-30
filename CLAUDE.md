@@ -4,81 +4,101 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A .NET-native multi-agent AI platform for the software development lifecycle. The **Leader-Specialists-Quality Loop** architecture with 5 agents: Orchestrator, Requirement, Coding, Testing, QA. Hybrid LLM (Anthropic Claude + Azure OpenAI), with models assigned via `appsettings.json`. A Blazor **AgentOS** desktop UI drives the engine. Full context in [README.md](README.md). For local setup, secrets, and GitHub Actions, see [docs/SETUP.md](docs/SETUP.md).
+**AgentOS** — a .NET-native multi-agent AI platform for the software development lifecycle. A central orchestrator coordinates 5 specialist agents — Orchestrator, Requirement, Coding, Testing, QA — in a **Leader-Specialists-Quality Loop** (QA scores requirement↔code↔test consistency and loops until convergence or an iteration cap `NMax`). Hybrid, provider-agnostic LLM gateway (Anthropic Claude + Azure OpenAI + Microsoft Agent Framework + a paired dev-machine agent); providers/models are assigned in `appsettings.json`. A Blazor Server **AgentOS** desktop-style UI drives the engine. Full context in [README.md](README.md). For local setup, secrets, and GitHub Actions, see [docs/SETUP.md](docs/SETUP.md).
+
+The platform is a **modular monolith**: each feature is a self-contained `IModule` with its own DI surface, EF Core context, and Postgres schema, so any module can later ship as a standalone NuGet package. Framed as a credible OSS product, not a thesis demo.
 
 ## Commands
 
 ```bash
-# Build / test (sln-rooted, from D:\LuanVan\prototype)
-dotnet restore AgentOs.sln
-dotnet build   AgentOs.sln --configuration Release
-dotnet test    AgentOs.sln --configuration Release
+# Build / test (slnx-rooted, from D:\LuanVan\prototype)
+dotnet restore AgentOs.slnx
+dotnet build   AgentOs.slnx --configuration Release
+dotnet test    AgentOs.slnx --configuration Release
 
 # Single test class / method
-dotnet test --filter "FullyQualifiedName~ClaudeClientTests"
-dotnet test --filter "FullyQualifiedName=AgentOs.Tests.Llm.LlmRequestTests.Validate_AllFieldsValid_DoesNotThrow"
+dotnet test AgentOs.slnx --filter "FullyQualifiedName~ToolGatewayTests"
+dotnet test AgentOs.slnx --filter "FullyQualifiedName=AgentOs.Tests.Tools.ToolInvocationTests.Request_Validate_AllFieldsValid_DoesNotThrow"
 
 # Run the API locally — Scalar UI at https://localhost:5080/scalar/v1
 dotnet run --project src/AgentOs.Api
 
 # Local secrets (DO NOT commit). UserSecretsId = "agentos-prototype"
 cd src/AgentOs.Api
-dotnet user-secrets set "Llm:Anthropic:ApiKey"  "sk-ant-..."
-dotnet user-secrets set "Llm:AzureOpenAI:ApiKey" "..."
+dotnet user-secrets set "Llm:Claude:ApiKey"      "sk-ant-..."
+dotnet user-secrets set "Llm:AzureOpenAi:ApiKey" "..."
+dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://<resource>.openai.azure.com"
 
-# Run the Web (Blazor "Agent Studio") locally
+# Run the Web (Blazor AgentOS desktop) locally
 dotnet run --project src/AgentOs.Web
 
-# One-shot local dev — Aspire AppHost wires Postgres + Keycloak + API + Web
+# One-shot local dev — Aspire AppHost wires Postgres + Keycloak + MailHog + API + Web
 dotnet run --project infra/AgentOs.AppHost
 
 # Direct API run without Aspire — provide a Postgres connection string yourself
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=agentos;Username=postgres;Password=postgres"
 
-# Generate a new EF migration (Infrastructure is its own startup project for this)
-dotnet ef migrations add <Name> --project src/AgentOs.Infrastructure --startup-project src/AgentOs.Infrastructure --output-dir Persistence/Migrations
+# Generate a new EF migration — migrations are PER-MODULE (each module is its own startup project,
+# owns its DbContext + schema + __EFMigrationsHistory). Example for the Pipeline module:
+dotnet ef migrations add <Name> \
+  --project src/AgentOs.Modules.Pipeline --startup-project src/AgentOs.Modules.Pipeline \
+  --output-dir Persistence/Migrations --context PipelineDbContext
 ```
 
 CI: `.github/workflows/ci.yml` runs `restore → build Release → test` on Ubuntu, on push to `main`/`develop` or PR to `main`.
 
 ## Architecture
 
-Clean Architecture (Domain → Application → Infrastructure) with two hosts (Api, Web). Dependency direction: **Api/Web → Infrastructure → Application → Domain** (the reverse direction is blocked by project references).
+Modular monolith. Solution file is **`AgentOs.slnx`** (the .NET 10 XML format). Each module is an `AgentOs.Modules.*` class library that **references `AgentOs.Domain` + `AgentOs.SharedKernel` only**; cross-module references are explicit and minimal (e.g. `Llm → AppConfig`, `Integration → Tools`). Hosts (`Api`, `Web`) reference every module and wire them with one `services.AddModulesFromAssemblies(cfg, …)` call + `await app.Services.InitializeModulesAsync()` + `app.MapModuleEndpoints()` — no per-module wiring in `Program.cs`.
 
 | Project | Role |
 |---|---|
-| `AgentOs.Domain` | Provider-neutral DTOs (`LlmRequest`, `LlmResponse`, `LlmOptions`), pipeline artifacts (`RequirementSpec`, `CodeArtifact`, `TestArtifact`, `QaReport`, `PipelineResult`), interfaces (`ILlmClient`), exceptions. References no framework other than the .NET BCL. |
-| `AgentOs.Application` | Agent interfaces (`IRequirementAgent` … `IOrchestratorAgent`), prompts, metrics (`IMetricsCollector`), persistence repository interfaces (`IPipelineRunRepository`, `IOrchestrationRepository`). References only `Microsoft.Extensions.Logging.Abstractions`. |
-| `AgentOs.Infrastructure` | `ILlmClient` implementations (3 clients), 5 agent + orchestrator implementations, EF Core/Postgres persistence, DI extensions. References `Azure.AI.OpenAI`, `Microsoft.Extensions.Http.Resilience`, `Npgsql.EntityFrameworkCore.PostgreSQL`. |
-| `AgentOs.Api` | ASP.NET Core minimal API (REST endpoints + Scalar UI). A composition root. |
-| `AgentOs.Web` | Blazor Server "Agent Studio" UI (realtime pipeline + orchestration editor). Runs the engine in-process; deployed as a second Container App. A composition root. |
+| `AgentOs.Domain` | Provider-neutral DTOs (`LlmRequest`, `LlmResponse`, `LlmOptions`), pipeline artifacts (`RequirementSpec`, `CodeArtifact`, `TestArtifact`, `QaReport`, `PipelineResult`), tool contracts (`ITool`, `IToolPolicy`, `IToolInvocationLog`, `IToolGateway`), interfaces (`ILlmClient`, `ILlmClientFactory`), exceptions. References the .NET BCL only. |
+| `AgentOs.SharedKernel` | `IModule` / `IEndpointModule` / `IInitializableModule` contracts + `ModuleLoader` (reflection) + cross-cutting `ITenantContext` + `IAuthTokenProvider`. |
+| `AgentOs.Modules.AppConfig` | Encrypted runtime KV store (DataProtection), `AppConfigDbContext` (schema `config`). Powers per-tenant LLM key overrides + the Settings UI. |
+| `AgentOs.Modules.Llm` | Provider-agnostic gateway: `LlmClientFactory` + keyed `ILlmClient` per provider, `PooledChatLlmClient` (multi-key pool + 429 failover), `CostCalculator`, `AIToolFunction` (ITool→AIFunction adapter). |
+| `AgentOs.Modules.Pipeline` | 5 agents + prompts + `PipelineOrchestrator` (+ optional MAF workflow engine) + `PipelineDbContext` (schema `pipeline`). |
+| `AgentOs.Modules.Identity` | JWT auth + `DefaultTenantContext` (operator mode) + `HttpTenantContext` (Keycloak claims) + `/auth`. |
+| `AgentOs.Modules.Tenants` | Tenant registry + Keycloak admin client (member lifecycle) + signup/invitations + audit, `TenantsDbContext` (schema `tenants`). |
+| `AgentOs.Modules.Tools` | `IToolRegistry`, `IToolPolicy` (per-tenant gate), `IToolInvocationLog` (evidence), `IToolGateway` (the policy→invoke→log seam). |
+| `AgentOs.Modules.Integration` | `IGitHubPrService` (Octokit) + `IBuildVerifier` (`dotnet build` in a temp dir), exposed as ITools. |
+| `AgentOs.Modules.Mcp` | MCP client (consume external tool servers) + server adapter; Api also serves MCP at `/mcp`. |
+| `AgentOs.Modules.RemoteAgent` | SignalR hub + transport + `RemoteAgentLlmClient` — dispatches work to a paired dev-machine agent (zero server API tokens). |
+| `AgentOs.Api` | ASP.NET Core minimal API (REST + Scalar UI + `/mcp`). A composition root. |
+| `AgentOs.Web` | Blazor Server **AgentOS** desktop UI (window manager, app catalog, realtime pipeline, orchestration editor). A composition root. |
+| `AgentOs.RemoteAgent` | Standalone dev-machine agent executable that pairs to the RemoteAgent hub. |
+| `infra/AgentOs.AppHost` | .NET Aspire orchestration (Postgres + Keycloak + MailHog + Api + Web). |
 
 ### LLM Gateway (critical pattern)
 
-The 5 agents **do not call vendor SDKs directly** — they all depend on `ILlmClient` (Domain). `LlmClientFactory` selects the provider based on the `Agents:<Name>:Provider` configuration. There are 3 implementations:
+The 5 agents **do not call vendor SDKs directly** — they depend on `ILlmClient` (Domain). `LlmClientFactory.Create(name)` / `.CreateDefault()` resolve a keyed `ILlmClient` registered under its canonical provider name. Providers:
 
-- **`ClaudeClient`** — a raw `HttpClient` calling Anthropic's `POST /v1/messages`. Headers `x-api-key` + `anthropic-version`. Does not use the Anthropic SDK.
-- **`AzureOpenAiClient`** — a raw `HttpClient` calling `openai/deployments/{model}/chat/completions?api-version=...`. Although the `Azure.AI.OpenAI` package is referenced (inherited for `Azure.Identity`), the client itself is hand-written to retain shape control.
-Retry: `RetryPolicy.ExecuteAsync` (exponential 1s/2s/4s, retries 429+5xx+timeout). Polly is not used in order to keep dependencies minimal initially; switch to `Microsoft.Extensions.Http.Resilience` if needed. The client throws `TransientHttpException` (an internal marker) on retry-able statuses, and `LlmException` for non-retriable / malformed cases.
+- **`Claude`** / **`AzureOpenAI`** — `PooledChatLlmClient`: a pool of `Microsoft.Extensions.AI` `IChatClient` instances (Anthropic.SDK / `Azure.AI.OpenAI`) keyed by API key, with round-robin + HTTP 429 cooldown failover across the (runtime override + appsettings) key pool.
+- **`MAF`** — Microsoft Agent Framework `ChatClient` (`Microsoft.Agents.AI`).
+- **`RemoteAgent`** — dispatches to a paired dev-machine agent over SignalR (owned by `Modules.RemoteAgent`).
 
-Cost: `CostCalculator.Calculate(model, in, out)` looks up hardcoded pricing (Sonnet 4 / Haiku 4.5 / GPT-4.1 / GPT-4o-mini, USD per 1M tokens, Q2/2026 snapshot). Matches with a case-insensitive `StartsWith` — allowing suffixes like `claude-sonnet-4-20250514`. A model with no match → returns `0m`.
+Provider selection: `Llm:ForceProvider` / per-agent `Agents:<Name>:Provider` + runtime overrides from the Settings UI (hydrated per request from tenant-scoped `AppConfig`). Cost: `CostCalculator.Calculate(model, in, out)` looks up hardcoded pricing (Sonnet 4 / Haiku 4.5 / GPT-4.1 / GPT-4o-mini, USD per 1M tokens, Q2/2026 snapshot); case-insensitive `StartsWith` match (allows suffixes like `claude-sonnet-4-20250514`); no match → `0m`.
 
-DI: `services.AddLlmGateway(configuration)` (Infrastructure) registers a named `HttpClient` via `IHttpClientFactory`, binds `LlmOptions` from the `"Llm"` section, and registers the factory + concrete clients. The default `ILlmClient` is resolved via `ILlmClientFactory.CreateDefault()`.
+### Tools, policy & evidence (governance)
 
-### Persistence (optional)
+Agents call **tools** through the gateway: `LlmRequest.Tools = ["build_verifier"]` makes `PooledChatLlmClient` resolve each name via `IToolRegistry`, adapt the `ITool` into an `AIFunction` (`AIToolFunction`), and run the tool-call loop via `FunctionInvokingChatClient`. **Every** invocation passes through `IToolGateway` (`DefaultToolGateway` in Domain) → `IToolPolicy` gate (default-permissive; production reads a per-tenant allowlist) → `ITool.InvokeAsync` → `IToolInvocationLog` (evidence; refusals + errors recorded too). `IToolGateway` is the single server-side seam so remote/off-box execution enforces identical governance. MCP: `Modules.Mcp` registers upstream MCP server tools under `{server}.{tool}`; the Api serves AgentOS's own pipeline as MCP tools at `/mcp`.
 
-`services.AddPersistence(configuration)` (Infrastructure) registers an EF Core `AgentOsDbContext` (Postgres/Npgsql) + repositories **when `ConnectionStrings:DefaultConnection` is set**; otherwise it registers no-op repos so the app still boots stateless (CI / local without a DB). Three tables: `pipeline_runs` (artifact as `jsonb`), `run_metrics` (one row per LLM call — SQL-friendly for analytics), `orchestrations` (Agent Studio state). `PersistingOrchestratorAgent` decorates `IOrchestratorAgent` to save each run + per-call metrics best-effort (a DB error never corrupts a successful run). `await app.Services.InitializePersistenceAsync()` applies EF migrations at startup. Local Postgres: `docker compose up -d`. Azure: bicep `deployPostgres=true` (default off — avoids cost).
+### Persistence & multi-tenancy
+
+`ConnectionStrings:DefaultConnection` (Postgres) is the only required wiring; **each module attaches its own DbContext + schema + migration history** (`pipeline.*`, `tenants.*`, `config.*`) and applies migrations at startup via its module init hook. Without a connection string (CI / local), modules fall back to no-op repositories so the app boots stateless. Row-level isolation: tenant-scoped entities carry a `TenantId` + an EF global query filter reading `ITenantContext.TenantId`. `Auth:Mode` switches between `operator` (single pseudo-tenant, HS256) and `keycloak` (RS256, `tenant` claim). Local Postgres via Aspire AppHost; Azure deploy via `azd up` (Container Apps).
 
 ## Conventions
 
-**.NET 10 / C# 14**, pinned to `10.0.100` via `global.json`. `Directory.Build.props` sets `TreatWarningsAsErrors=true`, `Nullable=enable`, `AnalysisLevel=latest-recommended`, `InvariantGlobalization=true` (Api overrides to `false`).
+**.NET 10 / C# 14**, pinned via `global.json`. `Directory.Build.props` sets `TreatWarningsAsErrors=true`, `Nullable=enable`, `AnalysisLevel=latest-recommended`, `InvariantGlobalization=true` (Api overrides to `false`).
 
-**Analyzer suppressions** (see `Directory.Build.props`): `CA1848` + `CA1873` across the whole solution (LoggerMessage delegates) — must be removed before v1.0. The test project additionally suppresses `CA1707` (underscores in test names), `CA1816`, `CA1859`, `xUnit1051`. Persistence-related: `Infrastructure.csproj` suppresses two `NU1903` advisories for `System.Security.Cryptography.Xml` (a build-time-only transitive of `Microsoft.EntityFrameworkCore.Design`, not shipped at runtime, no patch yet) and exposes internals via `InternalsVisibleTo("AgentOs.Tests")`; `.editorconfig` marks `**/Migrations/*.cs` as `generated_code` (EF migrations use block-scoped namespaces).
+**Analyzer suppressions** (see `Directory.Build.props`): `CA1848` + `CA1873` solution-wide (LoggerMessage delegates) — remove before v1.0. The test project additionally suppresses `CA1707`, `CA1816`, `CA1859`, `xUnit1051`. Modules expose internals via `InternalsVisibleTo("AgentOs.Tests")` where tests need them; `.editorconfig` marks `**/Migrations/*.cs` as `generated_code`.
 
-**Test stack**: xUnit **v3** (`xunit.v3` 1.1.0), Shouldly (NOT FluentAssertions, since v8 went commercial), NSubstitute. Naming: `MethodName_StateUnderTest_ExpectedBehavior`. `TestHttpMessageHandler.cs` is a helper that stubs `HttpClient` for client tests.
+**Test stack**: xUnit **v3** (`xunit.v3`), Shouldly (NOT FluentAssertions — v8 went commercial), NSubstitute. Naming: `MethodName_StateUnderTest_ExpectedBehavior`.
 
-**Commits**: Conventional Commits in English (e.g. `feat(llm):`, `fix(infra):`, `chore(deps):`). Co-author Claude when pair-coded. CI fails if the Release build/test fails.
+**Commits**: Conventional Commits in English (e.g. `feat(tools):`, `fix(llm):`, `chore(deps):`). Co-author Claude when pair-coded. CI fails if the Release build/test fails.
 
-**Language**: code, comments, docs, and LLM prompts/output are English (the repo was standardized from Vietnamese). The agent system prompts (`Application/Prompts/*.cs`) open with `"You are the <X> Agent …"` — this opening line is a routing key matched by `DemoLlmClient` + `OrchestrationStudio`; keep all three in sync if reworded.
+**Language**: code, comments, docs, and LLM prompts/output are English (the repo was standardized from Vietnamese). The agent system prompts (`Modules.Pipeline/Prompts/*.cs`) open with `"You are the <X> Agent …"` — this opening line is used as a routing key; keep the prompt and any matcher in sync if reworded.
+
+**Branding**: the product + desktop UI are both **AgentOS**. Code namespaces stay `AgentOs.*`. Do not reintroduce "Agent Studio" or the retired `AgenticSdlc.*` prefix.
 
 **PR**: fill in `.github/PULL_REQUEST_TEMPLATE.md` (summary + test plan) on every pull request.
