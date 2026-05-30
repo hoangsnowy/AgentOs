@@ -7,6 +7,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Tools;
+using AgentOs.Modules.Tools.Evidence;
+using AgentOs.Modules.Tools.Policy;
 using AgentOs.Modules.Tools.Registry;
 using AgentOs.SharedKernel.Modularity;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +24,8 @@ public sealed class ToolsModule : IModule, IInitializableModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<IToolRegistry, InMemoryToolRegistry>();
+        services.TryAddSingleton<IToolPolicy, PermissiveToolPolicy>();
+        services.TryAddSingleton<IToolInvocationLog, InMemoryToolInvocationLog>();
     }
 
     public Task InitializeAsync(IServiceProvider services, CancellationToken ct)

@@ -22,13 +22,22 @@ internal sealed class AIToolFunction : AIFunction
     private readonly string _tenantId;
     private readonly string? _runId;
     private readonly JsonElement _schema;
+    private readonly IToolPolicy? _policy;
+    private readonly IToolInvocationLog? _log;
 
     public AIToolFunction(ITool tool, string tenantId, string? runId)
+        : this(tool, tenantId, runId, policy: null, log: null)
+    {
+    }
+
+    public AIToolFunction(ITool tool, string tenantId, string? runId, IToolPolicy? policy, IToolInvocationLog? log)
     {
         ArgumentNullException.ThrowIfNull(tool);
         _tool = tool;
         _tenantId = string.IsNullOrWhiteSpace(tenantId) ? "anonymous" : tenantId;
         _runId = runId;
+        _policy = policy;
+        _log = log;
 
         var def = tool.Definition;
         def.Validate();
@@ -60,16 +69,54 @@ internal sealed class AIToolFunction : AIFunction
             TenantId: _tenantId,
             RunId: _runId);
 
-        var result = await _tool.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
-        if (result.IsError)
+        var started = DateTimeOffset.UtcNow;
+
+        // Epic E5 — policy gate. Denied calls are surfaced to the LLM as a tool_result error
+        // and recorded in the evidence log so the audit trail covers refusals as well.
+        if (_policy is not null)
         {
-            // Surface tool-side errors as the result string; FunctionInvokingChatClient feeds this
-            // back as the tool_result content so the LLM can react (retry, give up, ask user).
-            return string.IsNullOrEmpty(result.ErrorMessage)
-                ? $"Tool '{_tool.Definition.Name}' returned an error."
-                : result.ErrorMessage;
+            var decision = await _policy.EvaluateAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!decision.Allowed)
+            {
+                var deniedReason = decision.Reason ?? $"Tool '{_tool.Definition.Name}' denied by policy.";
+                await TryAppendEvidence(request, deniedReason, isError: true, started).ConfigureAwait(false);
+                return deniedReason;
+            }
         }
 
-        return result.Output;
+        var result = await _tool.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
+        var output = result.IsError
+            ? (string.IsNullOrEmpty(result.ErrorMessage)
+                ? $"Tool '{_tool.Definition.Name}' returned an error."
+                : result.ErrorMessage!)
+            : result.Output;
+
+        await TryAppendEvidence(request, output, result.IsError, started).ConfigureAwait(false);
+        return output;
+    }
+
+    private async ValueTask TryAppendEvidence(ToolInvocationRequest request, string output, bool isError, DateTimeOffset started)
+    {
+        if (_log is null)
+        {
+            return;
+        }
+        try
+        {
+            await _log.AppendAsync(new ToolInvocationEvidence(
+                CallId: request.CallId,
+                ToolName: request.ToolName,
+                TenantId: request.TenantId,
+                RunId: request.RunId,
+                Input: request.Input,
+                Output: output,
+                IsError: isError,
+                StartedUtc: started,
+                FinishedUtc: DateTimeOffset.UtcNow)).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Evidence is best-effort — a log failure must never break the tool call.
+        }
     }
 }

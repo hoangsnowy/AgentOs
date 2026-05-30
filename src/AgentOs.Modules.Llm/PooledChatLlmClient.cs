@@ -30,6 +30,8 @@ public sealed class PooledChatLlmClient : ILlmClient
     private readonly TimeSpan _baseDelay;
     private readonly IToolRegistry? _toolRegistry;
     private readonly ITenantContext? _tenantContext;
+    private readonly IToolPolicy? _toolPolicy;
+    private readonly IToolInvocationLog? _toolInvocationLog;
     private readonly ConcurrentDictionary<string, IChatClient> _clients = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, IChatClient> _wrappedClients = new(StringComparer.Ordinal);
 
@@ -46,7 +48,9 @@ public sealed class PooledChatLlmClient : ILlmClient
         ILogger logger,
         TimeSpan? baseDelay = null,
         IToolRegistry? toolRegistry = null,
-        ITenantContext? tenantContext = null)
+        ITenantContext? tenantContext = null,
+        IToolPolicy? toolPolicy = null,
+        IToolInvocationLog? toolInvocationLog = null)
     {
         Provider = string.IsNullOrWhiteSpace(provider) ? throw new ArgumentException("provider required", nameof(provider)) : provider;
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
@@ -58,6 +62,8 @@ public sealed class PooledChatLlmClient : ILlmClient
         _baseDelay = baseDelay ?? TimeSpan.FromSeconds(1);
         _toolRegistry = toolRegistry;
         _tenantContext = tenantContext;
+        _toolPolicy = toolPolicy;
+        _toolInvocationLog = toolInvocationLog;
     }
 
     /// <inheritdoc />
@@ -163,7 +169,7 @@ public sealed class PooledChatLlmClient : ILlmClient
                 _logger.LogWarning("[{Provider}] tool '{Tool}' requested but not registered — dropped.", Provider, name);
                 continue;
             }
-            resolved.Add(new AIToolFunction(tool, tenantId, runId: null));
+            resolved.Add(new AIToolFunction(tool, tenantId, runId: null, policy: _toolPolicy, log: _toolInvocationLog));
         }
         return resolved;
     }
