@@ -68,7 +68,9 @@ src/
 ├── AgentOs.Modules.Pipeline/   # Agents + prompts + orchestrator + PipelineDbContext (schema: pipeline)
 ├── AgentOs.Modules.Identity/   # JwtAuth + DefaultTenantContext + HttpTenantContext + /auth
 ├── AgentOs.Modules.Tenants/    # Keycloak admin + TenantsDbContext (schema: tenants) + /tenants
-├── AgentOs.Modules.Integration/# GitHub PR + dotnet build verifier
+├── AgentOs.Modules.Integration/# GitHub PR + dotnet build verifier (+ BuildVerifierTool)
+├── AgentOs.Modules.Tools/      # ITool contract + IToolRegistry + IToolPolicy + IToolInvocationLog
+├── AgentOs.Modules.Mcp/        # MCP client — connects to external MCP servers, registers their tools
 ├── AgentOs.Modules.RemoteAgent/# SignalR hub + transport + RemoteAgentLlmClient
 ├── AgentOs.Api/                # ASP.NET Core minimal API (+ Scalar UI). Composition root only.
 ├── AgentOs.Web/                # Blazor Server "Agent Studio". Composition root only.
@@ -80,8 +82,23 @@ tests/                          # xUnit (~180 unit/integration) + Playwright E2E
 
 Module dependency rule: a module references **Domain + SharedKernel only**. Cross-module
 references are explicit and minimal (Llm → AppConfig for hydrated overrides; Tenants → Identity
-for the JWT scheme; RemoteAgent → Llm for the keyed registration shape; Integration → AppConfig).
-Hosts ref every module.
+for the JWT scheme; RemoteAgent → Llm for the keyed registration shape; Integration → AppConfig
+and → Tools so BuildVerifierTool registers via `AddTool<>()`). Hosts ref every module.
+
+### Tools & MCP
+
+Agents call **tools** (build_verifier, MCP-exposed GitHub / filesystem actions, custom ITools)
+through the LLM gateway: `LlmRequest.Tools = ["build_verifier"]` causes `PooledChatLlmClient` to
+resolve each name via `IToolRegistry`, adapt the `ITool` into a `Microsoft.Extensions.AI.AIFunction`,
+and wrap the chat client with `FunctionInvokingChatClient` so the tool-call loop runs transparently
+inside `SendAsync`. Every invocation passes through `IToolPolicy` (gate) and `IToolInvocationLog`
+(evidence) so refused and successful calls alike are auditable.
+
+`AgentOs.Modules.Mcp` connects to upstream **MCP servers** at startup and registers their tools
+under the prefix `{server}.{tool}` — local and remote tools live in the same registry. The Api
+host also serves **MCP itself** at `/mcp` (Streamable HTTP), exposing `run_pipeline`, `list_runs`,
+and `get_run` so any MCP host (Claude Desktop, VS Code, custom orchestrator) can drive AgentOs.
+End result: a tool mesh where AgentOs is both an MCP consumer and an MCP provider.
 
 **Pipeline dataflow:**
 
