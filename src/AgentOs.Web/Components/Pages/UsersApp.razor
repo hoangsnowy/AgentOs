@@ -1,0 +1,290 @@
+@* UsersApp — tenant-admin member management desktop window (Windows Server "Users" / GNOME
+   Users vibe). Lists the current tenant's Keycloak members and lets an Admin change roles, send a
+   password-reset email, remove a member, or mint an invitation URL. Admin-gated: the app is
+   AdminOnly in AppCatalog, and the page itself re-checks the admin role (defence in depth). Tenant
+   + role are read from the circuit's AuthenticationState — HttpContext is null in interactive
+   Server, so ITenantContext can't be used in a component. *@
+
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Modules.Tenants
+@using AgentOs.Modules.Tenants.Keycloak
+@inject AgentOs.Modules.Tenants.Keycloak.IKeycloakAdminClient Kc
+@inject AgentOs.Modules.Tenants.ITenantSignupService Signup
+@inject AgentOs.Web.Services.ToastService Toasts
+
+<div class="admin-page users-app">
+    @if (!_resolved)
+    {
+        <Spinner />
+    }
+    else if (!_isAdmin)
+    {
+        <div class="login-error">Admin role required. Your account is a member of <code>@_tenantId</code> without admin rights.</div>
+    }
+    else
+    {
+        <header class="admin-head">
+            <div>
+                <h1>Users · <code>@_tenantId</code></h1>
+                <p class="admin-sub">@(_members?.Count ?? 0) member(s) · roles + lifecycle managed via Keycloak</p>
+            </div>
+            <Btn OnClick="Reload" Disabled="_loading">
+                <Icon Name="arrow-clockwise" Size="14" /> Refresh
+            </Btn>
+        </header>
+
+        @if (_loadError is not null)
+        {
+            <div class="login-error">@_loadError</div>
+        }
+        else if (_members is null)
+        {
+            <Spinner />
+        }
+        else
+        {
+            <table class="admin-tbl">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th style="text-align:right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in _members)
+                    {
+                        var isSelf = string.Equals(m.Id, _myUserId, StringComparison.Ordinal);
+                        <tr>
+                            <td>@m.Username @(isSelf ? "(you)" : "")</td>
+                            <td>@(m.Email ?? "—")</td>
+                            <td>
+                                <select class="prefs-select" disabled="@(_busyId == m.Id || isSelf)"
+                                        value="@PrimaryRole(m)" @onchange="@(e => ChangeRole(m, e))">
+                                    <option value="admin">Admin</option>
+                                    <option value="member">Member</option>
+                                </select>
+                            </td>
+                            <td>
+                                @if (!m.Enabled) { <Badge>disabled</Badge> }
+                                else if (!m.EmailVerified) { <Badge>unverified</Badge> }
+                                else { <Badge>active</Badge> }
+                            </td>
+                            <td style="text-align:right; white-space:nowrap">
+                                <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => ResetPassword(m))" Disabled="_busyId == m.Id">
+                                    <Icon Name="lock" Size="13" /> Reset
+                                </Btn>
+                                <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Danger"
+                                     OnClick="@(() => AskRemove(m))" Disabled="@(_busyId == m.Id || isSelf)">
+                                    <Icon Name="x" Size="13" /> Remove
+                                </Btn>
+                            </td>
+                        </tr>
+                    }
+                    @if (_members.Count == 0)
+                    {
+                        <tr><td colspan="5" class="muted">No members yet — invite one below.</td></tr>
+                    }
+                </tbody>
+            </table>
+
+            <section class="admin-section">
+                <h2>Invite a member</h2>
+                <div class="admin-invite">
+                    <Field Label="Email (optional)">
+                        <input type="email" @bind="_inviteEmail" placeholder="bob@@acme.test" autocomplete="email" />
+                    </Field>
+                    <Field Label="Role">
+                        <select @bind="_inviteRole" class="prefs-select">
+                            <option value="member">Member</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </Field>
+                    <Field Label="TTL (hours)">
+                        <input type="number" min="1" max="168" @bind="_inviteTtl" />
+                    </Field>
+                    <Btn Variant="Btn.ButtonVariant.Primary" OnClick="MintInvite" Disabled="_busy">
+                        @(_busy ? "Generating…" : "Mint invite URL")
+                    </Btn>
+                </div>
+
+                @if (_inviteUrl is not null)
+                {
+                    <div class="admin-invite-result">
+                        <div class="admin-invite-hint">Copy + send to your invitee. Expires @_inviteExpiresAt.ToString("u").</div>
+                        <textarea readonly rows="2" class="admin-invite-url">@_inviteUrl</textarea>
+                    </div>
+                }
+                @if (_inviteError is not null)
+                {
+                    <div class="login-error">@_inviteError</div>
+                }
+            </section>
+        }
+    }
+</div>
+
+<Dialog Show="_confirmRemove is not null" Title="Remove member" Width="380" OnClose="@(() => _confirmRemove = null)">
+    <ChildContent>
+        @if (_confirmRemove is not null)
+        {
+            <p>Permanently remove <strong>@_confirmRemove.Username</strong> from <code>@_tenantId</code>?</p>
+            <p class="muted">Deletes the Keycloak account. This cannot be undone.</p>
+        }
+    </ChildContent>
+    <Footer>
+        <Btn OnClick="@(() => _confirmRemove = null)">Cancel</Btn>
+        <Btn Variant="Btn.ButtonVariant.Danger" OnClick="ConfirmRemove">Remove</Btn>
+    </Footer>
+</Dialog>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _resolved;
+    private bool _isAdmin;
+    private string _tenantId = "default";
+    private string? _myUserId;
+
+    private IReadOnlyList<KeycloakUser>? _members;
+    private bool _loading;
+    private string? _loadError;
+    private string? _busyId;
+
+    private KeycloakUser? _confirmRemove;
+
+    private string _inviteEmail = "";
+    private string _inviteRole = "member";
+    private int _inviteTtl = 24;
+    private bool _busy;
+    private string? _inviteUrl;
+    private DateTimeOffset _inviteExpiresAt;
+    private string? _inviteError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            var user = state.User;
+            _isAdmin = user.IsInRole("admin");
+            _tenantId = user.FindFirst("tenant")?.Value ?? "default";
+            _myUserId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+        _resolved = true;
+
+        if (_isAdmin)
+        {
+            await LoadMembersAsync();
+        }
+    }
+
+    private static string PrimaryRole(KeycloakUser m) =>
+        m.Roles.Contains("admin", StringComparer.Ordinal) ? "admin" : "member";
+
+    private async Task LoadMembersAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        try
+        {
+            _members = await Kc.ListUsersByTenantAsync(_tenantId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Reload() => await LoadMembersAsync();
+
+    private async Task ChangeRole(KeycloakUser m, ChangeEventArgs e)
+    {
+        var role = e.Value?.ToString() ?? "member";
+        if (string.Equals(PrimaryRole(m), role, StringComparison.Ordinal)) { return; }
+        _busyId = m.Id;
+        try
+        {
+            await Kc.UpdateUserRolesAsync(m.Id, new[] { role });
+            Toasts.Show("Users", $"{m.Username} is now {role}.", ToastKind.Ok);
+            await LoadMembersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Toasts.Show("Users", $"Role change failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    private async Task ResetPassword(KeycloakUser m)
+    {
+        _busyId = m.Id;
+        try
+        {
+            await Kc.SendPasswordResetEmailAsync(m.Id);
+            Toasts.Show("Users", $"Password-reset email sent to {m.Username}.", ToastKind.Ok);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Toasts.Show("Users", $"Reset failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    private void AskRemove(KeycloakUser m) => _confirmRemove = m;
+
+    private async Task ConfirmRemove()
+    {
+        var m = _confirmRemove;
+        _confirmRemove = null;
+        if (m is null) { return; }
+        _busyId = m.Id;
+        try
+        {
+            await Kc.DeleteUserAsync(m.Id);
+            Toasts.Show("Users", $"Removed {m.Username}.", ToastKind.Ok);
+            await LoadMembersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Toasts.Show("Users", $"Remove failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    private void MintInvite()
+    {
+        if (_busy) { return; }
+        _busy = true;
+        _inviteError = null;
+        try
+        {
+            var ttl = TimeSpan.FromHours(Math.Clamp(_inviteTtl, 1, 168));
+            var token = Signup.CreateInvitation(
+                _tenantId,
+                _inviteRole,
+                string.IsNullOrWhiteSpace(_inviteEmail) ? null : _inviteEmail,
+                ttl);
+            _inviteExpiresAt = token.ExpiresAtUtc;
+            _inviteUrl = $"/signup?invite={Uri.EscapeDataString(token.Token)}";
+        }
+        catch (ArgumentException ex) { _inviteError = ex.Message; }
+        finally { _busy = false; }
+    }
+}

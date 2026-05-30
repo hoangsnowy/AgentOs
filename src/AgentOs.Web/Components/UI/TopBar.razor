@@ -54,8 +54,6 @@
     <div class="dd-clock-big">@DateTime.Now.ToString("HH:mm:ss")</div>
     <div class="dd-clock-date">@DateTime.Now.ToString("dddd")</div>
     <div class="dd-clock-sub">@DateTime.Now.ToString("d MMMM yyyy")</div>
-    <div class="dd-sep"></div>
-    <button class="dd-item" @onclick="OpenSystem"><span class="dd-ic"><Icon Name="clock" Size="14" /></span> Date &amp; time settings</button>
 </Dropdown>
 
 <Dropdown Show="_userOpen" ExtraClass="dropdown-user" OnClose="@(() => _userOpen = false)">

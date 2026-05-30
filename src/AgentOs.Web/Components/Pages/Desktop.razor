@@ -1,4 +1,5 @@
 @page "/"
+@using Microsoft.AspNetCore.Components.Authorization
 @inject AgentOs.Web.Services.WindowManagerService WM
 @inject AgentOs.Web.Services.ToastService Toasts
 
@@ -11,7 +12,7 @@
     <div class="desktop-group">
         <div class="desktop-group-title">Apps</div>
         <div class="desktop-icons">
-            @foreach (var app in AgentOs.Web.Services.AppCatalog.Pinned)
+            @foreach (var app in AgentOs.Web.Services.AppCatalog.VisiblePinned(_isAdmin))
             {
                 <DesktopIcon Title="@app.Title" Icon="@app.Icon" Caption="@app.Caption"
                              OnClick="@(() => WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H))" />
@@ -54,8 +55,20 @@
 </ContextMenu>
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private bool _ctxShow;
     private int _ctxX, _ctxY;
+    private bool _isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsInRole("admin");
+        }
+    }
 
     private void OnRightClick(MouseEventArgs e)
     {

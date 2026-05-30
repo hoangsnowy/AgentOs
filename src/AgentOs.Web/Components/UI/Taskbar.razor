@@ -1,6 +1,7 @@
 @* Floating dock (bottom-center) + system tray (top-right) — macOS / KDE Latte vibe. *@
 
 @using AgentOs.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
 @inject WindowManagerService WM
 @inject IJSRuntime JS
 @implements IDisposable
@@ -15,7 +16,7 @@
 
     <span class="dock-sep"></span>
 
-    @foreach (var app in AppCatalog.Pinned)
+    @foreach (var app in AppCatalog.VisiblePinned(_isAdmin))
     {
         var isOpen = WM.Open.Any(o => o.AppKey == app.Key);
         <button class="dock-item @(isOpen ? "running" : "")"
@@ -50,10 +51,12 @@
 @code {
     [Parameter] public bool StartOpen { get; set; }
     [Parameter] public EventCallback OnToggleStart { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private string _now = "";
     private string _today = "";
     private string? _user;
+    private bool _isAdmin;
     private string AvatarLetter => string.IsNullOrEmpty(_user) ? "?" : _user[..1].ToUpperInvariant();
 
     private System.Threading.Timer? _timer;
@@ -64,6 +67,15 @@
         _timer = new System.Threading.Timer(_ => InvokeAsync(() => { UpdateClock(); StateHasChanged(); }),
             null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         WM.Changed += OnWmChanged;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsInRole("admin");
+        }
     }
 
     private void OnWmChanged() => InvokeAsync(StateHasChanged);

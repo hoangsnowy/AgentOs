@@ -189,6 +189,130 @@ internal static class TenantEndpoints
         .WithTags("Tenants")
         .RequireAuthorization("Admin");
 
+        // Change a member's roles (admin/member). Tenant-scoped: an Admin can only touch members of
+        // their own tenant, and cannot strip their own last admin role (lock-out guard).
+        app.MapPatch("/tenants/{tenantId}/members/{userId}", async (
+            string tenantId,
+            string userId,
+            UpdateMemberRolesRequest body,
+            IKeycloakAdminClient kc,
+            IAuditLog audit,
+            ITenantContext ctx,
+            HttpContext http,
+            CancellationToken ct) =>
+        {
+            if (!string.Equals(ctx.TenantId, tenantId, StringComparison.Ordinal))
+            {
+                return Results.Forbid();
+            }
+            var roles = (body.Roles ?? Array.Empty<string>())
+                .Where(r => r is "admin" or "member")
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (roles.Count == 0)
+            {
+                return Results.BadRequest(new { error = "roles must contain at least one of: admin, member" });
+            }
+            // Lock-out guard: an Admin editing themselves must keep the admin role.
+            if (string.Equals(ctx.UserId, userId, StringComparison.Ordinal) && !roles.Contains("admin", StringComparer.Ordinal))
+            {
+                return Results.BadRequest(new { error = "You cannot remove your own admin role." });
+            }
+            try
+            {
+                await kc.UpdateUserRolesAsync(userId, roles, ct).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Problem(title: "Keycloak role update failed", detail: ex.Message, statusCode: StatusCodes.Status502BadGateway);
+            }
+            await audit.WriteAsync(new AuditEntry(
+                Guid.NewGuid(), tenantId, ctx.UserId, AuditActions.MemberRoleChanged,
+                Target: $"user={userId},roles={string.Join('+', roles)}",
+                IpAddress: http.Connection.RemoteIpAddress?.ToString(),
+                UserAgent: http.Request.Headers.UserAgent.ToString(),
+                TimestampUtc: DateTimeOffset.UtcNow), ct).ConfigureAwait(false);
+            return Results.Ok(new { userId, roles });
+        })
+        .WithName("TenantsUpdateMemberRoles")
+        .WithSummary("Change a member's roles (tenant Admin only)")
+        .WithTags("Tenants")
+        .RequireAuthorization("Admin");
+
+        // Remove a member from the tenant (deletes the Keycloak user). Cannot remove yourself.
+        app.MapDelete("/tenants/{tenantId}/members/{userId}", async (
+            string tenantId,
+            string userId,
+            IKeycloakAdminClient kc,
+            IAuditLog audit,
+            ITenantContext ctx,
+            HttpContext http,
+            CancellationToken ct) =>
+        {
+            if (!string.Equals(ctx.TenantId, tenantId, StringComparison.Ordinal))
+            {
+                return Results.Forbid();
+            }
+            if (string.Equals(ctx.UserId, userId, StringComparison.Ordinal))
+            {
+                return Results.BadRequest(new { error = "You cannot remove yourself." });
+            }
+            try
+            {
+                await kc.DeleteUserAsync(userId, ct).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Problem(title: "Keycloak delete failed", detail: ex.Message, statusCode: StatusCodes.Status502BadGateway);
+            }
+            await audit.WriteAsync(new AuditEntry(
+                Guid.NewGuid(), tenantId, ctx.UserId, AuditActions.MemberRemoved,
+                Target: $"user={userId}",
+                IpAddress: http.Connection.RemoteIpAddress?.ToString(),
+                UserAgent: http.Request.Headers.UserAgent.ToString(),
+                TimestampUtc: DateTimeOffset.UtcNow), ct).ConfigureAwait(false);
+            return Results.NoContent();
+        })
+        .WithName("TenantsRemoveMember")
+        .WithSummary("Remove a member from the tenant (tenant Admin only)")
+        .WithTags("Tenants")
+        .RequireAuthorization("Admin");
+
+        // Trigger a password-reset action email for a member (Keycloak owns the new password).
+        app.MapPost("/tenants/{tenantId}/members/{userId}/reset-password", async (
+            string tenantId,
+            string userId,
+            IKeycloakAdminClient kc,
+            IAuditLog audit,
+            ITenantContext ctx,
+            HttpContext http,
+            CancellationToken ct) =>
+        {
+            if (!string.Equals(ctx.TenantId, tenantId, StringComparison.Ordinal))
+            {
+                return Results.Forbid();
+            }
+            try
+            {
+                await kc.SendPasswordResetEmailAsync(userId, ct).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Problem(title: "Keycloak password-reset failed", detail: ex.Message, statusCode: StatusCodes.Status502BadGateway);
+            }
+            await audit.WriteAsync(new AuditEntry(
+                Guid.NewGuid(), tenantId, ctx.UserId, AuditActions.MemberPasswordReset,
+                Target: $"user={userId}",
+                IpAddress: http.Connection.RemoteIpAddress?.ToString(),
+                UserAgent: http.Request.Headers.UserAgent.ToString(),
+                TimestampUtc: DateTimeOffset.UtcNow), ct).ConfigureAwait(false);
+            return Results.Accepted();
+        })
+        .WithName("TenantsResetMemberPassword")
+        .WithSummary("Send a member a password-reset email (tenant Admin only)")
+        .WithTags("Tenants")
+        .RequireAuthorization("Admin");
+
         app.MapGet("/tenants/{tenantId}/audit", async (
             string tenantId,
             IAuditLog audit,
@@ -283,6 +407,9 @@ public sealed record CreatedTenantResponse(TenantRecord Tenant, string KeycloakU
 
 /// <summary>Body for POST /tenants/{id}/members.</summary>
 public sealed record InviteMemberRequest(string Username, string? Email, IReadOnlyList<string>? Roles);
+
+/// <summary>Body for PATCH /tenants/{id}/members/{userId}.</summary>
+public sealed record UpdateMemberRolesRequest(IReadOnlyList<string>? Roles);
 
 /// <summary>Response for POST /tenants/{id}/members.</summary>
 public sealed record InvitedMemberResponse(string KeycloakUserId, string Username, IReadOnlyList<string> Roles);

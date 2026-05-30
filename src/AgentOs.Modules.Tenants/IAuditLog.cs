@@ -36,6 +36,9 @@ public static class AuditActions
     public const string SignupCompleted = "signup.completed";
     public const string TenantCreated = "tenant.created";
     public const string MemberInvited = "member.invited";
+    public const string MemberRoleChanged = "member.role_changed";
+    public const string MemberRemoved = "member.removed";
+    public const string MemberPasswordReset = "member.password_reset";
     public const string InvitationMinted = "invitation.minted";
     public const string LoginFailed = "login.failed";
 }

@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
 @inject Microsoft.JSInterop.IJSRuntime JS
 @inject NavigationManager Nav
 @inject AgentOs.Web.Services.WindowManagerService WM
@@ -46,7 +47,7 @@
                     <span class="ko-section">Pinned</span>
                 </div>
                 <div class="ko-grid">
-                    @foreach (var app in AppCatalog.Pinned)
+                    @foreach (var app in AppCatalog.VisiblePinned(_isAdmin))
                     {
                         <button class="ko-tile" @onclick="@(() => Launch(app))" title="@app.Caption">
                             <span class="ko-tile-ic"><Icon Name="@app.Icon" Size="22" /></span>
@@ -150,12 +151,24 @@
 <ToastHost />
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private bool _startOpen;
     private bool _aboutOpen;
     private string _query = "";
     private string? _user;
+    private bool _isAdmin;
     private ElementReference _searchRef;
     private bool _focusOnRender;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsInRole("admin");
+        }
+    }
 
     private string AvatarLetter => string.IsNullOrEmpty(_user) ? "O" : _user[..1].ToUpperInvariant();
 
@@ -222,7 +235,7 @@
         var q = _query.Trim();
         _results = string.IsNullOrEmpty(q)
             ? new()
-            : AppCatalog.All
+            : AppCatalog.VisibleAll(_isAdmin)
                 .Where(a => a.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
                          || a.Caption.Contains(q, StringComparison.OrdinalIgnoreCase)
                          || a.Category.Contains(q, StringComparison.OrdinalIgnoreCase))
@@ -234,7 +247,7 @@
         if (e.Key == "Escape") { CloseStart(); }
         else if (e.Key == "Enter")
         {
-            var first = !string.IsNullOrWhiteSpace(_query) ? _results.FirstOrDefault() : AppCatalog.Pinned.FirstOrDefault();
+            var first = !string.IsNullOrWhiteSpace(_query) ? _results.FirstOrDefault() : AppCatalog.VisiblePinned(_isAdmin).FirstOrDefault();
             if (first is not null) { Launch(first); }
         }
     }

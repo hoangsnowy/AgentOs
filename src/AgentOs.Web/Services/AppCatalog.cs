@@ -16,6 +16,7 @@ namespace AgentOs.Web.Services;
 /// <param name="W">Default window width.</param>
 /// <param name="H">Default window height.</param>
 /// <param name="Pinned">Whether the app appears in the dock + pinned grid.</param>
+/// <param name="AdminOnly">When true the app is only shown to users holding the tenant <c>admin</c> role.</param>
 public sealed record DesktopApp(
     string Key,
     string Title,
@@ -24,7 +25,8 @@ public sealed record DesktopApp(
     string Category,
     int W = 920,
     int H = 620,
-    bool Pinned = true);
+    bool Pinned = true,
+    bool AdminOnly = false);
 
 /// <summary>The fixed catalog of apps the AgentOS shell can launch.</summary>
 public static class AppCatalog
@@ -34,6 +36,7 @@ public static class AppCatalog
     {
         new("pipeline", "Pipeline", "play",  "Run the 5-agent SDLC pipeline", "Agents", 920, 620),
         new("workflow", "Workflow", "graph", "Visual orchestration editor",   "Agents", 1080, 660),
+        new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: true, AdminOnly: true),
         new("settings", "Settings", "gear",  "LLM keys, providers, GitHub",   "System", 760, 600),
         new("system",   "System",   "wrench","OS appearance, themes, about",  "System", 760, 600),
     };
@@ -45,4 +48,12 @@ public static class AppCatalog
     /// <summary>Resolve an app by key, or <c>null</c> if unknown.</summary>
     public static DesktopApp? Find(string key) =>
         All.FirstOrDefault(a => a.Key == key);
+
+    /// <summary>All apps visible to a user with the given admin status (filters out <see cref="DesktopApp.AdminOnly"/>).</summary>
+    public static IEnumerable<DesktopApp> VisibleAll(bool isAdmin) =>
+        All.Where(a => isAdmin || !a.AdminOnly);
+
+    /// <summary>Pinned apps visible to a user with the given admin status.</summary>
+    public static IEnumerable<DesktopApp> VisiblePinned(bool isAdmin) =>
+        Pinned.Where(a => isAdmin || !a.AdminOnly);
 }

@@ -211,6 +211,90 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
         }
     }
 
+    /// <inheritdoc />
+    public async Task UpdateUserRolesAsync(string userId, IReadOnlyList<string> roles, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        ArgumentNullException.ThrowIfNull(roles);
+
+        var desired = roles
+            .Where(r => ManagedRoles.Contains(r, StringComparer.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var token = await GetAdminTokenAsync(ct).ConfigureAwait(false);
+
+        // Current realm role mappings for the user.
+        using var curReq = BuildRequest(HttpMethod.Get, $"admin/realms/{_options.Realm}/users/{userId}/role-mappings/realm", token);
+        using var curResp = await _http.SendAsync(curReq, ct).ConfigureAwait(false);
+        if (!curResp.IsSuccessStatusCode)
+        {
+            var body = await curResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new InvalidOperationException($"Keycloak get-role-mappings failed ({(int)curResp.StatusCode}): {body}");
+        }
+        var current = await curResp.Content.ReadFromJsonAsync<List<KeycloakRoleDto>>(ct).ConfigureAwait(false)
+            ?? new List<KeycloakRoleDto>();
+        var currentManaged = current.Where(r => ManagedRoles.Contains(r.Name, StringComparer.Ordinal)).ToList();
+
+        // Revoke managed roles no longer desired.
+        var toRemove = currentManaged.Where(r => !desired.Contains(r.Name, StringComparer.Ordinal)).ToList();
+        if (toRemove.Count > 0)
+        {
+            using var del = BuildRequest(HttpMethod.Delete,
+                $"admin/realms/{_options.Realm}/users/{userId}/role-mappings/realm", token,
+                toRemove.Select(r => new { id = r.Id, name = r.Name }).ToList());
+            using var delResp = await _http.SendAsync(del, ct).ConfigureAwait(false);
+            if (!delResp.IsSuccessStatusCode)
+            {
+                var body = await delResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                throw new InvalidOperationException($"Keycloak revoke-roles failed ({(int)delResp.StatusCode}): {body}");
+            }
+        }
+
+        // Grant desired roles not already present — resolve each role's id first.
+        var currentNames = current.Select(r => r.Name).ToHashSet(StringComparer.Ordinal);
+        var toAdd = new List<object>();
+        foreach (var roleName in desired.Where(d => !currentNames.Contains(d)))
+        {
+            using var roleReq = BuildRequest(HttpMethod.Get, $"admin/realms/{_options.Realm}/roles/{Uri.EscapeDataString(roleName)}", token);
+            using var roleResp = await _http.SendAsync(roleReq, ct).ConfigureAwait(false);
+            if (!roleResp.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Keycloak role {Role} lookup failed: {Status}", roleName, roleResp.StatusCode);
+                continue;
+            }
+            var dto = await roleResp.Content.ReadFromJsonAsync<KeycloakRoleDto>(ct).ConfigureAwait(false);
+            if (dto is not null) { toAdd.Add(new { id = dto.Id, name = dto.Name }); }
+        }
+        if (toAdd.Count > 0)
+        {
+            using var grant = BuildRequest(HttpMethod.Post,
+                $"admin/realms/{_options.Realm}/users/{userId}/role-mappings/realm", token, toAdd);
+            using var grantResp = await _http.SendAsync(grant, ct).ConfigureAwait(false);
+            if (!grantResp.IsSuccessStatusCode)
+            {
+                var body = await grantResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                throw new InvalidOperationException($"Keycloak grant-roles failed ({(int)grantResp.StatusCode}): {body}");
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task SendPasswordResetEmailAsync(string userId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        var token = await GetAdminTokenAsync(ct).ConfigureAwait(false);
+        using var req = BuildRequest(HttpMethod.Put,
+            $"admin/realms/{_options.Realm}/users/{userId}/execute-actions-email", token,
+            VerifyOnlyResetActions);
+        using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new InvalidOperationException($"Keycloak password-reset email failed ({(int)resp.StatusCode}): {body}");
+        }
+    }
+
     private async Task<string> GetAdminTokenAsync(CancellationToken ct)
     {
         if (_cachedToken is not null && DateTimeOffset.UtcNow < _cachedTokenExpiresAt)
@@ -264,6 +348,8 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
 
     private static readonly string[] InviteActions = new[] { "UPDATE_PASSWORD", "VERIFY_EMAIL" };
     private static readonly string[] VerifyOnlyActions = new[] { "VERIFY_EMAIL" };
+    private static readonly string[] VerifyOnlyResetActions = new[] { "UPDATE_PASSWORD" };
+    private static readonly string[] ManagedRoles = new[] { "admin", "member" };
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
