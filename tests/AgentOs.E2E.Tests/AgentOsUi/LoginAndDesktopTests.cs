@@ -63,6 +63,7 @@ public sealed class LoginAndDesktopTests : IClassFixture<AgentOsPageFixture>
     [Theory]
     [InlineData("Pipeline")]
     [InlineData("Workflow")]
+    [InlineData("Spine")]
     [InlineData("Settings")]
     [InlineData("System")]
     public async Task DesktopIcon_Click_OpensAppWindow(string title)
