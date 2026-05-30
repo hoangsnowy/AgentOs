@@ -11,6 +11,7 @@
     <Project Path="src/AgentOs.Modules.Identity/AgentOs.Modules.Identity.csproj" />
     <Project Path="src/AgentOs.Modules.Integration/AgentOs.Modules.Integration.csproj" />
     <Project Path="src/AgentOs.Modules.Llm/AgentOs.Modules.Llm.csproj" />
+    <Project Path="src/AgentOs.Modules.Mcp/AgentOs.Modules.Mcp.csproj" />
     <Project Path="src/AgentOs.Modules.Pipeline/AgentOs.Modules.Pipeline.csproj" />
     <Project Path="src/AgentOs.Modules.RemoteAgent/AgentOs.Modules.RemoteAgent.csproj" />
     <Project Path="src/AgentOs.Modules.Tenants/AgentOs.Modules.Tenants.csproj" />

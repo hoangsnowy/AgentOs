@@ -61,6 +61,11 @@
     <!-- GitHub integration (Octokit REST client) -->
     <PackageVersion Include="Octokit" Version="13.0.1" />
 
+    <!-- Model Context Protocol — official C# SDK. Used by AgentOs.Modules.Mcp to consume tools
+         exposed by external MCP servers (GitHub MCP, filesystem MCP, ...) and to expose AgentOs
+         pipeline agents as MCP tools to external hosts (Claude Desktop, VS Code). -->
+    <PackageVersion Include="ModelContextProtocol" Version="1.3.0" />
+
     <!-- Test stack -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageVersion Include="xunit.v3" Version="1.1.0" />
