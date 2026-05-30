@@ -13,25 +13,20 @@ public sealed class LoginAndDesktopTests : IClassFixture<AgentOsPageFixture>
 
     public LoginAndDesktopTests(AgentOsPageFixture fx) => _fx = fx;
 
-    // Scenario 1: Login overlay shows on first visit; Sign in persists + hides overlay.
+    // Scenario 1: the standalone dev Web uses Auth:DevAutoLogin, so "/" renders the authenticated
+    // desktop directly — no Keycloak round-trip, no login overlay/wall — even with the localStorage
+    // signed-in flag cleared. (The old localStorage login overlay was retired by dev-auto-login.)
     [Fact]
-    public async Task LoginOverlay_ShowsOnFirstVisit_AndSignInPersists()
+    public async Task Desktop_DevAuth_LoadsWithoutLoginWall()
     {
         if (!AgentOsPageFixture.IsEnabled) { Assert.Skip(AgentOsPageFixture.SkipReason); }
 
         await _fx.ClearAuthAsync();
         await _fx.Page.ReloadAsync(new PageReloadOptions { WaitUntil = WaitUntilState.NetworkIdle });
 
-        var overlay = _fx.Page.Locator(".login-overlay");
-        await Assertions.Expect(overlay).ToBeVisibleAsync();
-
-        // Username pre-filled with "developer"; click Sign in.
-        await _fx.Page.Locator(".login-card .btn-primary").ClickAsync();
-
-        await Assertions.Expect(overlay).ToBeHiddenAsync();
-
-        var signed = await _fx.Page.EvaluateAsync<string?>("localStorage.getItem('agentic-signed-in')");
-        Assert.Equal("developer", signed);
+        await Assertions.Expect(_fx.Page.Locator(".dock")).ToBeVisibleAsync();
+        await Assertions.Expect(_fx.Page.Locator(".topbar")).ToBeVisibleAsync();
+        await Assertions.Expect(_fx.Page.Locator(".login-overlay")).ToBeHiddenAsync();
     }
 
     // Scenario 2: right-click on the desktop opens the context menu at cursor position.
