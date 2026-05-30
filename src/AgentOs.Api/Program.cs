@@ -12,6 +12,7 @@ using AgentOs.Modules.Llm;
 using AgentOs.Modules.Mcp;
 using AgentOs.Modules.Pipeline;
 using AgentOs.Modules.RemoteAgent;
+using AgentOs.Modules.Sessions;
 using AgentOs.Modules.Tenants;
 using AgentOs.Modules.Tools;
 using AgentOs.Modules.Workspaces;
@@ -52,6 +53,7 @@ builder.Services.AddModulesFromAssemblies(builder.Configuration,
     typeof(ToolsModule).Assembly,
     typeof(IntegrationModule).Assembly,
     typeof(WorkspacesModule).Assembly,
+    typeof(SessionsModule).Assembly,
     typeof(McpModule).Assembly,
     typeof(RemoteAgentModule).Assembly);
 
