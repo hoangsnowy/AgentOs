@@ -51,7 +51,7 @@ builder.AddProject<Projects.AgentOs_Api>("api")
     .WithEnvironment("Auth__Keycloak__Admin__ClientId", "admin-cli");
 
 builder.AddProject<Projects.AgentOs_Web>("web")
-    .WithHttpEndpoint(port: 5180, name: "http")
+    .WithHttpsEndpoint(port: 5180, name: "https")
     .WithReference(db).WaitFor(db)
     .WithReference(keycloak).WaitFor(keycloak)
     .WithEnvironment("Auth__Keycloak__Authority",
