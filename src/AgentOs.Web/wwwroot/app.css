@@ -2082,6 +2082,22 @@ select {
 .prefs-range input[type=range] { width: 180px; accent-color: var(--accent); }
 .prefs-range-val { font-size: var(--fs-xs); color: var(--text-tertiary); min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
 
+/* Date & time tab — live clock preview card */
+.prefs-dt-preview {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: var(--space-5) var(--space-4);
+    margin-bottom: var(--space-3);
+    background: var(--bg-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+}
+.prefs-dt-time {
+    font-size: 40px; font-weight: 200; letter-spacing: -.02em; line-height: 1;
+    color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.prefs-dt-date { font-size: var(--fs-sm); color: var(--text-tertiary); margin-top: 6px; }
+.prefs-dt-tz { font-size: var(--fs-sm); color: var(--text-secondary); font-family: var(--mono); }
+
 /* Range slider — applies anywhere, also catalog. accent-color paints both track and thumb. */
 input[type=range] { accent-color: var(--accent); }
 

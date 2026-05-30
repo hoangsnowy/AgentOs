@@ -37,8 +37,36 @@ public sealed class WindowManagerService
     /// are sent to the dock.</summary>
     public bool AutoMinimizeOnBlur { get; set; }
 
+    /// <summary>
+    /// One-shot deep-link target: the tab a freshly-opened app should land on. Set it right before
+    /// <see cref="OpenApp"/> (e.g. the TopBar clock requests System → "datetime"); the app reads it
+    /// once on init via <see cref="ConsumeLaunchTab"/> and it self-clears so a later plain launch
+    /// opens the default tab. Keyed by app so concurrent deep-links don't collide.
+    /// </summary>
+    private readonly Dictionary<string, string> _launchTab = new(StringComparer.Ordinal);
+
+    /// <summary>Request that the next <see cref="OpenApp"/> of <paramref name="appKey"/> lands on <paramref name="tab"/>.</summary>
+    public void RequestLaunchTab(string appKey, string tab) => _launchTab[appKey] = tab;
+
+    /// <summary>Read + clear the pending launch tab for an app (null when none was requested).</summary>
+    public string? ConsumeLaunchTab(string appKey)
+    {
+        if (_launchTab.Remove(appKey, out var tab)) { return tab; }
+        return null;
+    }
+
     /// <summary>Fires when the window set or z-order changes.</summary>
     public event Action? Changed;
+
+    /// <summary>
+    /// Fires when the clock-format prefs (24h / seconds) change in System settings, so the TopBar
+    /// clock re-reads them live without a reload. Separate from <see cref="Changed"/> to avoid
+    /// churning every window subscriber on a clock-only tweak.
+    /// </summary>
+    public event Action? ClockPrefsChanged;
+
+    /// <summary>Raise <see cref="ClockPrefsChanged"/>. Called by System → Date &amp; time toggles.</summary>
+    public void NotifyClockPrefsChanged() => ClockPrefsChanged?.Invoke();
 
     /// <summary>Open an app window. If one already exists for this key, focus it instead.</summary>
     public AppWindowState OpenApp(string appKey, string title, string icon, int w = 920, int h = 620)

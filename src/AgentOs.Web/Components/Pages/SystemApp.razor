@@ -1,6 +1,7 @@
 @* SystemApp — macOS System Settings / GNOME Settings style: sidebar categories + content pane. *@
 
 @using AgentOs.Web.Services
+@implements IDisposable
 @inject ToastService Toasts
 @inject WindowManagerService WM
 @inject IJSRuntime JS
@@ -10,11 +11,12 @@
 <div class="prefs">
     <aside class="prefs-side">
         <div class="prefs-side-head">System</div>
-        <button class="prefs-cat @(_tab == "general"    ? "active" : "")" @onclick="@(() => _tab = "general")"><span class="prefs-cat-ic"><Icon Name="gear"    Size="14" /></span> General</button>
-        <button class="prefs-cat @(_tab == "appearance" ? "active" : "")" @onclick="@(() => _tab = "appearance")"><span class="prefs-cat-ic"><Icon Name="palette" Size="14" /></span> Appearance</button>
-        <button class="prefs-cat @(_tab == "notifs"     ? "active" : "")" @onclick="@(() => _tab = "notifs")"><span class="prefs-cat-ic"><Icon Name="bell"    Size="14" /></span> Notifications</button>
-        <button class="prefs-cat @(_tab == "about"      ? "active" : "")" @onclick="@(() => _tab = "about")"><span class="prefs-cat-ic"><Icon Name="info"    Size="14" /></span> About</button>
-        <button class="prefs-cat @(_tab == "session"    ? "active" : "")" @onclick="@(() => _tab = "session")"><span class="prefs-cat-ic"><Icon Name="power"   Size="14" /></span> Session</button>
+        <button class="prefs-cat @(_tab == "general"    ? "active" : "")" @onclick="@(() => _tab = "general")"><span class="prefs-cat-ic"><Icon Name="gear"     Size="14" /></span> General</button>
+        <button class="prefs-cat @(_tab == "appearance" ? "active" : "")" @onclick="@(() => _tab = "appearance")"><span class="prefs-cat-ic"><Icon Name="palette"  Size="14" /></span> Appearance</button>
+        <button class="prefs-cat @(_tab == "datetime"   ? "active" : "")" @onclick="@(() => _tab = "datetime")"><span class="prefs-cat-ic"><Icon Name="clock"    Size="14" /></span> Date &amp; time</button>
+        <button class="prefs-cat @(_tab == "notifs"     ? "active" : "")" @onclick="@(() => _tab = "notifs")"><span class="prefs-cat-ic"><Icon Name="bell"     Size="14" /></span> Notifications</button>
+        <button class="prefs-cat @(_tab == "about"      ? "active" : "")" @onclick="@(() => _tab = "about")"><span class="prefs-cat-ic"><Icon Name="info"     Size="14" /></span> About</button>
+        <button class="prefs-cat @(_tab == "session"    ? "active" : "")" @onclick="@(() => _tab = "session")"><span class="prefs-cat-ic"><Icon Name="power"    Size="14" /></span> Session</button>
     </aside>
 
     <div class="prefs-content">
@@ -62,6 +64,28 @@
                         <input type="range" min="0" max="100" value="@_glass" @oninput="OnGlassChanged" />
                         <span class="prefs-range-val">@_glass%</span>
                     </div>
+                </div>
+                break;
+            case "datetime":
+                <div class="prefs-section">
+                    <h2 class="prefs-h">Date &amp; time</h2>
+                    <p class="prefs-sub">Clock format for the top bar. The system clock follows this device's locale.</p>
+                </div>
+                <div class="prefs-dt-preview">
+                    <div class="prefs-dt-time">@_previewTime</div>
+                    <div class="prefs-dt-date">@_previewDate</div>
+                </div>
+                <div class="prefs-row">
+                    <div class="prefs-label"><strong>24-hour clock</strong><br /><span class="prefs-hint">Show the top-bar clock as 14:30 instead of 2:30 PM.</span></div>
+                    <Toggle Checked="_clock24" CheckedChanged="OnClock24Changed" />
+                </div>
+                <div class="prefs-row">
+                    <div class="prefs-label"><strong>Show seconds</strong><br /><span class="prefs-hint">Tick the top-bar clock every second.</span></div>
+                    <Toggle Checked="_clockSeconds" CheckedChanged="OnClockSecondsChanged" />
+                </div>
+                <div class="prefs-row">
+                    <div class="prefs-label"><strong>Time zone</strong><br /><span class="prefs-hint">Read-only — resolved from the host.</span></div>
+                    <span class="prefs-dt-tz">@_timeZone</span>
                 </div>
                 break;
             case "notifs":
@@ -117,6 +141,26 @@
     private string _wall = "enterprise-light";
     private int _glass = 0;
 
+    // Date & time
+    private bool _clock24 = true;
+    private bool _clockSeconds = true;
+    private string _previewTime = "";
+    private string _previewDate = "";
+    private string _timeZone = "";
+    private System.Threading.Timer? _clockTimer;
+
+    protected override void OnInitialized()
+    {
+        // Deep-link: the TopBar clock requests System → "datetime". One-shot, self-clears.
+        var requested = WM.ConsumeLaunchTab("system");
+        if (!string.IsNullOrEmpty(requested)) { _tab = requested; }
+
+        _timeZone = TimeZoneInfo.Local.StandardName;
+        UpdatePreview();
+        _clockTimer = new System.Threading.Timer(_ => InvokeAsync(() => { UpdatePreview(); StateHasChanged(); }),
+            null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -129,8 +173,45 @@
             _notifs = Toasts.ShowToasts;
             _focus = Toasts.FocusMode;
             _autoMin = WM.AutoMinimizeOnBlur;
+
+            // Clock prefs (default: 24h on, seconds on).
+            _clock24 = (await JS.InvokeAsync<string?>("localStorage.getItem", "pref-clock-24h")) != "0";
+            _clockSeconds = (await JS.InvokeAsync<string?>("localStorage.getItem", "pref-clock-seconds")) != "0";
+
+            UpdatePreview();
             StateHasChanged();
         }
+    }
+
+    private void UpdatePreview()
+    {
+        var now = DateTime.Now;
+        var timeFmt = (_clock24, _clockSeconds) switch
+        {
+            (true, true) => "HH:mm:ss",
+            (true, false) => "HH:mm",
+            (false, true) => "h:mm:ss tt",
+            (false, false) => "h:mm tt",
+        };
+        _previewTime = now.ToString(timeFmt);
+        _previewDate = now.ToString("dddd, d MMMM yyyy");
+    }
+
+    private async Task OnClock24Changed(bool v)
+    {
+        _clock24 = v;
+        UpdatePreview();
+        await JS.InvokeVoidAsync("localStorage.setItem", "pref-clock-24h", v ? "1" : "0");
+        // Nudge the TopBar (singleton WM event drives a shell-wide re-render).
+        WM.NotifyClockPrefsChanged();
+    }
+
+    private async Task OnClockSecondsChanged(bool v)
+    {
+        _clockSeconds = v;
+        UpdatePreview();
+        await JS.InvokeVoidAsync("localStorage.setItem", "pref-clock-seconds", v ? "1" : "0");
+        WM.NotifyClockPrefsChanged();
     }
 
     private async Task OnNotifsChanged(bool v)
@@ -178,4 +259,6 @@
     private void Lock() => Nav.NavigateTo("/account/logout", forceLoad: true);
 
     private void SignOut() => Nav.NavigateTo("/account/logout", forceLoad: true);
+
+    public void Dispose() => _clockTimer?.Dispose();
 }
