@@ -6,6 +6,12 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "src/AgentOs.Web", "--no-build", "-c", "Release", "--urls", "http://localhost:5180"],
       "port": 5180
+    },
+    {
+      "name": "web-dev",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/AgentOs.Web", "--no-launch-profile", "--no-build", "-c", "Release", "--urls", "http://localhost:5199"],
+      "port": 5199
     }
   ]
 }
