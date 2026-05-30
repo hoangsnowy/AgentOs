@@ -1,13 +1,12 @@
 // Module entry: binds LlmOptions, registers the key-pool router + every keyed ILlmClient this
-// module owns (Claude, AzureOpenAI, MAF), wires the factory + default ILlmClient, then runs
-// HydrateRuntimeOverridesAsync at startup so the persisted Settings overrides survive a restart.
+// module owns (Claude, AzureOpenAI, MAF), wires the factory + default ILlmClient. The runtime
+// overrides are tenant-scoped (RuntimeOverrides reads through IAppConfigStore on every access,
+// using the current request's ITenantContext), so no startup hydration step is needed.
 // The RemoteAgent provider lives in Modules.RemoteAgent and registers ITSELF as keyed "RemoteAgent".
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
 using AgentOs.SharedKernel.Modularity;
 using Microsoft.Extensions.Configuration;
@@ -17,7 +16,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgentOs.Modules.Llm;
 
-public sealed class LlmModule : IModule, IInitializableModule
+public sealed class LlmModule : IModule
 {
     public void AddServices(IServiceCollection services, IConfiguration configuration)
     {
@@ -69,11 +68,6 @@ public sealed class LlmModule : IModule, IInitializableModule
 
         services.AddSingleton<ILlmClientFactory, LlmClientFactory>();
         services.AddTransient<ILlmClient>(sp => sp.GetRequiredService<ILlmClientFactory>().CreateDefault());
-    }
-
-    public async Task InitializeAsync(IServiceProvider services, CancellationToken ct)
-    {
-        await services.HydrateRuntimeOverridesAsync(ct).ConfigureAwait(false);
     }
 
     private static List<string> ClaudeKeyPool(ClaudeOptions opts, IRuntimeOverrides ov)
