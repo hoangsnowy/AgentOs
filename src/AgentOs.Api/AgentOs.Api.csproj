@@ -17,6 +17,8 @@
     <ProjectReference Include="..\AgentOs.Modules.Tenants\AgentOs.Modules.Tenants.csproj" />
     <ProjectReference Include="..\AgentOs.Modules.Integration\AgentOs.Modules.Integration.csproj" />
     <ProjectReference Include="..\AgentOs.Modules.RemoteAgent\AgentOs.Modules.RemoteAgent.csproj" />
+    <ProjectReference Include="..\AgentOs.Modules.Tools\AgentOs.Modules.Tools.csproj" />
+    <ProjectReference Include="..\AgentOs.Modules.Mcp\AgentOs.Modules.Mcp.csproj" />
     <ProjectReference Include="..\AgentOs.ServiceDefaults\AgentOs.ServiceDefaults.csproj" />
   </ItemGroup>
 
@@ -24,6 +26,7 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
   </ItemGroup>
 
 </Project>

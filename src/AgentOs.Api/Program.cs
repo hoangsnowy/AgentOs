@@ -2,15 +2,18 @@
 // assembly list + ASP.NET Core lifecycle: AddServiceDefaults, AddModulesFromAssemblies, then
 // MapModuleEndpoints + a couple of host-level health/meta routes.
 
+using AgentOs.Api.Mcp;
 using AgentOs.Domain.Llm;
 using AgentOs.Modules.AppConfig;
 using AgentOs.Modules.Identity;
 using AgentOs.Modules.Identity.Auth;
 using AgentOs.Modules.Integration;
 using AgentOs.Modules.Llm;
+using AgentOs.Modules.Mcp;
 using AgentOs.Modules.Pipeline;
 using AgentOs.Modules.RemoteAgent;
 using AgentOs.Modules.Tenants;
+using AgentOs.Modules.Tools;
 using AgentOs.ServiceDefaults;
 using AgentOs.SharedKernel.Modularity;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,8 +48,16 @@ builder.Services.AddModulesFromAssemblies(builder.Configuration,
     typeof(IdentityModule).Assembly,
     typeof(TenantsModule).Assembly,
     typeof(PipelineModule).Assembly,
+    typeof(ToolsModule).Assembly,
     typeof(IntegrationModule).Assembly,
+    typeof(McpModule).Assembly,
     typeof(RemoteAgentModule).Assembly);
+
+// Epic E4 — expose AgentOs pipeline as MCP server. WithToolsFromAssembly discovers every
+// [McpServerToolType]-attributed class in the Api assembly (PipelineMcpTools today, more later).
+builder.Services.AddMcpServer()
+    .WithHttpTransport()
+    .WithToolsFromAssembly(typeof(PipelineMcpTools).Assembly);
 
 var app = builder.Build();
 
@@ -99,6 +110,10 @@ app.MapGet("/health", (IOptions<LlmOptions> llm) =>
    .WithTags("Meta");
 
 app.MapModuleEndpoints();
+
+// Epic E4 — MCP HTTP endpoint at /mcp. Streamable HTTP per spec; authenticated when the JWT
+// middleware above is active.
+app.MapMcp("/mcp");
 
 // Settings "Test connection" — probe the configured provider with a minimal call.
 app.MapPost("/llm/test", async (ILlmClientFactory factory, IConfiguration cfg, CancellationToken ct) =>
