@@ -1,0 +1,50 @@
+@page "/admin/settings"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
+@using AgentOs.Modules.Tenants
+@inject AgentOs.SharedKernel.Identity.ITenantContext Ctx
+@inject AgentOs.Modules.Tenants.ITenantsRepository Repo
+
+<PageTitle>Settings — @Ctx.TenantId</PageTitle>
+
+<div class="admin-page">
+    <header class="admin-head">
+        <h1>Workspace settings</h1>
+        <p class="admin-sub">Slug + creation timestamp are read-only after provisioning.</p>
+    </header>
+
+    @if (_loading)
+    {
+        <Spinner />
+    }
+    else if (_tenant is null)
+    {
+        <div class="login-error">Workspace <code>@Ctx.TenantId</code> is not in the registry.</div>
+    }
+    else
+    {
+        <table class="admin-tbl">
+            <tbody>
+                <tr><th>Workspace ID</th><td><code>@_tenant.Id</code></td></tr>
+                <tr><th>Display name</th><td>@_tenant.Name</td></tr>
+                <tr><th>Created at</th><td>@_tenant.CreatedAtUtc.ToString("u")</td></tr>
+                <tr><th>Your role</th><td>@string.Join(", ", Ctx.Roles)</td></tr>
+            </tbody>
+        </table>
+
+        <section class="admin-section">
+            <h2>Members</h2>
+            <p><a href="/admin/members">Manage members → /admin/members</a></p>
+        </section>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private TenantRecord? _tenant;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _tenant = await Repo.GetAsync(Ctx.TenantId); }
+        finally { _loading = false; }
+    }
+}

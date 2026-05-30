@@ -161,6 +161,25 @@ internal static class TenantEndpoints
         .WithTags("Tenants")
         .AllowAnonymous();
 
+        // List members of a tenant — only Admins, scoped to their own tenant by ITenantContext.
+        app.MapGet("/tenants/{tenantId}/members", async (
+            string tenantId,
+            IKeycloakAdminClient kc,
+            ITenantContext ctx,
+            CancellationToken ct) =>
+        {
+            if (!string.Equals(ctx.TenantId, tenantId, StringComparison.Ordinal))
+            {
+                return Results.Forbid();
+            }
+            var members = await kc.ListUsersByTenantAsync(tenantId, max: 200, ct: ct).ConfigureAwait(false);
+            return Results.Ok(members);
+        })
+        .WithName("TenantsListMembers")
+        .WithSummary("List the members of the current tenant (tenant Admin only)")
+        .WithTags("Tenants")
+        .RequireAuthorization("Admin");
+
         app.MapPost("/tenants/{tenantId}/members", async (
             string tenantId,
             InviteMemberRequest body,

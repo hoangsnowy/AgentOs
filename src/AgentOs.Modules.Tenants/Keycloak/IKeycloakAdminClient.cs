@@ -25,4 +25,19 @@ public interface IKeycloakAdminClient
     /// <summary>Delete a Keycloak user by id. Used by the signup saga to roll back a half-created
     /// user when the downstream registry write throws. Throws on any non-success response.</summary>
     Task DeleteUserAsync(string userId, CancellationToken ct = default);
+
+    /// <summary>List realm users whose <c>tenant</c> attribute matches the given id. Client-side
+    /// filter over a paged GET; bounded by <paramref name="max"/>. Realms larger than the bound
+    /// need a server-side search rewrite — call out the limit in the response if you display it.</summary>
+    Task<IReadOnlyList<KeycloakUser>> ListUsersByTenantAsync(string tenantId, int max = 200, CancellationToken ct = default);
 }
+
+/// <summary>Realm-user projection returned by the admin REST list endpoint.</summary>
+public sealed record KeycloakUser(
+    string Id,
+    string Username,
+    string? Email,
+    bool Enabled,
+    bool EmailVerified,
+    System.Collections.Generic.IReadOnlyList<string> Roles);
+
