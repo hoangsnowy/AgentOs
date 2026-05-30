@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AgentOs.Modules.Tools</RootNamespace>
+    <AssemblyName>AgentOs.Modules.Tools</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentOs.Domain\AgentOs.Domain.csproj" />
+    <ProjectReference Include="..\AgentOs.SharedKernel\AgentOs.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgentOs.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" />
+  </ItemGroup>
+
+</Project>
