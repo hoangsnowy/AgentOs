@@ -28,6 +28,7 @@ public sealed class TenantsModule : IModule, IEndpointModule, IInitializableModu
         services.AddOptions<KeycloakAdminOptions>()
             .Bind(configuration.GetSection(KeycloakAdminOptions.SectionName));
         services.AddHttpClient<IKeycloakAdminClient, KeycloakAdminClient>();
+        services.AddScoped<ITenantSignupService, TenantSignupService>();
 
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         if (!string.IsNullOrWhiteSpace(connectionString))

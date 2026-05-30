@@ -153,6 +153,20 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
         return userId;
     }
 
+    /// <inheritdoc />
+    public async Task DeleteUserAsync(string userId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        var token = await GetAdminTokenAsync(ct).ConfigureAwait(false);
+        using var req = BuildRequest(HttpMethod.Delete, $"admin/realms/{_options.Realm}/users/{userId}", token);
+        using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode && resp.StatusCode != System.Net.HttpStatusCode.NotFound)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new InvalidOperationException($"Keycloak delete-user failed ({(int)resp.StatusCode}): {body}");
+        }
+    }
+
     private async Task<string> GetAdminTokenAsync(CancellationToken ct)
     {
         if (_cachedToken is not null && DateTimeOffset.UtcNow < _cachedTokenExpiresAt)

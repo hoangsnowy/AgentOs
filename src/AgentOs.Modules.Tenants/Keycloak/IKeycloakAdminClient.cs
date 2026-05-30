@@ -21,4 +21,8 @@ public interface IKeycloakAdminClient
         bool sendVerifyEmail,
         string? password = null,
         CancellationToken ct = default);
+
+    /// <summary>Delete a Keycloak user by id. Used by the signup saga to roll back a half-created
+    /// user when the downstream registry write throws. Throws on any non-success response.</summary>
+    Task DeleteUserAsync(string userId, CancellationToken ct = default);
 }

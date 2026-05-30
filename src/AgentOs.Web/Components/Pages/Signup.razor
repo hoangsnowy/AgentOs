@@ -2,9 +2,7 @@
 @layout AuthLayout
 @attribute [AllowAnonymous]
 @using AgentOs.Modules.Tenants
-@using AgentOs.Modules.Tenants.Keycloak
-@inject AgentOs.Modules.Tenants.Keycloak.IKeycloakAdminClient Kc
-@inject AgentOs.Modules.Tenants.ITenantsRepository Repo
+@inject AgentOs.Modules.Tenants.ITenantSignupService SignupSvc
 @inject NavigationManager Nav
 
 <PageTitle>Create workspace — AgentOS</PageTitle>
@@ -13,19 +11,26 @@
     <div class="login-brand">
         <div class="brand-mark"><Icon Name="diamond" Size="14" /></div>
         <div>
-            <div class="brand-title">Create workspace</div>
-            <div class="brand-sub">Provision a tenant + admin user</div>
+            <div class="brand-title">@(_invitePreview is null ? "Create workspace" : "Join workspace")</div>
+            <div class="brand-sub">
+                @(_invitePreview is null
+                    ? "Provision a tenant + admin user"
+                    : $"You were invited to '{_invitePreview.TenantId}' as {_invitePreview.Role}")
+            </div>
         </div>
     </div>
 
     <div class="login-form">
-        <Field Label="Workspace ID" Hint="lowercase / digits / dash · 1–32 chars · no leading or trailing dash">
-            <input type="text" @bind="_tenantId" placeholder="acme" autocomplete="off" />
-        </Field>
-        <Field Label="Workspace name (optional)">
-            <input type="text" @bind="_tenantName" placeholder="Acme Corp" autocomplete="organization" />
-        </Field>
-        <Field Label="Admin username">
+        @if (_invitePreview is null)
+        {
+            <Field Label="Workspace ID" Hint="leave blank to auto-generate · or pick lowercase / digits / dash · 1–32 chars">
+                <input type="text" @bind="_tenantId" placeholder="acme (optional)" autocomplete="off" />
+            </Field>
+            <Field Label="Workspace name (optional)">
+                <input type="text" @bind="_tenantName" placeholder="Acme Corp" autocomplete="organization" />
+            </Field>
+        }
+        <Field Label="@(_invitePreview is null ? "Admin username" : "Username")">
             <input type="text" @bind="_username" placeholder="alice" autocomplete="username" />
         </Field>
         <Field Label="Email">
@@ -38,7 +43,7 @@
             <input type="password" @bind="_confirm" autocomplete="new-password" />
         </Field>
         <Btn Variant="Btn.ButtonVariant.Primary" ExtraClass="login-btn" OnClick="Submit" Disabled="_busy">
-            @(_busy ? "Creating…" : "Create workspace")
+            @(_busy ? "Submitting…" : _invitePreview is null ? "Create workspace" : "Join workspace")
         </Btn>
         @if (!string.IsNullOrEmpty(_error))
         {
@@ -51,6 +56,8 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "invite")] public string? InviteToken { get; set; }
+
     private string _tenantId = "";
     private string _tenantName = "";
     private string _username = "";
@@ -59,8 +66,16 @@
     private string _confirm = "";
     private string _error = "";
     private bool _busy;
+    private InvitationPreview? _invitePreview;
 
-    private static readonly string[] AdminRole = new[] { "admin" };
+    protected override void OnParametersSet()
+    {
+        _invitePreview = string.IsNullOrWhiteSpace(InviteToken) ? null : SignupSvc.PreviewInvitation(InviteToken);
+        if (_invitePreview is not null && string.IsNullOrEmpty(_email) && !string.IsNullOrEmpty(_invitePreview.Email))
+        {
+            _email = _invitePreview.Email;
+        }
+    }
 
     private async Task Submit()
     {
@@ -69,49 +84,25 @@
         _error = "";
         try
         {
-            var (slugOk, slugErr) = SignupValidation.ValidateTenantId(_tenantId);
-            if (!slugOk) { _error = slugErr!; return; }
-            if (string.IsNullOrWhiteSpace(_username))
-            {
-                _error = "Admin username is required.";
-                return;
-            }
-            var (emailOk, emailErr) = SignupValidation.ValidateEmail(_email);
-            if (!emailOk) { _error = emailErr!; return; }
-            var (pwdOk, pwdErr) = SignupValidation.ValidatePassword(_password);
-            if (!pwdOk) { _error = pwdErr!; return; }
             if (!string.Equals(_password, _confirm, StringComparison.Ordinal))
             {
                 _error = "Passwords do not match.";
                 return;
             }
 
-            var existing = await Repo.GetAsync(_tenantId);
-            if (existing is not null)
-            {
-                _error = $"Workspace '{_tenantId}' already exists.";
-                return;
-            }
-
-            var record = new TenantRecord(
-                _tenantId,
-                string.IsNullOrWhiteSpace(_tenantName) ? _tenantId : _tenantName,
-                DateTimeOffset.UtcNow);
-            await Repo.AddAsync(record);
-
             try
             {
-                await Kc.CreateUserAsync(
-                    username: _username,
-                    email: _email,
-                    tenantId: _tenantId,
-                    realmRoles: AdminRole,
-                    sendVerifyEmail: true,
-                    password: _password);
+                await SignupSvc.SignupAsync(new TenantSignupRequest(
+                    Username: _username,
+                    Password: _password,
+                    Email: string.IsNullOrWhiteSpace(_email) ? null : _email,
+                    TenantId: string.IsNullOrWhiteSpace(_tenantId) ? null : _tenantId,
+                    TenantName: string.IsNullOrWhiteSpace(_tenantName) ? null : _tenantName,
+                    InviteToken: InviteToken));
             }
             catch (InvalidOperationException ex)
             {
-                _error = $"Provisioning failed: {ex.Message}";
+                _error = ex.Message;
                 return;
             }
 
