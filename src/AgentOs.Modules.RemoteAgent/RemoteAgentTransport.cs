@@ -1,10 +1,11 @@
-// Bridges the in-process IRemoteAgentBroker to the SignalR hub: when the gateway dispatches a
-// request, run it past the approval gate, then push "Execute" to the ONE resolved runner connection.
-// Runner replies arrive via the hub's CompleteRequest, which resolves the broker's pending task.
+// Bridges the in-process IRemoteAgentBroker to the SignalR hub.
 //
-// M3 — the broker now resolves the dispatch to a single target connection (RemoteDispatch.ConnectionId),
-// so the push is Clients.Client(connectionId), never Clients.All. A tenant's request reaches only that
-// tenant's (member's) runner.
+// M3 — full-prompt dispatch: when the gateway raises Dispatched, push "Execute" to the ONE resolved
+// runner connection (Clients.Client, never Clients.All). Runner replies via CompleteRequest.
+//
+// M4 — tool-call dispatch: when the broker raises ToolCallDispatched, push "ExecuteToolCall" to the
+// same targeted connection. Runner replies via CompleteToolCall. The server-side LLM loop stays on
+// the server; only the tool execution crosses the wire.
 
 using System;
 using System.Threading;
@@ -39,6 +40,7 @@ public sealed class RemoteAgentTransport : IHostedService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _broker.Dispatched += OnDispatched;
+        _broker.ToolCallDispatched += OnToolCallDispatched;
         return Task.CompletedTask;
     }
 
@@ -46,8 +48,11 @@ public sealed class RemoteAgentTransport : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _broker.Dispatched -= OnDispatched;
+        _broker.ToolCallDispatched -= OnToolCallDispatched;
         return Task.CompletedTask;
     }
+
+    // ── M3: full-prompt dispatch ──
 
     private void OnDispatched(RemoteDispatch dispatch) => _ = PushAsync(dispatch);
 
@@ -67,6 +72,29 @@ public sealed class RemoteAgentTransport : IHostedService
         catch (Exception ex)
         {
             _broker.Complete(new RemoteExecResult(request.Id, false, string.Empty, $"Transport error: {ex.Message}"));
+        }
+    }
+
+    // ── M4: bidirectional tool-call dispatch ──
+
+    private void OnToolCallDispatched(RunnerToolDispatch dispatch) => _ = PushToolCallAsync(dispatch);
+
+    private async Task PushToolCallAsync(RunnerToolDispatch dispatch)
+    {
+        try
+        {
+            await _hub.Clients.Client(dispatch.ConnectionId)
+                .SendAsync("ExecuteToolCall", dispatch.Call)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _broker.CompleteToolCall(new RunnerToolResult(
+                dispatch.Call.RequestId,
+                dispatch.Call.ToolCallId,
+                false,
+                string.Empty,
+                $"Transport error: {ex.Message}"));
         }
     }
 }

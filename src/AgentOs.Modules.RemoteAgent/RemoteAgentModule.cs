@@ -24,6 +24,11 @@ public sealed class RemoteAgentModule : IModule, IEndpointModule
         // Register the Llm provider as a keyed ILlmClient so Llm.LlmClientFactory can resolve it by name.
         services.AddKeyedTransient<ILlmClient, RemoteAgentLlmClient>("RemoteAgent");
 
+        // M4 — runner_shell: ITool discovered + registered by ToolsModule.InitializeAsync at startup.
+        // IHttpContextAccessor resolves the current user's identity from this singleton-scoped tool.
+        services.AddHttpContextAccessor();
+        services.AddTransient<AgentOs.Domain.Tools.ITool, RunnerShellTool>();
+
         services.AddSignalR();
         services.AddHostedService<RemoteAgentTransport>();
     }

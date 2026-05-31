@@ -77,6 +77,9 @@ public sealed class RemoteAgentHub : Hub
         return base.OnDisconnectedAsync(exception);
     }
 
-    /// <summary>Invoked by the runner when it has a result for a dispatched request.</summary>
+    /// <summary>Invoked by the runner when it has a result for a dispatched request (M3).</summary>
     public void CompleteRequest(RemoteExecResult result) => _broker.Complete(result);
+
+    /// <summary>Invoked by the runner when it has finished executing a tool call (M4).</summary>
+    public void CompleteToolCall(RunnerToolResult result) => _broker.CompleteToolCall(result);
 }
