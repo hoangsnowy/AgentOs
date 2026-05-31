@@ -137,6 +137,9 @@ public sealed class RuntimeOverridesTests
             return ValueTask.CompletedTask;
         }
 
+        public ValueTask<string?> GetForTenantAsync(string tenantId, string key, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(_data.TryGetValue($"{tenantId}::{key}", out var v) ? v : null);
+
         public ValueTask SetForTenantAsync(string tenantId, string key, string value, CancellationToken cancellationToken = default)
         {
             _data[$"{tenantId}::{key}"] = value;

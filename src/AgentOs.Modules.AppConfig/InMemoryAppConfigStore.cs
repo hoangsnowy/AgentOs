@@ -47,6 +47,10 @@ public sealed class InMemoryAppConfigStore : IAppConfigStore
     // so the tenant-explicit overloads just delegate.
 
     /// <inheritdoc />
+    public ValueTask<string?> GetForTenantAsync(string tenantId, string key, CancellationToken cancellationToken = default)
+        => GetAsync(key, cancellationToken);
+
+    /// <inheritdoc />
     public ValueTask SetForTenantAsync(string tenantId, string key, string value, CancellationToken cancellationToken = default)
         => SetAsync(key, value, cancellationToken);
 

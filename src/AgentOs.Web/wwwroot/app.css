@@ -2499,3 +2499,16 @@ input[type=range] { accent-color: var(--accent); }
 .spine-empty { padding: var(--space-4); }
 .spine-form { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
 .spine-form-hint { margin-top: var(--space-2); }
+
+/* Spine — back bar (issues sub-view) */
+.spine-back-bar {
+    display: flex; align-items: center; gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+.spine-back-repo { font-size: 13px; }
+
+/* Spine — issue link */
+.spine-issue-link {
+    color: var(--text-primary); text-decoration: none;
+}
+.spine-issue-link:hover { text-decoration: underline; color: var(--accent, #3b82f6); }
