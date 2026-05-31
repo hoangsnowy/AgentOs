@@ -10,12 +10,13 @@ name: Deploy (azd / Aspire)
 #       assignments for the managed identity → ACR pull + Key Vault). Contributor alone is not enough.
 
 on:
-  push:
-    branches: [ main ]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
   workflow_dispatch:
+  # push trigger disabled — re-enable when Azure creds are configured
+  # push:
+  #   branches: [ main ]
+  #   paths-ignore:
+  #     - 'docs/**'
+  #     - '**.md'
 
 permissions:
   id-token: write
