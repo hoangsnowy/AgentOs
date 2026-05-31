@@ -75,7 +75,8 @@ public sealed class DefaultToolGateway : IToolGateway
                 Output: output,
                 IsError: isError,
                 StartedUtc: started,
-                FinishedUtc: DateTimeOffset.UtcNow)).ConfigureAwait(false);
+                FinishedUtc: DateTimeOffset.UtcNow,
+                SessionId: request.SessionId)).ConfigureAwait(false);
         }
         catch
         {

@@ -1,0 +1,101 @@
+@* EvidenceApp — admin view of the tool-invocation evidence trail (governance). Every governed tool
+   call (success, error, or policy denial) is recorded by IToolGateway; this lists the recent entries
+   for the current tenant. Admin-gated (AdminOnly in AppCatalog + a re-check here). Tenant is read from
+   AuthenticationState — a circuit has no HttpContext — and passed to the tenant-explicit ListRecentAsync. *@
+
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Domain.Tools
+@inject IToolInvocationLog Evidence
+@inject AgentOs.Web.Services.ToastService Toasts
+
+<div class="admin-page evidence-app">
+    @if (!_resolved)
+    {
+        <Spinner />
+    }
+    else if (!_isAdmin)
+    {
+        <div class="login-error">Admin role required to view the evidence trail.</div>
+    }
+    else
+    {
+        <header class="admin-head">
+            <div>
+                <h1>Evidence · <code>@_tenantId</code></h1>
+                <p class="admin-sub">@(_rows?.Count ?? 0) recent tool invocation(s) — every governed side-effect is recorded.</p>
+            </div>
+            <Btn OnClick="Reload" Disabled="_loading">
+                <Icon Name="arrow-clockwise" Size="14" /> Refresh
+            </Btn>
+        </header>
+
+        @if (_rows is null) { <Spinner /> }
+        else if (_rows.Count == 0)
+        {
+            <div class="muted spine-empty">No tool invocations recorded yet. Evidence appears here once an agent calls a tool.</div>
+        }
+        else
+        {
+            <table class="admin-tbl evidence-tbl">
+                <thead>
+                    <tr><th>Tool</th><th>Status</th><th>Run</th><th>Session</th><th>Started (UTC)</th><th>Duration</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in _rows)
+                    {
+                        <tr>
+                            <td><code>@e.ToolName</code></td>
+                            <td>@if (e.IsError) { <Badge>error</Badge> } else { <Badge>ok</Badge> }</td>
+                            <td>@(string.IsNullOrEmpty(e.RunId) ? "—" : e.RunId)</td>
+                            <td>@(string.IsNullOrEmpty(e.SessionId) ? "—" : e.SessionId)</td>
+                            <td>@e.StartedUtc.ToString("u")</td>
+                            <td>@($"{e.Duration.TotalMilliseconds:0} ms")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _resolved;
+    private bool _isAdmin;
+    private bool _loading;
+    private string _tenantId = "default";
+    private IReadOnlyList<ToolInvocationEvidence>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsInRole("admin");
+            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
+        }
+        _resolved = true;
+        if (_isAdmin) { await LoadAsync(); }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _rows = await Evidence.ListRecentAsync(_tenantId, 100);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Evidence", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Reload() => await LoadAsync();
+}

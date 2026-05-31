@@ -8,9 +8,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Tools;
 using AgentOs.Modules.Tools.Evidence;
+using AgentOs.Modules.Tools.Persistence;
 using AgentOs.Modules.Tools.Policy;
 using AgentOs.Modules.Tools.Registry;
 using AgentOs.SharedKernel.Modularity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,7 +27,21 @@ public sealed class ToolsModule : IModule, IInitializableModule
 
         services.TryAddSingleton<IToolRegistry, InMemoryToolRegistry>();
         services.TryAddSingleton<IToolPolicy, PermissiveToolPolicy>();
-        services.TryAddSingleton<IToolInvocationLog, InMemoryToolInvocationLog>();
+
+        // Evidence sink: durable EF-backed when a DB is configured, else the in-memory ring buffer
+        // (dev / CI). The schema `tools` keeps tool-invocation evidence as a first-class audit trail.
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            services.AddDbContext<ToolsDbContext>(opt =>
+                opt.UseNpgsql(connectionString, npg =>
+                    npg.MigrationsHistoryTable("__EFMigrationsHistory", schema: "tools")));
+            services.TryAddSingleton<IToolInvocationLog, EfToolInvocationLog>();
+        }
+        else
+        {
+            services.TryAddSingleton<IToolInvocationLog, InMemoryToolInvocationLog>();
+        }
 
         // M1 — the shared policy-gate + invoke + evidence seam. Every governed execution path
         // (the in-process LLM tool loop and the remote-session executor) resolves this so tools
@@ -35,7 +51,7 @@ public sealed class ToolsModule : IModule, IInitializableModule
             sp.GetService<IToolInvocationLog>()));
     }
 
-    public Task InitializeAsync(IServiceProvider services, CancellationToken ct)
+    public async Task InitializeAsync(IServiceProvider services, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -45,6 +61,11 @@ public sealed class ToolsModule : IModule, IInitializableModule
             registry.Register(tool);
         }
 
-        return Task.CompletedTask;
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetService<ToolsDbContext>();
+        if (db is not null)
+        {
+            await db.Database.MigrateAsync(ct).ConfigureAwait(false);
+        }
     }
 }

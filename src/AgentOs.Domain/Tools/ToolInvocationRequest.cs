@@ -13,12 +13,14 @@ namespace AgentOs.Domain.Tools;
 /// <param name="Input">JSON object payload validated against <see cref="ToolDefinition.JsonInputSchema"/>. Required.</param>
 /// <param name="TenantId">Calling tenant for policy + evidence partitioning. Required.</param>
 /// <param name="RunId">Pipeline run correlator. Optional — tool calls outside a pipeline run (e.g. CLI probes) leave this null.</param>
+/// <param name="SessionId">Remote-session correlator, when the call runs inside a member×workspace session. Optional.</param>
 public sealed record ToolInvocationRequest(
     string ToolName,
     string CallId,
     string Input,
     string TenantId,
-    string? RunId = null)
+    string? RunId = null,
+    string? SessionId = null)
 {
     /// <summary>Validates required fields. Throws <see cref="System.ArgumentException"/> if invalid.</summary>
     public void Validate()

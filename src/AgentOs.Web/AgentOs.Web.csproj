@@ -17,6 +17,9 @@
     <ProjectReference Include="..\AgentOs.Modules.Identity\AgentOs.Modules.Identity.csproj" />
     <ProjectReference Include="..\AgentOs.Modules.Tenants\AgentOs.Modules.Tenants.csproj" />
     <ProjectReference Include="..\AgentOs.Modules.Integration\AgentOs.Modules.Integration.csproj" />
+    <ProjectReference Include="..\AgentOs.Modules.Workspaces\AgentOs.Modules.Workspaces.csproj" />
+    <ProjectReference Include="..\AgentOs.Modules.Sessions\AgentOs.Modules.Sessions.csproj" />
+    <ProjectReference Include="..\AgentOs.Modules.Tools\AgentOs.Modules.Tools.csproj" />
     <ProjectReference Include="..\AgentOs.ServiceDefaults\AgentOs.ServiceDefaults.csproj" />
   </ItemGroup>
 

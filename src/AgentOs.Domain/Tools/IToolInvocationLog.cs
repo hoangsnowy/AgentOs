@@ -15,6 +15,7 @@ namespace AgentOs.Domain.Tools;
 /// <param name="IsError">True when policy denied the call OR the tool returned an error result.</param>
 /// <param name="StartedUtc">When the invocation started (UTC).</param>
 /// <param name="FinishedUtc">When the invocation finished or was denied (UTC).</param>
+/// <param name="SessionId">Remote-session correlator, when the call ran inside a member×workspace session.</param>
 public sealed record ToolInvocationEvidence(
     string CallId,
     string ToolName,
@@ -24,7 +25,8 @@ public sealed record ToolInvocationEvidence(
     string Output,
     bool IsError,
     System.DateTimeOffset StartedUtc,
-    System.DateTimeOffset FinishedUtc)
+    System.DateTimeOffset FinishedUtc,
+    string? SessionId = null)
 {
     /// <summary>Wall-clock duration of the invocation.</summary>
     public System.TimeSpan Duration => FinishedUtc - StartedUtc;

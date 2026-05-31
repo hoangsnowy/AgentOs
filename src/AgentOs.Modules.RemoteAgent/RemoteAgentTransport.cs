@@ -1,6 +1,10 @@
 // Bridges the in-process IRemoteAgentBroker to the SignalR hub: when the gateway dispatches a
-// request, run it past the approval gate, then push "Execute" to connected agents. Agent replies
-// arrive via the hub's CompleteRequest, which resolves the broker's pending task.
+// request, run it past the approval gate, then push "Execute" to the ONE resolved runner connection.
+// Runner replies arrive via the hub's CompleteRequest, which resolves the broker's pending task.
+//
+// M3 — the broker now resolves the dispatch to a single target connection (RemoteDispatch.ConnectionId),
+// so the push is Clients.Client(connectionId), never Clients.All. A tenant's request reaches only that
+// tenant's (member's) runner.
 
 using System;
 using System.Threading;
@@ -34,21 +38,22 @@ public sealed class RemoteAgentTransport : IHostedService
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _broker.RequestDispatched += OnDispatched;
+        _broker.Dispatched += OnDispatched;
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        _broker.RequestDispatched -= OnDispatched;
+        _broker.Dispatched -= OnDispatched;
         return Task.CompletedTask;
     }
 
-    private void OnDispatched(RemoteExecRequest request) => _ = PushAsync(request);
+    private void OnDispatched(RemoteDispatch dispatch) => _ = PushAsync(dispatch);
 
-    private async Task PushAsync(RemoteExecRequest request)
+    private async Task PushAsync(RemoteDispatch dispatch)
     {
+        var request = dispatch.Request;
         try
         {
             if (!await _approver.ApproveAsync(request).ConfigureAwait(false))
@@ -57,7 +62,7 @@ public sealed class RemoteAgentTransport : IHostedService
                 _broker.Complete(new RemoteExecResult(request.Id, false, string.Empty, "Denied by approval gate."));
                 return;
             }
-            await _hub.Clients.All.SendAsync("Execute", request).ConfigureAwait(false);
+            await _hub.Clients.Client(dispatch.ConnectionId).SendAsync("Execute", request).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

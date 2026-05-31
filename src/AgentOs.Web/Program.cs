@@ -5,12 +5,16 @@
 
 using System.Security.Claims;
 using AgentOs.Modules.AppConfig;
+using AgentOs.Web.Auth;
 using AgentOs.Modules.Identity;
 using AgentOs.Modules.Identity.Auth;
 using AgentOs.Modules.Integration;
 using AgentOs.Modules.Llm;
 using AgentOs.Modules.Pipeline;
+using AgentOs.Modules.Sessions;
 using AgentOs.Modules.Tenants;
+using AgentOs.Modules.Tools;
+using AgentOs.Modules.Workspaces;
 using AgentOs.ServiceDefaults;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Modularity;
@@ -36,6 +40,27 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddDataProtection();
+
+// Dev single-command run: auto-authenticate as a fixed developer principal so `dotnet run --project
+// src/AgentOs.Web` shows the desktop with no Keycloak / Postgres. Defaults ON in Development (so a fresh
+// clone just works — appsettings.Development.json is gitignored and can't be relied on); the AppHost
+// injects Auth__DevAutoLogin=false so the full stack uses real OIDC, and it is hard-off outside Development.
+var devAutoLogin = builder.Configuration.GetValue("Auth:DevAutoLogin", builder.Environment.IsDevelopment());
+if (devAutoLogin && !builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException(
+        "Auth:DevAutoLogin must never be enabled outside Development — it authenticates every request as a fixed user.");
+}
+
+if (devAutoLogin)
+{
+    builder.Services
+        .AddAuthentication(DevAutoAuthHandler.SchemeName)
+        .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevAutoAuthHandler>(
+            DevAutoAuthHandler.SchemeName, _ => { });
+}
+else
+{
 
 // Cookie + OpenID Connect against Keycloak. The cookie carries the signed-in principal across
 // HTTP requests; SaveTokens=true stores the access token in the auth cookie so circuit-scoped
@@ -95,6 +120,8 @@ builder.Services
         };
     });
 
+} // end else (real Keycloak OIDC)
+
 builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddModulesFromAssemblies(builder.Configuration,
@@ -103,11 +130,16 @@ builder.Services.AddModulesFromAssemblies(builder.Configuration,
     typeof(IdentityModule).Assembly,
     typeof(TenantsModule).Assembly,
     typeof(PipelineModule).Assembly,
-    typeof(IntegrationModule).Assembly);
+    typeof(IntegrationModule).Assembly,
+    typeof(WorkspacesModule).Assembly,
+    typeof(SessionsModule).Assembly,
+    typeof(ToolsModule).Assembly);
 
 builder.Services.AddSingleton<AgentOs.Web.Orchestrations.OrchestrationStore>();
-builder.Services.AddSingleton<AgentOs.Web.Services.ToastService>();
-builder.Services.AddSingleton<AgentOs.Web.Services.WindowManagerService>();
+// Per-circuit UI state: each user's desktop has its own open windows. Singleton would bleed windows
+// (and their Z-order) across every connected circuit/user on the server.
+builder.Services.AddScoped<AgentOs.Web.Services.ToastService>();
+builder.Services.AddScoped<AgentOs.Web.Services.WindowManagerService>();
 
 // Per-circuit auth session — surfaces identity + (optional) bearer to the HttpPipelineClient.
 builder.Services.AddScoped<AuthSession>();
@@ -131,16 +163,26 @@ app.UseAntiforgery();
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", utc = DateTime.UtcNow }));
 
 // OIDC challenge / sign-out — buttons in the UI hit these endpoints. /signin-oidc and
-// /signout-callback-oidc are owned by the OIDC middleware.
-app.MapGet("/account/login", (string? returnUrl) =>
-    Results.Challenge(
-        new AuthenticationProperties { RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl },
-        new[] { OpenIdConnectDefaults.AuthenticationScheme }));
+// /signout-callback-oidc are owned by the OIDC middleware. In dev-auto-login mode there are no
+// Cookie/OIDC schemes, so these become simple redirects (the dev user is always signed in).
+if (devAutoLogin)
+{
+    app.MapGet("/account/login", (string? returnUrl) =>
+        Results.Redirect(string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl));
+    app.MapGet("/account/logout", () => Results.Redirect("/"));
+}
+else
+{
+    app.MapGet("/account/login", (string? returnUrl) =>
+        Results.Challenge(
+            new AuthenticationProperties { RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl },
+            new[] { OpenIdConnectDefaults.AuthenticationScheme }));
 
-app.MapGet("/account/logout", () =>
-    Results.SignOut(
-        new AuthenticationProperties { RedirectUri = "/" },
-        new[] { CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme }));
+    app.MapGet("/account/logout", () =>
+        Results.SignOut(
+            new AuthenticationProperties { RedirectUri = "/" },
+            new[] { CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme }));
+}
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

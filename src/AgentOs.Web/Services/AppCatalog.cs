@@ -36,7 +36,9 @@ public static class AppCatalog
     {
         new("pipeline", "Pipeline", "play",  "Run the 5-agent SDLC pipeline", "Agents", 920, 620),
         new("workflow", "Workflow", "graph", "Visual orchestration editor",   "Agents", 1080, 660),
+        new("spine",    "Spine",    "git-pull-request", "Connected repos → runners → sessions", "Agents", 940, 640),
         new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: true, AdminOnly: true),
+        new("evidence", "Evidence", "lock",  "Tool-invocation audit trail",   "Admin", 960, 620, Pinned: true, AdminOnly: true),
         new("settings", "Settings", "gear",  "LLM keys, providers, GitHub",   "System", 760, 600),
         new("system",   "System",   "wrench","OS appearance, themes, about",  "System", 760, 600),
     };

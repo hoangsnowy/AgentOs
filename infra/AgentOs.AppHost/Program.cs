@@ -60,6 +60,8 @@ builder.AddProject<Projects.AgentOs_Api>("api")
 
 builder.AddProject<Projects.AgentOs_Web>("web")
     .WithHttpsEndpoint(port: 5180, name: "https")
+    // Full stack uses real Keycloak OIDC — turn OFF the standalone dev-run auto-login.
+    .WithEnvironment("Auth__DevAutoLogin", "false")
     .WithReference(db).WaitFor(db)
     .WithReference(keycloak).WaitFor(keycloak)
     .WithEnvironment("Auth__Keycloak__Authority",

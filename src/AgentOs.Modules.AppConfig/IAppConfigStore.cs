@@ -22,4 +22,12 @@ public interface IAppConfigStore
 
     /// <summary>List keys with a given prefix. Useful for the Settings UI to enumerate <c>Llm:*</c>.</summary>
     ValueTask<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default);
+
+    /// <summary>Write a value for an explicit tenant. For callers without an ambient <c>ITenantContext</c>
+    /// (a Blazor Server circuit has no HttpContext, and this store resolves the tenant from a fresh
+    /// scope that would fall back to the default tenant). Pass the tenant from the signed-in principal.</summary>
+    ValueTask SetForTenantAsync(string tenantId, string key, string value, CancellationToken cancellationToken = default);
+
+    /// <summary>Delete a value for an explicit tenant. See <see cref="SetForTenantAsync"/>.</summary>
+    ValueTask DeleteForTenantAsync(string tenantId, string key, CancellationToken cancellationToken = default);
 }

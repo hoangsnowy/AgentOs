@@ -137,6 +137,18 @@ public sealed class RuntimeOverridesTests
             return ValueTask.CompletedTask;
         }
 
+        public ValueTask SetForTenantAsync(string tenantId, string key, string value, CancellationToken cancellationToken = default)
+        {
+            _data[$"{tenantId}::{key}"] = value;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask DeleteForTenantAsync(string tenantId, string key, CancellationToken cancellationToken = default)
+        {
+            _data.TryRemove($"{tenantId}::{key}", out _);
+            return ValueTask.CompletedTask;
+        }
+
         public ValueTask<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
         {
             var tenantPrefix = $"{_ctx.TenantId}::{prefix}";

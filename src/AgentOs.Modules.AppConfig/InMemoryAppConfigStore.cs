@@ -42,4 +42,15 @@ public sealed class InMemoryAppConfigStore : IAppConfigStore
             .ToList();
         return ValueTask.FromResult<IReadOnlyList<string>>(keys);
     }
+
+    // This fallback store is already tenant-agnostic (keys are globally unique, e.g. workspace/{id}/token),
+    // so the tenant-explicit overloads just delegate.
+
+    /// <inheritdoc />
+    public ValueTask SetForTenantAsync(string tenantId, string key, string value, CancellationToken cancellationToken = default)
+        => SetAsync(key, value, cancellationToken);
+
+    /// <inheritdoc />
+    public ValueTask DeleteForTenantAsync(string tenantId, string key, CancellationToken cancellationToken = default)
+        => DeleteAsync(key, cancellationToken);
 }

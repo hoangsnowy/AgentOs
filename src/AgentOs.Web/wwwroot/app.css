@@ -2432,3 +2432,22 @@ input[type=range] { accent-color: var(--accent); }
     font-size: var(--fs-xs); font-family: var(--mono);
 }
 .catalog-icon-cell span { color: var(--text-tertiary); }
+
+/* Spine app — tabbed Workspaces / Runners / Sessions */
+.spine-tabs {
+    display: flex; gap: var(--space-1);
+    border-bottom: 1px solid var(--border-subtle);
+    margin: var(--space-3) 0 var(--space-4);
+}
+.spine-tab {
+    background: transparent; border: none; cursor: pointer;
+    padding: var(--space-2) var(--space-3);
+    color: var(--text-tertiary); font-size: var(--fs-sm);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    display: inline-flex; align-items: center; gap: 6px;
+}
+.spine-tab:hover { color: var(--text-primary); }
+.spine-tab.active { color: var(--text-primary); border-bottom-color: var(--accent, #3b82f6); }
+.spine-empty { padding: var(--space-4); }
+.spine-form { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+.spine-form-hint { margin-top: var(--space-2); }

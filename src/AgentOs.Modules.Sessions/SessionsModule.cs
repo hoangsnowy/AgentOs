@@ -1,0 +1,78 @@
+// M3 — Sessions module entry. Registers the runner + session repositories, the runner directory used by
+// the RemoteAgent hub's pairing handshake, the (always-on) pairing service, the DbContext, mounts the
+// /sessions + /runners endpoints, and applies the EF migration at startup. When no DB is configured the
+// repos + directory fall back to no-ops so the host still boots (same convention as WorkspacesModule).
+//
+// The pairing service is registered unconditionally (singleton, stateless crypto) because both the
+// endpoints (issue) and the RemoteAgent hub (verify) resolve it from this one container.
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using AgentOs.Domain.Sessions;
+using AgentOs.Modules.Sessions.Endpoints;
+using AgentOs.Modules.Sessions.Persistence;
+using AgentOs.Modules.Sessions.Persistence.Repositories;
+using AgentOs.SharedKernel.Modularity;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace AgentOs.Modules.Sessions;
+
+public sealed class SessionsModule : IModule, IEndpointModule, IInitializableModule
+{
+    public void AddServices(IServiceCollection services, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IRunnerPairingService, RunnerPairingService>();
+
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            services.AddDbContext<SessionsDbContext>(opt =>
+                opt.UseNpgsql(connectionString, npg =>
+                    npg.MigrationsHistoryTable("__EFMigrationsHistory", schema: "sessions")));
+            services.AddScoped<IRunnerRepository, RunnerRepository>();
+            services.AddScoped<ISessionRepository, SessionRepository>();
+            services.AddScoped<IRunnerDirectory, EfRunnerDirectory>();
+        }
+        else
+        {
+            var requireDb = configuration.GetValue("Persistence:RequireDatabase", true);
+            if (requireDb)
+            {
+                throw new InvalidOperationException(
+                    "ConnectionStrings:DefaultConnection is empty but Persistence:RequireDatabase is true. "
+                    + "Run the AppHost (dotnet run --project infra/AgentOs.AppHost) so Aspire wires Postgres, "
+                    + "or set Persistence:RequireDatabase=false to opt into the legacy no-op repositories.");
+            }
+            services.AddSingleton<IRunnerRepository, NullRunnerRepository>();
+            services.AddSingleton<ISessionRepository, NullSessionRepository>();
+            services.AddSingleton<IRunnerDirectory, NullRunnerDirectory>();
+        }
+    }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        endpoints.MapSessionEndpoints();
+    }
+
+    public async Task InitializeAsync(IServiceProvider services, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetService<SessionsDbContext>();
+        if (db is not null)
+        {
+            await db.Database.MigrateAsync(ct).ConfigureAwait(false);
+        }
+    }
+}
