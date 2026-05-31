@@ -45,6 +45,12 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
         // Focus Pipeline (click its titlebar) — its z-index should now be highest.
         await pipeline.Locator(".appwin-titlebar").ClickAsync();
 
+        // Focus bumps Z on the server, which re-renders over SignalR; the front-most window gains
+        // `.focused` (driven off max-Z). Web-first wait for that before reading the inline z-index,
+        // otherwise we race the round-trip and read the pre-click value.
+        await Assertions.Expect(pipeline).ToHaveClassAsync(new System.Text.RegularExpressions.Regex(@"\bfocused\b"));
+        await Assertions.Expect(settings).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex(@"\bfocused\b"));
+
         var pipelineZ = int.Parse(await GetZ(pipeline), System.Globalization.CultureInfo.InvariantCulture);
         var settingsZ = int.Parse(await GetZ(settings), System.Globalization.CultureInfo.InvariantCulture);
         Assert.True(pipelineZ > settingsZ, $"Pipeline z ({pipelineZ}) should be above Settings ({settingsZ}) after focus.");
@@ -85,6 +91,11 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
 
         var win = AppWindow("Settings");
         await win.Locator(".appwin-btn").Nth(1).ClickAsync(); // maximize
+
+        // ToggleMax flips state on the server and re-renders the maximized PositionStyle over
+        // SignalR. Web-first wait for the `maximized` class before reading the inline style,
+        // otherwise we race the round-trip and read the still-windowed geometry.
+        await Assertions.Expect(win).ToHaveClassAsync(new System.Text.RegularExpressions.Regex(@"\bmaximized\b"));
 
         // Read the inline style we render — AppFrame: "left:0; top:30px; right:0; bottom:80px;"
         var style = await win.GetAttributeAsync("style");
