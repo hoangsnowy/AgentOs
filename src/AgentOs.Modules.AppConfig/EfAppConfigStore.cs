@@ -57,6 +57,25 @@ public sealed class EfAppConfigStore : IAppConfigStore
     }
 
     /// <inheritdoc />
+    public async ValueTask<string?> GetForTenantAsync(string tenantId, string key, CancellationToken cancellationToken = default)
+    {
+        var cacheKey = CacheKey(tenantId, key);
+        if (_cache.TryGetValue(cacheKey, out var hit) && hit.FetchedUtc + CacheTtl > DateTime.UtcNow)
+        {
+            return hit.Value;
+        }
+
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppConfigDbContext>();
+        var row = await db.AppConfig.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.Key == key, cancellationToken)
+            .ConfigureAwait(false);
+        var value = row is null ? null : TryUnprotect(row.EncryptedValue);
+        _cache[cacheKey] = new CacheEntry(value, DateTime.UtcNow);
+        return value;
+    }
+
+    /// <inheritdoc />
     public ValueTask SetAsync(string key, string value, CancellationToken cancellationToken = default)
         => SetForTenantAsync(ResolveTenant(), key, value, cancellationToken);
 

@@ -1,12 +1,16 @@
-@* SpineApp — desktop window for the remote repo-execution spine (M2/M3): connected Workspaces, paired
-   Runners, and Sessions (member × workspace). Reads data in-process via the module repositories. A
-   Blazor Server circuit has no HttpContext, so ITenantContext is blank here — we read the tenant + user
-   from AuthenticationState and call the repos' tenant-explicit (*ForTenant) overloads. *@
+@* SpineApp — Projects (connected repos) → Issues (GitHub) → AI sessions (M2/M3/M4).
+   Primary flow: select a project, browse its open GitHub Issues, click "Work on this" to
+   start an AI session against that issue. Runners are infrastructure managed on a separate tab.
+   Reads data in-process via module repositories. A Blazor Server circuit has no HttpContext,
+   so ITenantContext is blank here — we read the tenant + user from AuthenticationState and
+   call repos via tenant-explicit overloads. *@
 
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
-@using AgentOs.Domain.Sessions
 @using AgentOs.Domain.Workspaces
+@using AgentOs.Domain.Sessions
+@using AgentOs.Modules.AppConfig
+@using AgentOs.Modules.Integration
 @using AgentOs.Modules.Workspaces
 @using AgentOs.Modules.Workspaces.Persistence
 @using AgentOs.Modules.Workspaces.Persistence.Entities
@@ -17,36 +21,43 @@
 @inject IRunnerRepository Runners
 @inject ISessionRepository Sessions
 @inject IRunnerPairingService Pairing
+@inject IAppConfigStore ConfigStore
+@inject IGitHubIssueService IssueService
 @inject AgentOs.Web.Services.ToastService Toasts
 
 <header class="page-head">
     <div>
         <h1 class="page-title">Spine · <code>@_tenantId</code></h1>
-        <p class="page-sub">Connected repos → paired runners → sessions. The remote repo-execution path (M2/M3).</p>
+        <p class="page-sub">Projects → Issues → AI sessions. Remote repo-execution path (M2/M3/M4).</p>
     </div>
     <Btn OnClick="ReloadAll" Disabled="_loading">
         <Icon Name="arrow-clockwise" Size="14" /> Refresh
     </Btn>
 </header>
 
-    <div class="spine-tabs">
-        <button class="spine-tab @(_tab == Tab.Workspaces ? "active" : "")" @onclick="@(() => _tab = Tab.Workspaces)">
-            Workspaces <Badge>@(_workspaces?.Count ?? 0)</Badge>
-        </button>
-        <button class="spine-tab @(_tab == Tab.Runners ? "active" : "")" @onclick="@(() => _tab = Tab.Runners)">
-            Runners <Badge>@(_runners?.Count ?? 0)</Badge>
-        </button>
-        <button class="spine-tab @(_tab == Tab.Sessions ? "active" : "")" @onclick="@(() => _tab = Tab.Sessions)">
-            Sessions <Badge>@(_sessions?.Count ?? 0)</Badge>
-        </button>
-    </div>
+<div class="spine-tabs">
+    <button class="spine-tab @(_tab == Tab.Projects ? "active" : "")" @onclick="@(() => { _tab = Tab.Projects; _selectedProject = null; })">
+        Projects <Badge>@(_workspaces?.Count ?? 0)</Badge>
+    </button>
+    <button class="spine-tab @(_tab == Tab.Runners ? "active" : "")" @onclick="@(() => _tab = Tab.Runners)">
+        Runners <Badge>@(_runners?.Count ?? 0)</Badge>
+    </button>
+    <button class="spine-tab @(_tab == Tab.Sessions ? "active" : "")" @onclick="@(() => _tab = Tab.Sessions)">
+        Sessions <Badge>@(_sessions?.Count ?? 0)</Badge>
+    </button>
+</div>
 
-    @if (!_resolved)
+@if (!_resolved)
+{
+    <Spinner />
+}
+
+@* ── PROJECTS TAB ──────────────────────────────────────────────────────────────────────── *@
+else if (_tab == Tab.Projects)
+{
+    @if (_selectedProject is null)
     {
-        <Spinner />
-    }
-    else if (_tab == Tab.Workspaces)
-    {
+        @* Projects list view *@
         <Panel Title="Connect a repository">
             <div class="form-grid">
                 <Field Label="Provider">
@@ -82,152 +93,240 @@
                     @(_busy ? "Connecting…" : "Connect")
                 </Btn>
             </div>
-            <p class="muted spine-form-hint">The token is validated against the provider, then stored encrypted —
-                it is never shown again or kept on the workspace row.</p>
+            <p class="muted spine-form-hint">Token is validated, then stored encrypted — never shown again or kept on the row.</p>
         </Panel>
 
         @if (_workspaces is null) { <Spinner /> }
         else
         {
-            <Panel Title="Workspaces">
+            <Panel Title="Projects">
             <table class="data-table">
-                <thead><tr><th>Name</th><th>Repository</th><th>Kind</th><th>Branch</th><th>Status</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Repository</th>
+                        <th>Branch</th>
+                        <th>Status</th>
+                        <th class="actions">Issues</th>
+                    </tr>
+                </thead>
                 <tbody>
                     @foreach (var w in _workspaces)
                     {
                         <tr>
-                            <td>@w.Name</td>
+                            <td><strong>@w.Name</strong></td>
                             <td><code>@w.Owner/@w.Repo</code></td>
-                            <td>@w.Kind</td>
                             <td>@w.DefaultBranch</td>
                             <td><Badge>@w.Status</Badge></td>
-                        </tr>
-                    }
-                    @if (_workspaces.Count == 0) { <tr><td colspan="5" class="data-empty">No workspaces yet — connect one above.</td></tr> }
-                </tbody>
-            </table>
-            </Panel>
-        }
-    }
-    else if (_tab == Tab.Runners)
-    {
-        <Panel Title="Register a runner (a paired dev machine)">
-            <div class="form-grid">
-                <Field Label="Label">
-                    <input @bind="_runnerLabel" placeholder="Hoang's laptop" />
-                </Field>
-            </div>
-            <div class="form-actions">
-                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="RegisterRunner" Disabled="_busy">
-                    @(_busy ? "Registering…" : "Register runner")
-                </Btn>
-            </div>
-            @if (_newRunner is not null)
-            {
-                <div class="cred-readout">
-                    <p class="cred-readout-hint">
-                        Pairing token — shown <strong>once</strong>. Set these on the dev machine, then run the AgentOS remote agent:
-                    </p>
-                    <textarea readonly rows="2">REMOTE_AGENT_ID=@_newRunner.Value.Id
-REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
-                </div>
-            }
-        </Panel>
-
-        @if (_runners is null) { <Spinner /> }
-        else
-        {
-            <Panel Title="Runners">
-            <table class="data-table">
-                <thead><tr><th>Label</th><th>Owner</th><th>Status</th><th>Created</th><th class="actions">Actions</th></tr></thead>
-                <tbody>
-                    @foreach (var r in _runners)
-                    {
-                        <tr>
-                            <td>@r.Label</td>
-                            <td><code>@(string.IsNullOrEmpty(r.OwnerUserId) ? "—" : r.OwnerUserId)</code></td>
-                            <td><Badge>@r.Status</Badge></td>
-                            <td>@r.CreatedAtUtc.ToString("u")</td>
                             <td class="actions">
-                                <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Danger"
-                                     OnClick="@(() => RevokeRunner(r))" Disabled="@(_busyId == r.Id || r.Status == "Revoked")">
-                                    <Icon Name="x" Size="13" /> Revoke
-                                </Btn>
+                                @if (w.Kind == SourceProviderKind.GitHub)
+                                {
+                                    <Btn Size="Btn.ButtonSize.Sm"
+                                         OnClick="@(() => SelectProject(w))"
+                                         Disabled="@(w.Status != "Active")">
+                                        Issues <Icon Name="arrow-right" Size="13" />
+                                    </Btn>
+                                }
+                                else
+                                {
+                                    <span class="muted" style="font-size:12px">ADO — soon</span>
+                                }
                             </td>
                         </tr>
                     }
-                    @if (_runners.Count == 0) { <tr><td colspan="5" class="data-empty">No runners yet — register one above.</td></tr> }
+                    @if (_workspaces.Count == 0)
+                    {
+                        <tr><td colspan="5" class="data-empty">No projects yet — connect one above.</td></tr>
+                    }
                 </tbody>
             </table>
             </Panel>
         }
     }
-    else if (_tab == Tab.Sessions)
+    else
     {
-        <Panel Title="Start a session (member × workspace)">
-            @if (_workspaces is null || _workspaces.Count == 0)
-            {
-                <div class="muted">Connect a workspace first — a session runs against one repo.</div>
-            }
-            else
-            {
-                <div class="form-grid">
-                    <Field Label="Workspace">
-                        <select class="prefs-select" @bind="_sessionWorkspaceId">
-                            <option value="">— pick a repo —</option>
-                            @foreach (var w in _workspaces)
-                            {
-                                <option value="@w.Id">@w.Name (@w.Owner/@w.Repo)</option>
-                            }
-                        </select>
-                    </Field>
-                    <Field Label="Title">
-                        <input @bind="_sessionTitle" placeholder="Add rate-limit to the login endpoint" />
-                    </Field>
-                </div>
+        @* Issues sub-view for the selected project *@
+        <div class="spine-back-bar">
+            <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => { _selectedProject = null; _issues = null; _issueError = null; })">
+                <Icon Name="arrow-left" Size="13" /> @_selectedProject.Name
+            </Btn>
+            <span class="spine-back-repo muted"><code>@_selectedProject.Owner/@_selectedProject.Repo</code></span>
+        </div>
+
+        @if (_loadingIssues)
+        {
+            <Spinner />
+        }
+        else if (_issueError is not null)
+        {
+            <Panel Title="Issues">
+                <p class="login-error">@_issueError</p>
                 <div class="form-actions">
-                    <Btn Variant="Btn.ButtonVariant.Primary" OnClick="CreateSession" Disabled="_busy">
-                        @(_busy ? "Creating…" : "Start session")
-                    </Btn>
+                    <Btn OnClick="@(() => SelectProject(_selectedProject))">Retry</Btn>
                 </div>
-            }
-        </Panel>
-
-        @if (_sessions is null) { <Spinner /> }
-        else
+            </Panel>
+        }
+        else if (_issues is not null)
         {
-            <Panel Title="Sessions">
+            <Panel Title="@($"Open Issues · {_selectedProject.Name}")">
             <table class="data-table">
-                <thead><tr><th>Title</th><th>Workspace</th><th>Status</th><th>Created</th><th class="actions">Actions</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th style="width:60px">#</th>
+                        <th>Title</th>
+                        <th>Labels</th>
+                        <th>Assignee</th>
+                        <th class="actions">Action</th>
+                    </tr>
+                </thead>
                 <tbody>
-                    @foreach (var s in _sessions)
+                    @foreach (var issue in _issues)
                     {
                         <tr>
-                            <td>@s.Title</td>
-                            <td><code>@WorkspaceName(s.WorkspaceId)</code></td>
-                            <td><Badge>@s.Status</Badge></td>
-                            <td>@s.CreatedAtUtc.ToString("u")</td>
+                            <td class="muted">#@issue.Number</td>
+                            <td>
+                                <a href="@issue.HtmlUrl" target="_blank" rel="noopener" class="spine-issue-link">
+                                    @issue.Title
+                                </a>
+                            </td>
+                            <td>
+                                @foreach (var label in issue.Labels.Take(3))
+                                {
+                                    <Badge>@label</Badge>
+                                }
+                            </td>
+                            <td class="muted">@(issue.AssigneeLogin ?? "—")</td>
                             <td class="actions">
-                                <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => CloseSession(s))"
-                                     Disabled="@(_busyId == s.Id || s.Status == "Closed")">
-                                    <Icon Name="check" Size="13" /> Close
+                                <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Primary"
+                                     OnClick="@(() => StartIssueSession(issue))"
+                                     Disabled="_busy">
+                                    Work on this <Icon Name="arrow-right" Size="13" />
                                 </Btn>
                             </td>
                         </tr>
                     }
-                    @if (_sessions.Count == 0) { <tr><td colspan="5" class="data-empty">No sessions yet.</td></tr> }
+                    @if (_issues.Count == 0)
+                    {
+                        <tr><td colspan="5" class="data-empty">No open issues — project is all clear!</td></tr>
+                    }
                 </tbody>
             </table>
             </Panel>
         }
     }
+}
+
+@* ── RUNNERS TAB ───────────────────────────────────────────────────────────────────────── *@
+else if (_tab == Tab.Runners)
+{
+    <Panel Title="Register a runner (a paired dev machine)">
+        <div class="form-grid">
+            <Field Label="Label">
+                <input @bind="_runnerLabel" placeholder="Hoang's laptop" />
+            </Field>
+        </div>
+        <div class="form-actions">
+            <Btn Variant="Btn.ButtonVariant.Primary" OnClick="RegisterRunner" Disabled="_busy">
+                @(_busy ? "Registering…" : "Register runner")
+            </Btn>
+        </div>
+        @if (_newRunner is not null)
+        {
+            <div class="cred-readout">
+                <p class="cred-readout-hint">
+                    Pairing token — shown <strong>once</strong>. Set these on the dev machine, then run the AgentOS remote agent:
+                </p>
+                <textarea readonly rows="2">REMOTE_AGENT_ID=@_newRunner.Value.Id
+REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
+            </div>
+        }
+    </Panel>
+
+    @if (_runners is null) { <Spinner /> }
+    else
+    {
+        <Panel Title="@(_isAdmin ? "Runners (all members)" : "My Runners")">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Label</th>
+                    @if (_isAdmin) { <th>Owner</th> }
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _runners)
+                {
+                    <tr>
+                        <td>@r.Label</td>
+                        @if (_isAdmin) { <td><code>@(string.IsNullOrEmpty(r.OwnerUserId) ? "—" : r.OwnerUserId)</code></td> }
+                        <td><Badge>@r.Status</Badge></td>
+                        <td>@r.CreatedAtUtc.ToString("u")</td>
+                        <td class="actions">
+                            <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Danger"
+                                 OnClick="@(() => RevokeRunner(r))" Disabled="@(_busyId == r.Id || r.Status == "Revoked")">
+                                <Icon Name="x" Size="13" /> Revoke
+                            </Btn>
+                        </td>
+                    </tr>
+                }
+                @if (_runners.Count == 0) { <tr><td colspan="@(_isAdmin ? 5 : 4)" class="data-empty">No runners yet — register one above.</td></tr> }
+            </tbody>
+        </table>
+        </Panel>
+    }
+}
+
+@* ── SESSIONS TAB ──────────────────────────────────────────────────────────────────────── *@
+else if (_tab == Tab.Sessions)
+{
+    @if (_sessions is null) { <Spinner /> }
+    else
+    {
+        <Panel Title="@(_isAdmin ? "Sessions (all members)" : "My Sessions")">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Project</th>
+                    @if (_isAdmin) { <th>Member</th> }
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in _sessions)
+                {
+                    <tr>
+                        <td>@s.Title</td>
+                        <td><code>@WorkspaceName(s.WorkspaceId)</code></td>
+                        @if (_isAdmin) { <td><code>@(string.IsNullOrEmpty(s.MemberUserId) ? "—" : s.MemberUserId)</code></td> }
+                        <td><Badge>@s.Status</Badge></td>
+                        <td>@s.CreatedAtUtc.ToString("u")</td>
+                        <td class="actions">
+                            <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => CloseSession(s))"
+                                 Disabled="@(_busyId == s.Id || s.Status == "Closed")">
+                                <Icon Name="check" Size="13" /> Close
+                            </Btn>
+                        </td>
+                    </tr>
+                }
+                @if (_sessions.Count == 0) { <tr><td colspan="@(_isAdmin ? 6 : 5)" class="data-empty">No sessions yet. Browse a project's issues to start one.</td></tr> }
+            </tbody>
+        </table>
+        </Panel>
+    }
+}
 
 @code {
-    private enum Tab { Workspaces, Runners, Sessions }
+    private enum Tab { Projects, Runners, Sessions }
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    private Tab _tab = Tab.Runners;
+    private Tab _tab = Tab.Projects;
     private bool _resolved;
     private bool _loading;
     private bool _busy;
@@ -235,17 +334,24 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
 
     private string _tenantId = "default";
     private string _userId = "";
+    private bool _isAdmin;
 
+    // ── Data ────────────────────────────────────────────────────────────────────────────────
     private IReadOnlyList<WorkspaceEntity>? _workspaces;
     private IReadOnlyList<RunnerEntity>? _runners;
     private IReadOnlyList<RemoteSessionEntity>? _sessions;
 
+    // ── Projects → Issues state ─────────────────────────────────────────────────────────────
+    private WorkspaceEntity? _selectedProject;
+    private IReadOnlyList<GitHubIssue>? _issues;
+    private bool _loadingIssues;
+    private string? _issueError;
+
+    // ── Runner registration form ─────────────────────────────────────────────────────────────
     private string _runnerLabel = "";
     private (Guid Id, string Token)? _newRunner;
 
-    private string _sessionWorkspaceId = "";
-    private string _sessionTitle = "";
-
+    // ── Connect workspace form ───────────────────────────────────────────────────────────────
     private SourceProviderKind _wsKind = SourceProviderKind.GitHub;
     private string _wsName = "";
     private string _wsOwner = "";
@@ -253,6 +359,8 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
     private string _wsProject = "";
     private string _wsBranch = "";
     private string _wsToken = "";
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────────────────────
 
     protected override async Task OnInitializedAsync()
     {
@@ -262,6 +370,7 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
             var user = state.User;
             _tenantId = user.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
             _userId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            _isAdmin = user.IsInRole("admin");
         }
         _resolved = true;
         await ReloadAll();
@@ -273,8 +382,12 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         try
         {
             _workspaces = await Workspaces.ListForTenantAsync(_tenantId);
-            _runners = await Runners.ListForTenantAsync(_tenantId);
-            _sessions = await Sessions.ListForTenantAsync(_tenantId);
+
+            var allRunners = await Runners.ListForTenantAsync(_tenantId);
+            _runners = _isAdmin ? allRunners : allRunners.Where(r => r.OwnerUserId == _userId).ToList();
+
+            var allSessions = await Sessions.ListForTenantAsync(_tenantId);
+            _sessions = _isAdmin ? allSessions : allSessions.Where(s => s.MemberUserId == _userId).ToList();
         }
         catch (Exception ex)
         {
@@ -288,6 +401,79 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
 
     private string WorkspaceName(Guid id) =>
         _workspaces?.FirstOrDefault(w => w.Id == id)?.Name ?? id.ToString("N")[..8];
+
+    // ── Projects → Issues ────────────────────────────────────────────────────────────────────
+
+    private async Task SelectProject(WorkspaceEntity project)
+    {
+        _selectedProject = project;
+        _issues = null;
+        _issueError = null;
+        _loadingIssues = true;
+        StateHasChanged();
+
+        try
+        {
+            var pat = await ConfigStore.GetForTenantAsync(_tenantId, project.CredentialRef);
+            if (string.IsNullOrEmpty(pat))
+            {
+                _issueError = "Could not retrieve workspace credentials. Reconnect the project.";
+                return;
+            }
+
+            var descriptor = new WorkspaceDescriptor(
+                project.Id, _tenantId, project.Kind, project.Owner, project.Repo,
+                project.Project, project.DefaultBranch, pat);
+
+            _issues = await IssueService.ListOpenIssuesAsync(descriptor);
+        }
+        catch (Exception ex)
+        {
+            _issueError = $"Failed to load issues: {ex.Message}";
+        }
+        finally
+        {
+            _loadingIssues = false;
+        }
+    }
+
+    private async Task StartIssueSession(GitHubIssue issue)
+    {
+        if (_busy || _selectedProject is null) { return; }
+        _busy = true;
+        try
+        {
+            var entity = new RemoteSessionEntity
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantId,
+                WorkspaceId = _selectedProject.Id,
+                MemberUserId = _userId,
+                Title = $"#{issue.Number} {issue.Title}",
+                Status = "Draft",
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                CreatedByUserId = string.IsNullOrEmpty(_userId) ? null : _userId,
+            };
+            await Sessions.AddForTenantAsync(entity);
+            Toasts.Show("Spine", $"Session created for issue #{issue.Number}. Switch to Sessions tab to track it.", ToastKind.Ok);
+
+            var allSessions = await Sessions.ListForTenantAsync(_tenantId);
+            _sessions = _isAdmin ? allSessions : allSessions.Where(s => s.MemberUserId == _userId).ToList();
+            _tab = Tab.Sessions;
+            _selectedProject = null;
+            _issues = null;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ── Runner management ────────────────────────────────────────────────────────────────────
 
     private async Task RegisterRunner()
     {
@@ -316,7 +502,8 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
             _newRunner = (entity.Id, secret.Token);
             _runnerLabel = "";
             Toasts.Show("Spine", "Runner registered. Copy the pairing token now — it won't be shown again.", ToastKind.Ok);
-            _runners = await Runners.ListForTenantAsync(_tenantId);
+            var r0 = await Runners.ListForTenantAsync(_tenantId);
+            _runners = _isAdmin ? r0 : r0.Where(r => r.OwnerUserId == _userId).ToList();
         }
         catch (Exception ex)
         {
@@ -335,7 +522,8 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         {
             await Runners.SetStatusForTenantAsync(_tenantId, r.Id, "Revoked");
             Toasts.Show("Spine", $"Revoked '{r.Label}'.", ToastKind.Ok);
-            _runners = await Runners.ListForTenantAsync(_tenantId);
+            var r0 = await Runners.ListForTenantAsync(_tenantId);
+            _runners = _isAdmin ? r0 : r0.Where(r => r.OwnerUserId == _userId).ToList();
         }
         catch (Exception ex)
         {
@@ -347,43 +535,7 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         }
     }
 
-    private async Task CreateSession()
-    {
-        if (_busy) { return; }
-        if (!Guid.TryParse(_sessionWorkspaceId, out var workspaceId) || string.IsNullOrWhiteSpace(_sessionTitle))
-        {
-            Toasts.Show("Spine", "Pick a workspace and enter a title.", ToastKind.Err);
-            return;
-        }
-        _busy = true;
-        try
-        {
-            var entity = new RemoteSessionEntity
-            {
-                Id = Guid.NewGuid(),
-                TenantId = _tenantId,
-                WorkspaceId = workspaceId,
-                MemberUserId = _userId,
-                Title = _sessionTitle.Trim(),
-                Status = "Draft",
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-                CreatedByUserId = string.IsNullOrEmpty(_userId) ? null : _userId,
-            };
-            await Sessions.AddForTenantAsync(entity);
-            _sessionTitle = "";
-            _sessionWorkspaceId = "";
-            Toasts.Show("Spine", "Session created.", ToastKind.Ok);
-            _sessions = await Sessions.ListForTenantAsync(_tenantId);
-        }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Create failed: {ex.Message}", ToastKind.Err);
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
+    // ── Sessions ─────────────────────────────────────────────────────────────────────────────
 
     private async Task CloseSession(RemoteSessionEntity s)
     {
@@ -392,7 +544,8 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         {
             await Sessions.CloseForTenantAsync(_tenantId, s.Id, DateTimeOffset.UtcNow);
             Toasts.Show("Spine", $"Closed '{s.Title}'.", ToastKind.Ok);
-            _sessions = await Sessions.ListForTenantAsync(_tenantId);
+            var s0 = await Sessions.ListForTenantAsync(_tenantId);
+            _sessions = _isAdmin ? s0 : s0.Where(s => s.MemberUserId == _userId).ToList();
         }
         catch (Exception ex)
         {
@@ -403,6 +556,8 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
             _busyId = null;
         }
     }
+
+    // ── Connect workspace ────────────────────────────────────────────────────────────────────
 
     private async Task ConnectWorkspace()
     {

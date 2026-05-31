@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using AgentOs.Modules.Tenants.Endpoints;
 using AgentOs.Modules.Tenants.Keycloak;
 using AgentOs.Modules.Tenants.Persistence;
+using AgentOs.Modules.Tenants.Persistence.Entities;
 using AgentOs.Modules.Tenants.Persistence.Repositories;
 using AgentOs.SharedKernel.Modularity;
 using Microsoft.AspNetCore.Routing;
@@ -61,6 +62,21 @@ public sealed class TenantsModule : IModule, IEndpointModule, IInitializableModu
         if (db is not null)
         {
             await db.Database.MigrateAsync(ct).ConfigureAwait(false);
+
+            // Seed the 'default' tenant so operator-mode invitations can always be accepted.
+            // DefaultTenantContext uses tenant id "default" for single-tenant / dev operation;
+            // invitations created in that mode embed "default" and would fail the existence
+            // check in TenantSignupService without this row.
+            if (!await db.Tenants.AnyAsync(t => t.Id == "default", ct).ConfigureAwait(false))
+            {
+                db.Tenants.Add(new TenantEntity
+                {
+                    Id = "default",
+                    Name = "Default Workspace",
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                });
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
         }
     }
 }
