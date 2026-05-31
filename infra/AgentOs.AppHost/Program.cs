@@ -42,6 +42,10 @@ var keycloak = builder.AddKeycloak("keycloak", port: 8080)
     .WithEnvironment("KC_SPI_THEME_STATIC_MAX_AGE", "-1")
     .WithEnvironment("KC_SPI_THEME_CACHE_THEMES", "false")
     .WithEnvironment("KC_SPI_THEME_CACHE_TEMPLATES", "false")
+    // Dev only: localhost shares one cookie jar across EVERY dev app on the box, so the Cookie header
+    // sent to Keycloak can blow past Quarkus's default max header size → HTTP 431 on /auth. Raise the
+    // ceiling (a real Keycloak on its own domain never sees this pollution).
+    .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE", "64K")
     .WaitFor(mailhog);
 
 builder.AddProject<Projects.AgentOs_Api>("api")

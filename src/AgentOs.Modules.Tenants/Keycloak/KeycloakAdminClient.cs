@@ -297,6 +297,18 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
 
     private async Task<string> GetAdminTokenAsync(CancellationToken ct)
     {
+        // No BaseAddress ⟺ Keycloak unconfigured (the ctor only sets it when Options.BaseUrl is present).
+        // Fail with an actionable message instead of letting HttpClient throw the opaque "An invalid request
+        // URI was provided. Either the request URI must be an absolute URI or BaseAddress must be set." —
+        // every public method funnels through here, so this is the single guard for the whole client.
+        if (_http.BaseAddress is null)
+        {
+            throw new InvalidOperationException(
+                "User management requires Keycloak, which isn't configured in this environment. "
+                + "Run the full stack with `dotnet run --project infra/AgentOs.AppHost` (Aspire wires Keycloak); "
+                + "the standalone Web has no identity backend.");
+        }
+
         if (_cachedToken is not null && DateTimeOffset.UtcNow < _cachedTokenExpiresAt)
         {
             return _cachedToken;

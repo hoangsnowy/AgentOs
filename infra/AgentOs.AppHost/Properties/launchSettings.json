@@ -12,7 +12,7 @@
         "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21050",
         "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22050",
         "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21050",
-        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:21051",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://localhost:21051",
         "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22050"
       }
     },
