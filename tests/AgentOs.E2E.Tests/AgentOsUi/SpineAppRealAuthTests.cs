@@ -48,8 +48,8 @@ public sealed class SpineAppRealAuthTests : IClassFixture<AgentOsRealAuthFixture
         await win.GetByPlaceholder("Hoang's laptop").FillAsync(label);
         await win.GetByRole(AriaRole.Button, new() { Name = "Register runner" }).ClickAsync();
 
-        await Assertions.Expect(win.Locator(".admin-invite-url")).ToContainTextAsync("REMOTE_AGENT_TOKEN");
+        await Assertions.Expect(win.Locator(".cred-readout textarea")).ToContainTextAsync("REMOTE_AGENT_TOKEN");
         // Persisted to Postgres + listed under the operator's tenant.
-        await Assertions.Expect(win.Locator(".admin-tbl")).ToContainTextAsync(label);
+        await Assertions.Expect(win.Locator(".data-table")).ToContainTextAsync(label);
     }
 }

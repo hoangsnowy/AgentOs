@@ -105,6 +105,15 @@ builder.Services
         options.SaveTokens = true;
         options.GetClaimsFromUserInfoEndpoint = true;
         options.RequireHttpsMetadata = requireHttps;
+        // Correlation + nonce cookies default to SameSite=None, which the browser only stores when
+        // also Secure. Behind Aspire's dcp TLS-terminating proxy the app can see the request as http,
+        // so the cookie is written WITHOUT Secure → Chrome drops it → "Correlation failed" at
+        // /signin-oidc. The code flow's callback is a top-level GET, so SameSite=Lax is sufficient and
+        // is sent without requiring Secure; SameAsRequest keeps it Secure when the scheme really is https.
+        options.CorrelationCookie.SameSite = SameSiteMode.Lax;
+        options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.NonceCookie.SameSite = SameSiteMode.Lax;
+        options.NonceCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         // Realm `agentic-web` client attaches `tenant` + `realm-roles` + `preferred-username` +
         // `email` claims via inline protocol mappers — we only request the `openid` base scope.
         options.Scope.Clear();

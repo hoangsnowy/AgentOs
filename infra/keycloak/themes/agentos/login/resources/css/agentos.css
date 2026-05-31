@@ -1,6 +1,6 @@
 /* =================================================================
-   AgentOs login theme — Keycloak skin matching AgentOs Studio (Breeze).
-   Mirrors the design tokens from src/AgentOs.Web/wwwroot/app.css so the
+   AgentOS login theme — Keycloak skin matching AgentOS Studio (Breeze).
+   Mirrors the design tokens from src/AgentOS.Web/wwwroot/app.css so the
    sign-in screen feels like part of the same product.
    ================================================================= */
 
@@ -38,7 +38,7 @@
     --shadow-2:    0 2px 4px rgba(15,23,42,.06), 0 1px 0 rgba(15,23,42,.04);
 }
 
-/* ===== Page shell — lock-screen glass over the AgentOs wallpaper ===== */
+/* ===== Page shell — lock-screen glass over the AgentOS wallpaper ===== */
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body {
@@ -99,7 +99,7 @@ body, .login-pf body, .login-pf-page {
 
 #kc-content { padding: 0; background: transparent; box-shadow: none; border: 0; }
 
-/* ===== Header — replace the stock KC logo with the AgentOs mark ===== */
+/* ===== Header — replace the stock KC logo with the AgentOS mark ===== */
 #kc-header,
 .login-pf-page-header {
     text-align: left;

@@ -19,16 +19,15 @@
 @inject IRunnerPairingService Pairing
 @inject AgentOs.Web.Services.ToastService Toasts
 
-<div class="admin-page spine-app">
-    <header class="admin-head">
-        <div>
-            <h1>Spine · <code>@_tenantId</code></h1>
-            <p class="admin-sub">Connected repos → paired runners → sessions. The remote repo-execution path (M2/M3).</p>
-        </div>
-        <Btn OnClick="ReloadAll" Disabled="_loading">
-            <Icon Name="arrow-clockwise" Size="14" /> Refresh
-        </Btn>
-    </header>
+<header class="page-head">
+    <div>
+        <h1 class="page-title">Spine · <code>@_tenantId</code></h1>
+        <p class="page-sub">Connected repos → paired runners → sessions. The remote repo-execution path (M2/M3).</p>
+    </div>
+    <Btn OnClick="ReloadAll" Disabled="_loading">
+        <Icon Name="arrow-clockwise" Size="14" /> Refresh
+    </Btn>
+</header>
 
     <div class="spine-tabs">
         <button class="spine-tab @(_tab == Tab.Workspaces ? "active" : "")" @onclick="@(() => _tab = Tab.Workspaces)">
@@ -48,9 +47,8 @@
     }
     else if (_tab == Tab.Workspaces)
     {
-        <section class="admin-section">
-            <h2>Connect a repository</h2>
-            <div class="spine-form">
+        <Panel Title="Connect a repository">
+            <div class="form-grid">
                 <Field Label="Provider">
                     <select class="prefs-select" @bind="_wsKind">
                         <option value="@SourceProviderKind.GitHub">GitHub</option>
@@ -78,18 +76,21 @@
                 <Field Label="Access token (PAT)">
                     <input type="password" @bind="_wsToken" placeholder="ghp_… / Azure PAT" autocomplete="off" />
                 </Field>
+            </div>
+            <div class="form-actions">
                 <Btn Variant="Btn.ButtonVariant.Primary" OnClick="ConnectWorkspace" Disabled="_busy">
                     @(_busy ? "Connecting…" : "Connect")
                 </Btn>
             </div>
             <p class="muted spine-form-hint">The token is validated against the provider, then stored encrypted —
                 it is never shown again or kept on the workspace row.</p>
-        </section>
+        </Panel>
 
         @if (_workspaces is null) { <Spinner /> }
         else
         {
-            <table class="admin-tbl">
+            <Panel Title="Workspaces">
+            <table class="data-table">
                 <thead><tr><th>Name</th><th>Repository</th><th>Kind</th><th>Branch</th><th>Status</th></tr></thead>
                 <tbody>
                     @foreach (var w in _workspaces)
@@ -102,40 +103,43 @@
                             <td><Badge>@w.Status</Badge></td>
                         </tr>
                     }
-                    @if (_workspaces.Count == 0) { <tr><td colspan="5" class="muted">No workspaces yet — connect one above.</td></tr> }
+                    @if (_workspaces.Count == 0) { <tr><td colspan="5" class="data-empty">No workspaces yet — connect one above.</td></tr> }
                 </tbody>
             </table>
+            </Panel>
         }
     }
     else if (_tab == Tab.Runners)
     {
-        <section class="admin-section">
-            <h2>Register a runner (a paired dev machine)</h2>
-            <div class="admin-invite">
+        <Panel Title="Register a runner (a paired dev machine)">
+            <div class="form-grid">
                 <Field Label="Label">
                     <input @bind="_runnerLabel" placeholder="Hoang's laptop" />
                 </Field>
+            </div>
+            <div class="form-actions">
                 <Btn Variant="Btn.ButtonVariant.Primary" OnClick="RegisterRunner" Disabled="_busy">
                     @(_busy ? "Registering…" : "Register runner")
                 </Btn>
             </div>
             @if (_newRunner is not null)
             {
-                <div class="admin-invite-result">
-                    <div class="admin-invite-hint">
+                <div class="cred-readout">
+                    <p class="cred-readout-hint">
                         Pairing token — shown <strong>once</strong>. Set these on the dev machine, then run the AgentOS remote agent:
-                    </div>
-                    <textarea readonly rows="2" class="admin-invite-url">REMOTE_AGENT_ID=@_newRunner.Value.Id
+                    </p>
+                    <textarea readonly rows="2">REMOTE_AGENT_ID=@_newRunner.Value.Id
 REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
                 </div>
             }
-        </section>
+        </Panel>
 
         @if (_runners is null) { <Spinner /> }
         else
         {
-            <table class="admin-tbl">
-                <thead><tr><th>Label</th><th>Owner</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
+            <Panel Title="Runners">
+            <table class="data-table">
+                <thead><tr><th>Label</th><th>Owner</th><th>Status</th><th>Created</th><th class="actions">Actions</th></tr></thead>
                 <tbody>
                     @foreach (var r in _runners)
                     {
@@ -144,7 +148,7 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
                             <td><code>@(string.IsNullOrEmpty(r.OwnerUserId) ? "—" : r.OwnerUserId)</code></td>
                             <td><Badge>@r.Status</Badge></td>
                             <td>@r.CreatedAtUtc.ToString("u")</td>
-                            <td style="text-align:right">
+                            <td class="actions">
                                 <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Danger"
                                      OnClick="@(() => RevokeRunner(r))" Disabled="@(_busyId == r.Id || r.Status == "Revoked")">
                                     <Icon Name="x" Size="13" /> Revoke
@@ -152,22 +156,22 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
                             </td>
                         </tr>
                     }
-                    @if (_runners.Count == 0) { <tr><td colspan="5" class="muted">No runners yet — register one above.</td></tr> }
+                    @if (_runners.Count == 0) { <tr><td colspan="5" class="data-empty">No runners yet — register one above.</td></tr> }
                 </tbody>
             </table>
+            </Panel>
         }
     }
     else if (_tab == Tab.Sessions)
     {
-        <section class="admin-section">
-            <h2>Start a session (member × workspace)</h2>
+        <Panel Title="Start a session (member × workspace)">
             @if (_workspaces is null || _workspaces.Count == 0)
             {
                 <div class="muted">Connect a workspace first — a session runs against one repo.</div>
             }
             else
             {
-                <div class="admin-invite">
+                <div class="form-grid">
                     <Field Label="Workspace">
                         <select class="prefs-select" @bind="_sessionWorkspaceId">
                             <option value="">— pick a repo —</option>
@@ -180,18 +184,21 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
                     <Field Label="Title">
                         <input @bind="_sessionTitle" placeholder="Add rate-limit to the login endpoint" />
                     </Field>
+                </div>
+                <div class="form-actions">
                     <Btn Variant="Btn.ButtonVariant.Primary" OnClick="CreateSession" Disabled="_busy">
                         @(_busy ? "Creating…" : "Start session")
                     </Btn>
                 </div>
             }
-        </section>
+        </Panel>
 
         @if (_sessions is null) { <Spinner /> }
         else
         {
-            <table class="admin-tbl">
-                <thead><tr><th>Title</th><th>Workspace</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
+            <Panel Title="Sessions">
+            <table class="data-table">
+                <thead><tr><th>Title</th><th>Workspace</th><th>Status</th><th>Created</th><th class="actions">Actions</th></tr></thead>
                 <tbody>
                     @foreach (var s in _sessions)
                     {
@@ -200,7 +207,7 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
                             <td><code>@WorkspaceName(s.WorkspaceId)</code></td>
                             <td><Badge>@s.Status</Badge></td>
                             <td>@s.CreatedAtUtc.ToString("u")</td>
-                            <td style="text-align:right">
+                            <td class="actions">
                                 <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => CloseSession(s))"
                                      Disabled="@(_busyId == s.Id || s.Status == "Closed")">
                                     <Icon Name="check" Size="13" /> Close
@@ -208,12 +215,12 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
                             </td>
                         </tr>
                     }
-                    @if (_sessions.Count == 0) { <tr><td colspan="5" class="muted">No sessions yet.</td></tr> }
+                    @if (_sessions.Count == 0) { <tr><td colspan="5" class="data-empty">No sessions yet.</td></tr> }
                 </tbody>
             </table>
+            </Panel>
         }
     }
-</div>
 
 @code {
     private enum Tab { Workspaces, Runners, Sessions }

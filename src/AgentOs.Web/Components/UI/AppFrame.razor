@@ -11,7 +11,8 @@
      role="dialog"
      aria-labelledby="@TitleId"
      aria-modal="false"
-     @onmousedown="@(() => WM.Focus(W.Id))">
+     @onmousedown="@(() => WM.Focus(W.Id))"
+     @onmouseup="EndAll">
     <div class="appwin-titlebar"
          @onmousedown="StartDrag"
          @onmousedown:stopPropagation="true"
