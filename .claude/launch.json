@@ -12,6 +12,12 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "src/AgentOs.Web", "--no-launch-profile", "--no-build", "-c", "Release", "--urls", "http://localhost:5199"],
       "port": 5199
+    },
+    {
+      "name": "aspire",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "infra/AgentOs.AppHost", "--launch-profile", "http", "-c", "Release"],
+      "port": 15050
     }
   ]
 }
