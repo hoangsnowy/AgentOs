@@ -137,15 +137,23 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         @if (_runners is null) { <Spinner /> }
         else
         {
-            <Panel Title="Runners">
+            <Panel Title="@(_isAdmin ? "Runners (all members)" : "My Runners")">
             <table class="data-table">
-                <thead><tr><th>Label</th><th>Owner</th><th>Status</th><th>Created</th><th class="actions">Actions</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Label</th>
+                        @if (_isAdmin) { <th>Owner</th> }
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th class="actions">Actions</th>
+                    </tr>
+                </thead>
                 <tbody>
                     @foreach (var r in _runners)
                     {
                         <tr>
                             <td>@r.Label</td>
-                            <td><code>@(string.IsNullOrEmpty(r.OwnerUserId) ? "—" : r.OwnerUserId)</code></td>
+                            @if (_isAdmin) { <td><code>@(string.IsNullOrEmpty(r.OwnerUserId) ? "—" : r.OwnerUserId)</code></td> }
                             <td><Badge>@r.Status</Badge></td>
                             <td>@r.CreatedAtUtc.ToString("u")</td>
                             <td class="actions">
@@ -156,7 +164,7 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
                             </td>
                         </tr>
                     }
-                    @if (_runners.Count == 0) { <tr><td colspan="5" class="data-empty">No runners yet — register one above.</td></tr> }
+                    @if (_runners.Count == 0) { <tr><td colspan="@(_isAdmin ? 5 : 4)" class="data-empty">No runners yet — register one above.</td></tr> }
                 </tbody>
             </table>
             </Panel>
@@ -196,15 +204,25 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         @if (_sessions is null) { <Spinner /> }
         else
         {
-            <Panel Title="Sessions">
+            <Panel Title="@(_isAdmin ? "Sessions (all members)" : "My Sessions")">
             <table class="data-table">
-                <thead><tr><th>Title</th><th>Workspace</th><th>Status</th><th>Created</th><th class="actions">Actions</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Workspace</th>
+                        @if (_isAdmin) { <th>Member</th> }
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th class="actions">Actions</th>
+                    </tr>
+                </thead>
                 <tbody>
                     @foreach (var s in _sessions)
                     {
                         <tr>
                             <td>@s.Title</td>
                             <td><code>@WorkspaceName(s.WorkspaceId)</code></td>
+                            @if (_isAdmin) { <td><code>@(string.IsNullOrEmpty(s.MemberUserId) ? "—" : s.MemberUserId)</code></td> }
                             <td><Badge>@s.Status</Badge></td>
                             <td>@s.CreatedAtUtc.ToString("u")</td>
                             <td class="actions">
@@ -215,7 +233,7 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
                             </td>
                         </tr>
                     }
-                    @if (_sessions.Count == 0) { <tr><td colspan="5" class="data-empty">No sessions yet.</td></tr> }
+                    @if (_sessions.Count == 0) { <tr><td colspan="@(_isAdmin ? 6 : 5)" class="data-empty">No sessions yet.</td></tr> }
                 </tbody>
             </table>
             </Panel>
@@ -235,6 +253,7 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
 
     private string _tenantId = "default";
     private string _userId = "";
+    private bool _isAdmin;
 
     private IReadOnlyList<WorkspaceEntity>? _workspaces;
     private IReadOnlyList<RunnerEntity>? _runners;
@@ -262,6 +281,7 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
             var user = state.User;
             _tenantId = user.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
             _userId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            _isAdmin = user.IsInRole("admin");
         }
         _resolved = true;
         await ReloadAll();
@@ -273,8 +293,10 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         try
         {
             _workspaces = await Workspaces.ListForTenantAsync(_tenantId);
-            _runners = await Runners.ListForTenantAsync(_tenantId);
-            _sessions = await Sessions.ListForTenantAsync(_tenantId);
+            var allRunners = await Runners.ListForTenantAsync(_tenantId);
+            _runners = _isAdmin ? allRunners : allRunners.Where(r => r.OwnerUserId == _userId).ToList();
+            var allSessions = await Sessions.ListForTenantAsync(_tenantId);
+            _sessions = _isAdmin ? allSessions : allSessions.Where(s => s.MemberUserId == _userId).ToList();
         }
         catch (Exception ex)
         {
@@ -316,7 +338,8 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
             _newRunner = (entity.Id, secret.Token);
             _runnerLabel = "";
             Toasts.Show("Spine", "Runner registered. Copy the pairing token now — it won't be shown again.", ToastKind.Ok);
-            _runners = await Runners.ListForTenantAsync(_tenantId);
+            var r0 = await Runners.ListForTenantAsync(_tenantId);
+            _runners = _isAdmin ? r0 : r0.Where(r => r.OwnerUserId == _userId).ToList();
         }
         catch (Exception ex)
         {
@@ -335,7 +358,8 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         {
             await Runners.SetStatusForTenantAsync(_tenantId, r.Id, "Revoked");
             Toasts.Show("Spine", $"Revoked '{r.Label}'.", ToastKind.Ok);
-            _runners = await Runners.ListForTenantAsync(_tenantId);
+            var r0 = await Runners.ListForTenantAsync(_tenantId);
+            _runners = _isAdmin ? r0 : r0.Where(r => r.OwnerUserId == _userId).ToList();
         }
         catch (Exception ex)
         {
@@ -373,7 +397,8 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
             _sessionTitle = "";
             _sessionWorkspaceId = "";
             Toasts.Show("Spine", "Session created.", ToastKind.Ok);
-            _sessions = await Sessions.ListForTenantAsync(_tenantId);
+            var s0 = await Sessions.ListForTenantAsync(_tenantId);
+            _sessions = _isAdmin ? s0 : s0.Where(s => s.MemberUserId == _userId).ToList();
         }
         catch (Exception ex)
         {
@@ -392,7 +417,8 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
         {
             await Sessions.CloseForTenantAsync(_tenantId, s.Id, DateTimeOffset.UtcNow);
             Toasts.Show("Spine", $"Closed '{s.Title}'.", ToastKind.Ok);
-            _sessions = await Sessions.ListForTenantAsync(_tenantId);
+            var s0 = await Sessions.ListForTenantAsync(_tenantId);
+            _sessions = _isAdmin ? s0 : s0.Where(s => s.MemberUserId == _userId).ToList();
         }
         catch (Exception ex)
         {
