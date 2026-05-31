@@ -67,7 +67,7 @@ public sealed class SpineAppTests : IClassFixture<AgentOsPageFixture>
         await win.GetByPlaceholder("Hoang's laptop").FillAsync("CI test runner");
         await win.GetByRole(AriaRole.Button, new() { Name = "Register runner" }).ClickAsync();
 
-        var token = win.Locator(".admin-invite-url");
+        var token = win.Locator(".cred-readout textarea");
         await Assertions.Expect(token).ToBeVisibleAsync();
         await Assertions.Expect(token).ToContainTextAsync("REMOTE_AGENT_TOKEN");
         await Assertions.Expect(token).ToContainTextAsync("REMOTE_AGENT_ID");

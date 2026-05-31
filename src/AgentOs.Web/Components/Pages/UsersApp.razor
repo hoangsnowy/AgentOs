@@ -13,45 +13,45 @@
 @inject AgentOs.Modules.Tenants.ITenantSignupService Signup
 @inject AgentOs.Web.Services.ToastService Toasts
 
-<div class="admin-page users-app">
-    @if (!_resolved)
+@if (!_resolved)
+{
+    <Spinner />
+}
+else if (!_isAdmin)
+{
+    <div class="login-error">Admin role required. Your account is a member of <code>@_tenantId</code> without admin rights.</div>
+}
+else
+{
+    <header class="page-head">
+        <div>
+            <h1 class="page-title">Users · <code>@_tenantId</code></h1>
+            <p class="page-sub">@(_members?.Count ?? 0) member(s) · roles + lifecycle managed via Keycloak</p>
+        </div>
+        <Btn OnClick="Reload" Disabled="_loading">
+            <Icon Name="arrow-clockwise" Size="14" /> Refresh
+        </Btn>
+    </header>
+
+    @if (_loadError is not null)
+    {
+        <div class="login-error">@_loadError</div>
+    }
+    else if (_members is null)
     {
         <Spinner />
     }
-    else if (!_isAdmin)
-    {
-        <div class="login-error">Admin role required. Your account is a member of <code>@_tenantId</code> without admin rights.</div>
-    }
     else
     {
-        <header class="admin-head">
-            <div>
-                <h1>Users · <code>@_tenantId</code></h1>
-                <p class="admin-sub">@(_members?.Count ?? 0) member(s) · roles + lifecycle managed via Keycloak</p>
-            </div>
-            <Btn OnClick="Reload" Disabled="_loading">
-                <Icon Name="arrow-clockwise" Size="14" /> Refresh
-            </Btn>
-        </header>
-
-        @if (_loadError is not null)
-        {
-            <div class="login-error">@_loadError</div>
-        }
-        else if (_members is null)
-        {
-            <Spinner />
-        }
-        else
-        {
-            <table class="admin-tbl">
+        <Panel Title="Members">
+            <table class="data-table">
                 <thead>
                     <tr>
                         <th>Username</th>
                         <th>Email</th>
                         <th>Role</th>
                         <th>Status</th>
-                        <th style="text-align:right">Actions</th>
+                        <th class="actions">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -73,59 +73,62 @@
                                 else if (!m.EmailVerified) { <Badge>unverified</Badge> }
                                 else { <Badge>active</Badge> }
                             </td>
-                            <td style="text-align:right; white-space:nowrap">
-                                <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => ResetPassword(m))" Disabled="_busyId == m.Id">
-                                    <Icon Name="lock" Size="13" /> Reset
-                                </Btn>
-                                <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Danger"
-                                     OnClick="@(() => AskRemove(m))" Disabled="@(_busyId == m.Id || isSelf)">
-                                    <Icon Name="x" Size="13" /> Remove
-                                </Btn>
+                            <td class="actions">
+                                <span class="row-actions">
+                                    <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => ResetPassword(m))" Disabled="_busyId == m.Id">
+                                        <Icon Name="lock" Size="13" /> Reset
+                                    </Btn>
+                                    <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Danger"
+                                         OnClick="@(() => AskRemove(m))" Disabled="@(_busyId == m.Id || isSelf)">
+                                        <Icon Name="x" Size="13" /> Remove
+                                    </Btn>
+                                </span>
                             </td>
                         </tr>
                     }
                     @if (_members.Count == 0)
                     {
-                        <tr><td colspan="5" class="muted">No members yet — invite one below.</td></tr>
+                        <tr><td colspan="5" class="data-empty">No members yet — invite one below.</td></tr>
                     }
                 </tbody>
             </table>
+        </Panel>
 
-            <section class="admin-section">
-                <h2>Invite a member</h2>
-                <div class="admin-invite">
-                    <Field Label="Email (optional)">
-                        <input type="email" @bind="_inviteEmail" placeholder="bob@@acme.test" autocomplete="email" />
-                    </Field>
-                    <Field Label="Role">
-                        <select @bind="_inviteRole" class="prefs-select">
-                            <option value="member">Member</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </Field>
-                    <Field Label="TTL (hours)">
-                        <input type="number" min="1" max="168" @bind="_inviteTtl" />
-                    </Field>
-                    <Btn Variant="Btn.ButtonVariant.Primary" OnClick="MintInvite" Disabled="_busy">
-                        @(_busy ? "Generating…" : "Mint invite URL")
-                    </Btn>
+        <Panel Title="Invite a member">
+            <div class="form-grid">
+                <Field Label="Email (optional)">
+                    <input type="email" @bind="_inviteEmail" placeholder="bob@@acme.test" autocomplete="email" />
+                </Field>
+                <Field Label="Role">
+                    <select @bind="_inviteRole" class="prefs-select">
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </Field>
+                <Field Label="TTL (hours)">
+                    <input type="number" min="1" max="168" @bind="_inviteTtl" />
+                </Field>
+            </div>
+            <div class="form-actions">
+                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="MintInvite" Disabled="_busy">
+                    @(_busy ? "Generating…" : "Mint invite URL")
+                </Btn>
+            </div>
+
+            @if (_inviteUrl is not null)
+            {
+                <div class="cred-readout">
+                    <p class="cred-readout-hint">Copy + send to your invitee. Expires @_inviteExpiresAt.ToString("u").</p>
+                    <textarea readonly rows="2">@_inviteUrl</textarea>
                 </div>
-
-                @if (_inviteUrl is not null)
-                {
-                    <div class="admin-invite-result">
-                        <div class="admin-invite-hint">Copy + send to your invitee. Expires @_inviteExpiresAt.ToString("u").</div>
-                        <textarea readonly rows="2" class="admin-invite-url">@_inviteUrl</textarea>
-                    </div>
-                }
-                @if (_inviteError is not null)
-                {
-                    <div class="login-error">@_inviteError</div>
-                }
-            </section>
-        }
+            }
+            @if (_inviteError is not null)
+            {
+                <div class="login-error">@_inviteError</div>
+            }
+        </Panel>
     }
-</div>
+}
 
 <Dialog Show="_confirmRemove is not null" Title="Remove member" Width="380" OnClose="@(() => _confirmRemove = null)">
     <ChildContent>

@@ -901,6 +901,53 @@ select {
     background: var(--bg-3); color: var(--text-disabled); cursor: not-allowed;
 }
 
+/* --- Admin / data pages (Users, Spine, Evidence, Audit, Members) ---
+   First-class, token-based primitives so every admin screen shares ONE professional vocabulary.
+   Pair with .page-head + <Panel> + Field/Btn. Replaces the old phantom admin-* classes. */
+.data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.data-table th {
+    text-align: left; padding: 8px 10px;
+    font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+    text-transform: uppercase; letter-spacing: .04em;
+    color: var(--txt-dim); white-space: nowrap;
+    border-bottom: 1px solid var(--line-strong);
+}
+.data-table td {
+    padding: 9px 10px; vertical-align: middle;
+    color: var(--txt-soft); border-bottom: 1px solid var(--line);
+}
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table tbody tr:hover td { background: var(--bg-3); }
+.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table td.actions { text-align: right; white-space: nowrap; }
+.data-table .row-actions { display: inline-flex; gap: var(--space-1); justify-content: flex-end; }
+.data-table code { font-family: var(--mono); background: var(--bg-3); padding: 1px 6px; border-radius: var(--r-2); font-size: 12px; }
+.data-empty { color: var(--txt-dim); text-align: center; padding: var(--space-5) var(--space-3); }
+
+/* Constrained form — Fields in a responsive grid, capped so inputs never span the whole window. */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-2) var(--space-3); align-items: end; max-width: 720px; }
+.form-grid .field { margin-bottom: 0; }
+.form-actions { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
+
+/* One-time credential / URL readout (pairing token, invite URL). */
+.cred-readout { margin-top: var(--space-3); padding: var(--space-3); background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--r-4); max-width: 720px; }
+.cred-readout-hint { font-size: var(--fs-xs); color: var(--txt-dim); margin: 0 0 var(--space-2); }
+.cred-readout textarea { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; color: var(--txt); background: var(--bg-2); border: 1px solid var(--line-strong); border-radius: var(--r-3); padding: var(--space-2); resize: vertical; }
+
+/* Inline error banner (admin pages + login/signup). Self-inset via margin so it reads well as a
+   direct window child or inside a panel. */
+.login-error {
+    margin: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(220,38,38,.08);
+    border: 1px solid rgba(220,38,38,.35);
+    border-radius: var(--r-3);
+    color: var(--err);
+    font-size: var(--fs-sm);
+    line-height: 1.45;
+}
+.login-error code { font-family: var(--mono); }
+
 /* --- Dialog --- */
 .dialog-backdrop {
     position: fixed; inset: 0;
@@ -2237,7 +2284,8 @@ input[type=range] { accent-color: var(--accent); }
 .shell-main:has(.syn-root) > .syn-root { flex: 1; }
 
 /* --- Page header --- */
-.page-head { margin-bottom: 12px; }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); margin-bottom: 12px; }
+.page-head > :first-child { min-width: 0; }
 .page-title {
     font-size: 17px;
     font-weight: 700;
