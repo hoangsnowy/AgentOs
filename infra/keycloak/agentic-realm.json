@@ -13,13 +13,15 @@
   "accessTokenLifespan": 1800,
   "sslRequired": "external",
   "smtpServer": {
-    "host": "mailhog",
-    "port": "1025",
-    "from": "noreply@agentic.local",
-    "fromDisplayName": "AgentOS",
-    "ssl": "false",
-    "starttls": "false",
-    "auth": "false"
+    "host": "${KC_SMTP_HOST:mailhog}",
+    "port": "${KC_SMTP_PORT:1025}",
+    "from": "${KC_SMTP_FROM:noreply@agentic.local}",
+    "fromDisplayName": "${KC_SMTP_FROM_NAME:AgentOS}",
+    "ssl": "${KC_SMTP_SSL:false}",
+    "starttls": "${KC_SMTP_STARTTLS:false}",
+    "auth": "${KC_SMTP_AUTH:false}",
+    "user": "${KC_SMTP_USER:}",
+    "password": "${KC_SMTP_PASSWORD:}"
   },
   "attributes": {
     "userProfileEnabled": "true"

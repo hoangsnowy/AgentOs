@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AgentOs.Modules.Tenants.Email;
 using AgentOs.Modules.Tenants.Keycloak;
 using AgentOs.SharedKernel.Identity;
 using Microsoft.AspNetCore.Builder;
@@ -128,6 +129,7 @@ internal static class TenantEndpoints
             CreateInvitationRequest body,
             ITenantSignupService signup,
             IAuditLog audit,
+            IEmailSender email,
             ITenantContext ctx,
             HttpContext http,
             CancellationToken ct) =>
@@ -147,7 +149,24 @@ internal static class TenantEndpoints
                 IpAddress: http.Connection.RemoteIpAddress?.ToString(),
                 UserAgent: http.Request.Headers.UserAgent.ToString(),
                 TimestampUtc: DateTimeOffset.UtcNow), ct).ConfigureAwait(false);
-            return Results.Ok(new CreatedInvitationResponse(minted.Token, url, minted.ExpiresAtUtc));
+
+            // Best-effort: email the link when an address is supplied. The URL is returned regardless
+            // so the admin can still copy/paste it if delivery is unconfigured or fails.
+            var emailed = false;
+            if (!string.IsNullOrWhiteSpace(body.Email))
+            {
+                try
+                {
+                    var (subject, htmlBody, textBody) = InvitationEmail.Build(tenantId, role, url);
+                    await email.SendAsync(body.Email!, subject, htmlBody, textBody, ct).ConfigureAwait(false);
+                    emailed = true;
+                }
+                catch (Exception)
+                {
+                    // Already logged by the sender; fall back to the returned URL.
+                }
+            }
+            return Results.Ok(new CreatedInvitationResponse(minted.Token, url, minted.ExpiresAtUtc, emailed));
         })
         .WithName("TenantsCreateInvitation")
         .WithSummary("Mint a signup invitation URL for the tenant (admin only)")
@@ -431,4 +450,5 @@ public sealed record RegisteredTenantResponse(string TenantId, string KeycloakUs
 public sealed record CreateInvitationRequest(string? Email, string? Role, int? TtlHours);
 
 /// <summary>Response for POST /tenants/{id}/invitations.</summary>
-public sealed record CreatedInvitationResponse(string Token, string Url, DateTimeOffset ExpiresAtUtc);
+/// <param name="Emailed">True when the invitation link was emailed to the supplied address.</param>
+public sealed record CreatedInvitationResponse(string Token, string Url, DateTimeOffset ExpiresAtUtc, bool Emailed = false);

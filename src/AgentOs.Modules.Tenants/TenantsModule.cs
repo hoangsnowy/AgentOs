@@ -5,6 +5,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AgentOs.Modules.Tenants.Email;
 using AgentOs.Modules.Tenants.Endpoints;
 using AgentOs.Modules.Tenants.Keycloak;
 using AgentOs.Modules.Tenants.Persistence;
@@ -30,6 +31,20 @@ public sealed class TenantsModule : IModule, IEndpointModule, IInitializableModu
             .Bind(configuration.GetSection(KeycloakAdminOptions.SectionName));
         services.AddHttpClient<IKeycloakAdminClient, KeycloakAdminClient>();
         services.AddScoped<ITenantSignupService, TenantSignupService>();
+
+        // App-sent email (invitation links). Real MailKit sender when an SMTP host is configured
+        // (full stack injects MailHog; prod injects a real provider via secrets); otherwise a no-op
+        // logger so standalone dev / CI still boot. Keycloak's own auth emails are separate.
+        services.AddOptions<EmailOptions>().Bind(configuration.GetSection(EmailOptions.SectionName));
+        var smtpHost = configuration.GetSection(EmailOptions.SectionName)["SmtpHost"];
+        if (!string.IsNullOrWhiteSpace(smtpHost))
+        {
+            services.AddSingleton<IEmailSender, MailKitEmailSender>();
+        }
+        else
+        {
+            services.AddSingleton<IEmailSender, NullEmailSender>();
+        }
 
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         if (!string.IsNullOrWhiteSpace(connectionString))
