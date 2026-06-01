@@ -25,6 +25,9 @@ public sealed class AgentsOptions
 
     /// <summary>QaAgent configuration.</summary>
     public AgentOptions Qa { get; set; } = new() { Model = "claude-haiku-4-5", Temperature = 0.1, MaxTokens = 1500 };
+
+    /// <summary>IssueWorkAgent configuration (M5 — agentic issue→PR pipeline).</summary>
+    public AgentOptions IssueWork { get; set; } = new() { Model = "claude-sonnet-4-20250514", Temperature = 0.2, MaxTokens = 32768 };
 }
 
 /// <summary>Configuration for a single agent.</summary>

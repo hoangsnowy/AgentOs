@@ -94,4 +94,23 @@ internal sealed class SessionRepository : ISessionRepository
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
         return true;
     }
+
+    public async Task<bool> UpdateRunResultAsync(
+        string tenantId, Guid id, string status, string? prUrl, string? errorMessage,
+        CancellationToken ct = default)
+    {
+        var row = await _db.Sessions
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.Id == id && s.TenantId == tenantId, ct)
+            .ConfigureAwait(false);
+        if (row is null)
+        {
+            return false;
+        }
+        row.Status = status;
+        row.PrUrl = prUrl;
+        row.Error = errorMessage;
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return true;
+    }
 }

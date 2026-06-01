@@ -26,4 +26,10 @@ public interface ISessionRepository
     Task<IReadOnlyList<RemoteSessionEntity>> ListForTenantAsync(string tenantId, CancellationToken ct = default);
     Task AddForTenantAsync(RemoteSessionEntity session, CancellationToken ct = default);
     Task<bool> CloseForTenantAsync(string tenantId, Guid id, DateTimeOffset closedAtUtc, CancellationToken ct = default);
+
+    /// <summary>Updates status + run-result fields after the issue-work agent completes (M5).
+    /// Bypasses the ambient query filter — tenant must be supplied explicitly.</summary>
+    Task<bool> UpdateRunResultAsync(
+        string tenantId, Guid id, string status, string? prUrl, string? errorMessage,
+        CancellationToken ct = default);
 }

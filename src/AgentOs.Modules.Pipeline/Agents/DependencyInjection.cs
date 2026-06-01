@@ -36,6 +36,7 @@ public static class AgentsServiceCollectionExtensions
             .Bind(configuration.GetSection(PipelineOptions.SectionName));
 
         services.AddTransient<IRequirementAgent, RequirementAgent>();
+        services.AddTransient<AgentOs.Domain.Sessions.IIssueWorkAgent, IssueWorkAgent>();
         services.AddTransient<ICodingAgent, CodingAgent>();
         services.AddTransient<ITestingAgent, TestingAgent>();
         services.AddTransient<IQaAgent, QaAgent>();
