@@ -26,4 +26,9 @@ public sealed class RemoteSessionEntity
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset? ClosedAtUtc { get; set; }
     public string? CreatedByUserId { get; set; }
+
+    // M5 — run result fields, populated after the issue-work agent completes.
+    public int? IssueNumber { get; set; }
+    public string? PrUrl { get; set; }
+    public string? Error { get; set; }
 }

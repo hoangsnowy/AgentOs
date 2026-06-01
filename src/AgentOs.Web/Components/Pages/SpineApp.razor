@@ -1,9 +1,10 @@
-@* SpineApp — Projects (connected repos) → Issues (GitHub) → AI sessions (M2/M3/M4).
+@* SpineApp — Projects (connected repos) → Issues (GitHub) → AI sessions (M2/M3/M4/M5).
    Primary flow: select a project, browse its open GitHub Issues, click "Work on this" to
-   start an AI session against that issue. Runners are infrastructure managed on a separate tab.
+   start an AI session, then "Run" to trigger the IssueWorkAgent → branch → PR.
    Reads data in-process via module repositories. A Blazor Server circuit has no HttpContext,
    so ITenantContext is blank here — we read the tenant + user from AuthenticationState and
-   call repos via tenant-explicit overloads. *@
+   call repos via tenant-explicit overloads.
+   M5 adds: Run button (Draft sessions), PR link (Done sessions), 5-second poll when Running. *@
 
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
@@ -24,6 +25,10 @@
 @inject IAppConfigStore ConfigStore
 @inject IGitHubIssueService IssueService
 @inject AgentOs.Web.Services.ToastService Toasts
+@inject AgentOs.Domain.Sessions.IIssueWorkAgent IssueWorkAgent
+@inject AgentOs.Domain.Workspaces.IPrCreationService PrCreation
+@inject IServiceScopeFactory ScopeFactory
+@implements IDisposable
 
 <header class="page-head">
     <div>
@@ -301,14 +306,34 @@ else if (_tab == Tab.Sessions)
                 @foreach (var s in _sessions)
                 {
                     <tr>
-                        <td>@s.Title</td>
+                        <td>
+                            @s.Title
+                            @if (!string.IsNullOrEmpty(s.Error))
+                            {
+                                <br /><span class="muted" style="font-size:11px;color:var(--color-err,#e55)">@s.Error</span>
+                            }
+                        </td>
                         <td><code>@WorkspaceName(s.WorkspaceId)</code></td>
                         @if (_isAdmin) { <td><code>@(string.IsNullOrEmpty(s.MemberUserId) ? "—" : s.MemberUserId)</code></td> }
-                        <td><Badge>@s.Status</Badge></td>
+                        <td>
+                            <Badge>@s.Status</Badge>
+                            @if (!string.IsNullOrEmpty(s.PrUrl))
+                            {
+                                <br /><a href="@s.PrUrl" target="_blank" rel="noopener" style="font-size:11px">View PR</a>
+                            }
+                        </td>
                         <td>@s.CreatedAtUtc.ToString("u")</td>
                         <td class="actions">
+                            @if (s.Status == "Draft")
+                            {
+                                <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Primary"
+                                     OnClick="@(() => RunSession(s))"
+                                     Disabled="@(_busyId == s.Id)">
+                                    <Icon Name="play" Size="13" /> Run
+                                </Btn>
+                            }
                             <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => CloseSession(s))"
-                                 Disabled="@(_busyId == s.Id || s.Status == "Closed")">
+                                 Disabled="@(_busyId == s.Id || s.Status is "Closed" or "Running")">
                                 <Icon Name="check" Size="13" /> Close
                             </Btn>
                         </td>
@@ -360,6 +385,9 @@ else if (_tab == Tab.Sessions)
     private string _wsBranch = "";
     private string _wsToken = "";
 
+    // ── Polling timer (runs while any session is in "Running" state) ─────────────────────────
+    private System.Threading.Timer? _pollTimer;
+
     // ── Lifecycle ────────────────────────────────────────────────────────────────────────────
 
     protected override async Task OnInitializedAsync()
@@ -374,7 +402,15 @@ else if (_tab == Tab.Sessions)
         }
         _resolved = true;
         await ReloadAll();
+        // Start the poll timer stopped; RunSession will start it when needed.
+        _pollTimer = new System.Threading.Timer(
+            _ => InvokeAsync(PollRunningSessions),
+            null,
+            System.Threading.Timeout.Infinite,
+            System.Threading.Timeout.Infinite);
     }
+
+    public void Dispose() => _pollTimer?.Dispose();
 
     private async Task ReloadAll()
     {
@@ -397,6 +433,31 @@ else if (_tab == Tab.Sessions)
         {
             _loading = false;
         }
+    }
+
+    private async Task PollRunningSessions()
+    {
+        try
+        {
+            var all = await Sessions.ListForTenantAsync(_tenantId);
+            _sessions = _isAdmin ? all : all.Where(s => s.MemberUserId == _userId).ToList();
+            StateHasChanged();
+            // Stop polling when no sessions are still running.
+            if (_sessions.All(s => s.Status != "Running"))
+            {
+                _pollTimer?.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+            }
+        }
+        catch
+        {
+            // Suppress poll errors — next tick will retry.
+        }
+    }
+
+    private void StartPolling()
+    {
+        // Fire after 5s, repeat every 5s.
+        _pollTimer?.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
     private string WorkspaceName(Guid id) =>
@@ -451,6 +512,7 @@ else if (_tab == Tab.Sessions)
                 MemberUserId = _userId,
                 Title = $"#{issue.Number} {issue.Title}",
                 Status = "Draft",
+                IssueNumber = issue.Number,
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 CreatedByUserId = string.IsNullOrEmpty(_userId) ? null : _userId,
             };
@@ -470,6 +532,109 @@ else if (_tab == Tab.Sessions)
         finally
         {
             _busy = false;
+        }
+    }
+
+    // ── Run session (M5 — fire-and-forget AI pipeline) ──────────────────────────────────────
+
+    private async Task RunSession(RemoteSessionEntity session)
+    {
+        if (_busyId == session.Id) { return; }
+        _busyId = session.Id;
+        try
+        {
+            // Look up workspace + PAT.
+            var ws = _workspaces?.FirstOrDefault(w => w.Id == session.WorkspaceId);
+            if (ws is null)
+            {
+                Toasts.Show("Spine", "Workspace not found — reload and try again.", ToastKind.Err);
+                return;
+            }
+            var pat = await ConfigStore.GetForTenantAsync(_tenantId, ws.CredentialRef);
+            if (string.IsNullOrEmpty(pat))
+            {
+                Toasts.Show("Spine", "Could not retrieve workspace credentials. Reconnect the project.", ToastKind.Err);
+                return;
+            }
+
+            // Mark session Running immediately so UI reflects it.
+            await Sessions.UpdateRunResultAsync(_tenantId, session.Id, "Running", null, null);
+            var all = await Sessions.ListForTenantAsync(_tenantId);
+            _sessions = _isAdmin ? all : all.Where(s => s.MemberUserId == _userId).ToList();
+            Toasts.Show("Spine", $"Session #{session.IssueNumber} is running — AI agent dispatched to runner.", ToastKind.Ok);
+            StartPolling();
+
+            // Fire-and-forget background work. Use a fresh DI scope so the LLM client +
+            // repositories are properly scoped, independent of this Blazor circuit.
+            var capturedTenantId = _tenantId;
+            var capturedSession = session;
+            var capturedWs = ws;
+            var capturedPat = pat;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = ScopeFactory.CreateScope();
+                    var agent = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Sessions.IIssueWorkAgent>();
+                    var prService = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Workspaces.IPrCreationService>();
+                    var sessRepo = scope.ServiceProvider.GetRequiredService<AgentOs.Modules.Sessions.Persistence.ISessionRepository>();
+
+                    var issueRequest = new AgentOs.Domain.Sessions.IssueWorkRequest(
+                        SessionId: capturedSession.Id,
+                        TenantId: capturedTenantId,
+                        MemberId: capturedSession.MemberUserId,
+                        WorkspaceOwner: capturedWs.Owner,
+                        WorkspaceRepo: capturedWs.Repo,
+                        WorkspaceDefaultBranch: capturedWs.DefaultBranch,
+                        IssueNumber: capturedSession.IssueNumber ?? 0,
+                        IssueTitle: capturedSession.Title,
+                        IssueBody: "");
+
+                    var workResult = await agent.RunAsync(issueRequest).ConfigureAwait(false);
+                    if (!workResult.Ok)
+                    {
+                        await sessRepo.UpdateRunResultAsync(capturedTenantId, capturedSession.Id,
+                            "Failed", null, workResult.Error ?? "Agent failed without a reason.").ConfigureAwait(false);
+                        return;
+                    }
+
+                    var descriptor = new AgentOs.Domain.Workspaces.WorkspaceDescriptor(
+                        capturedWs.Id, capturedTenantId, capturedWs.Kind,
+                        capturedWs.Owner, capturedWs.Repo, capturedWs.Project,
+                        capturedWs.DefaultBranch, capturedPat);
+
+                    var prResult = await prService.CreateFromBranchAsync(
+                        descriptor,
+                        workResult.BranchName,
+                        $"fix: {capturedSession.Title}",
+                        workResult.Summary).ConfigureAwait(false);
+
+                    await sessRepo.UpdateRunResultAsync(
+                        capturedTenantId, capturedSession.Id,
+                        prResult.Ok ? "Done" : "Failed",
+                        prResult.HtmlUrl,
+                        prResult.Ok ? null : prResult.Error).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        using var scope = ScopeFactory.CreateScope();
+                        var sessRepo = scope.ServiceProvider.GetRequiredService<AgentOs.Modules.Sessions.Persistence.ISessionRepository>();
+                        await sessRepo.UpdateRunResultAsync(capturedTenantId, capturedSession.Id,
+                            "Failed", null, ex.Message).ConfigureAwait(false);
+                    }
+                    catch { /* best-effort */ }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busyId = null;
         }
     }
 

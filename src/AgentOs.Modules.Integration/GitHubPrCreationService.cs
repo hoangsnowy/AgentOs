@@ -1,0 +1,84 @@
+// M5 — creates a PR from an already-pushed branch in the workspace repo.
+// The runner pushes the branch; this service calls the GitHub API to open the PR.
+// PAT comes from WorkspaceDescriptor.AccessToken (per-workspace credential), never from
+// tenant-global IRuntimeOverrides — correct grain for the Spine per-workspace flow.
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using AgentOs.Domain.Workspaces;
+using Microsoft.Extensions.Logging;
+using Octokit;
+
+namespace AgentOs.Modules.Integration;
+
+/// <inheritdoc cref="IPrCreationService"/>
+public sealed class GitHubPrCreationService : IPrCreationService
+{
+    private const string UserAgent = "agentos";
+
+    private readonly ILogger<GitHubPrCreationService> _logger;
+
+    public GitHubPrCreationService(ILogger<GitHubPrCreationService> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <inheritdoc />
+    public async Task<PrCreationResult> CreateFromBranchAsync(
+        WorkspaceDescriptor workspace,
+        string branch,
+        string title,
+        string body,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+
+        if (workspace.Kind != SourceProviderKind.GitHub)
+        {
+            return new PrCreationResult(false, null, null,
+                $"PR creation not supported for provider '{workspace.Kind}' yet.");
+        }
+
+        var client = string.IsNullOrWhiteSpace(workspace.Host)
+            ? new GitHubClient(new ProductHeaderValue(UserAgent))
+            { Credentials = new Credentials(workspace.AccessToken) }
+            : new GitHubClient(new ProductHeaderValue(UserAgent), new Uri(workspace.Host))
+            { Credentials = new Credentials(workspace.AccessToken) };
+
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            var pr = await client.PullRequest.Create(
+                workspace.Owner,
+                workspace.Repo,
+                new NewPullRequest(title, branch, workspace.DefaultBranch) { Body = body })
+                .ConfigureAwait(false);
+
+            _logger.LogInformation(
+                "M5: opened PR #{Number} ({Url}) for branch '{Branch}' on {Owner}/{Repo}",
+                pr.Number, pr.HtmlUrl, branch, workspace.Owner, workspace.Repo);
+
+            return new PrCreationResult(true, pr.Number, pr.HtmlUrl, null);
+        }
+        catch (AuthorizationException ex)
+        {
+            _logger.LogWarning(ex, "M5: GitHub rejected PAT for {Owner}/{Repo}", workspace.Owner, workspace.Repo);
+            return new PrCreationResult(false, null, null,
+                $"GitHub rejected the PAT for {workspace.Owner}/{workspace.Repo}. Check the token's 'repo' scope.");
+        }
+        catch (NotFoundException ex)
+        {
+            _logger.LogWarning(ex, "M5: branch '{Branch}' not found on {Owner}/{Repo}", branch, workspace.Owner, workspace.Repo);
+            return new PrCreationResult(false, null, null,
+                $"Branch '{branch}' was not found on {workspace.Owner}/{workspace.Repo}. Ensure the runner pushed it.");
+        }
+        catch (ApiException ex)
+        {
+            _logger.LogError(ex, "M5: GitHub API error creating PR for {Owner}/{Repo}", workspace.Owner, workspace.Repo);
+            return new PrCreationResult(false, null, null, $"GitHub API error: {ex.Message}");
+        }
+    }
+}

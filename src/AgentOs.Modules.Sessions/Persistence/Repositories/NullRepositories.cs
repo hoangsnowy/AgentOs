@@ -53,6 +53,11 @@ internal sealed class NullSessionRepository : ISessionRepository
 
     public Task<bool> CloseForTenantAsync(string tenantId, Guid id, DateTimeOffset closedAtUtc, CancellationToken ct = default) =>
         Task.FromResult(false);
+
+    public Task<bool> UpdateRunResultAsync(
+        string tenantId, Guid id, string status, string? prUrl, string? errorMessage,
+        CancellationToken ct = default) =>
+        Task.FromResult(false);
 }
 
 internal sealed class NullRunnerDirectory : IRunnerDirectory
