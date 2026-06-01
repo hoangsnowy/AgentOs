@@ -153,6 +153,19 @@
         { "type": "password", "value": "operator", "temporary": false }
       ],
       "realmRoles": ["admin"]
+    },
+    {
+      "username": "member",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "member@agentic.local",
+      "firstName": "Team",
+      "lastName": "Member",
+      "attributes": { "tenant": ["default"] },
+      "credentials": [
+        { "type": "password", "value": "member", "temporary": false }
+      ],
+      "realmRoles": ["member"]
     }
   ]
 }

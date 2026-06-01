@@ -29,13 +29,17 @@
     --r-3:   5px;
     --r-4:   6px;
     --r-5:   8px;
-    --r-card: 14px;
+    --r-card: 8px;
 
     --focus-ring: 0 0 0 2px rgba(61,174,233,.55);
 
-    --shadow-card: 0 30px 80px rgba(0,0,0,.50);
+    /* Mirror the app's --shadow-4 (max elevation) — calm enterprise, not a heavy 50%-black drop. */
+    --shadow-card: 0 24px 48px -8px rgba(15,23,42,.18), 0 8px 16px rgba(15,23,42,.08);
     --shadow-1:    0 1px 0 rgba(15,23,42,.04);
     --shadow-2:    0 2px 4px rgba(15,23,42,.06), 0 1px 0 rgba(15,23,42,.04);
+
+    /* Match the app desktop's default enterprise-light wallpaper. */
+    --wallpaper-bg: linear-gradient(180deg, #e8eef5 0%, #d4dde8 100%);
 }
 
 /* ===== Page shell — lock-screen glass over the AgentOS wallpaper ===== */
@@ -54,11 +58,11 @@ html, body {
 }
 
 body, .login-pf body, .login-pf-page {
+    /* Calm enterprise wallpaper + one faint accent glow — mirrors the app shell,
+       no more triple aurora blobs. */
     background:
-        radial-gradient(60vw 50vh at 12% 8%,  rgba( 61,174,233,.22) 0%, transparent 55%),
-        radial-gradient(55vw 45vh at 92% 14%, rgba( 56,189,248,.18) 0%, transparent 55%),
-        radial-gradient(55vw 50vh at 78% 92%, rgba(124,58,237,.18) 0%, transparent 55%),
-        linear-gradient(180deg, #e8eef5 0%, #d4dde8 100%);
+        radial-gradient(70vw 55vh at 50% -10%, rgba(61,174,233,.10) 0%, transparent 60%),
+        var(--wallpaper-bg);
     min-height: 100vh;
 }
 
@@ -88,9 +92,9 @@ body, .login-pf body, .login-pf-page {
 #kc-content,
 #kc-form-wrapper {
     background: rgba(255,255,255,.95);
-    backdrop-filter: blur(20px) saturate(140%);
-    -webkit-backdrop-filter: blur(20px) saturate(140%);
-    border: 1px solid rgba(255,255,255,.55);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border: 1px solid var(--line);
     border-radius: var(--r-card);
     box-shadow: var(--shadow-card);
     padding: 24px 26px 22px;
@@ -388,6 +392,33 @@ label .required, .required {
 
 /* ===== Footer (KC version, info) — hide ===== */
 #kc-info { display: none; }
+
+/* ===== Dark mode — follows the OS preference (the KC login page has no data-theme
+   attribute, so prefers-color-scheme is the right trigger). Mirrors app Breeze Dark. ===== */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #1b1e23;  --bg-2: #232629;  --bg-3: #2a2e32;  --bg-sunk: #16191c;
+        --line: #3a3f44;  --line-strong: #4e555c;
+        --txt: #eff0f1;  --txt-soft: #bdc3c7;  --txt-dim: #7f8c8d;  --txt-faint: #5d646b;
+        --accent: #3daee9;  --accent-hover: #4cbcf2;  --accent-active: #2196e1;  --accent-soft: #1d3a4d;
+        --ok: #2ecc71;  --warn: #f39c12;  --err: #e74c3c;
+        --focus-ring: 0 0 0 2px rgba(61,174,233,.70);
+        --shadow-card: 0 24px 56px rgba(0,0,0,.55);
+        --wallpaper-bg: linear-gradient(180deg, #1a1d22 0%, #0e1014 100%);
+    }
+    .login-pf-page .card-pf,
+    #kc-form-wrapper {
+        background: rgba(35,38,41,.92);
+        border-color: rgba(255,255,255,.08);
+    }
+    #kc-header,
+    .login-pf-page-header { border-bottom-color: rgba(255,255,255,.10); }
+    #kc-info-wrapper { border-top-color: rgba(255,255,255,.10); }
+    #kc-current-locale-link { background: rgba(35,38,41,.70); }
+    input[type="text"], input[type="email"], input[type="password"],
+    input[type="number"], input[type="tel"], input[type="url"],
+    select, textarea, .pf-c-form-control, .form-control { background: var(--bg-3); }
+}
 
 /* ===== Reduce motion ===== */
 @media (prefers-reduced-motion: reduce) {
