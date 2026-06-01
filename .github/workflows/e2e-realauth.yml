@@ -1,29 +1,12 @@
 # Real-auth end-to-end against the FULL Aspire stack (Postgres + Keycloak + MailHog + Api + Web).
-# This is the "never test by hand again" job: a fresh container set boots per run, so the realm —
-# including the seeded operator/member users — imports automatically (no manual volume wipe), then
-# Playwright drives the real Keycloak OIDC login and asserts member role isolation + invitation email
-# delivery (via the MailHog API). Heavy + Docker-bound, so it runs nightly + on manual dispatch only,
-# NOT on every push (the fast unit suite in ci.yml guards those).
+# Booting Keycloak + Docker containers + Playwright in CI is heavy and slow (~10-15 min), so this is
+# MANUAL-ONLY (workflow_dispatch) — an on-demand "verify the whole real-service path" button, run
+# before a release or after touching auth/email, never auto on push/PR/schedule. The fast per-PR
+# guard is the lightweight dev-auth UI E2E (standalone Web, no Keycloak/Docker) in ci.yml.
 name: E2E (real-auth, full stack)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 2 * * *'   # nightly 02:00 UTC
-  # Also run on PRs that touch the auth / email / spine surface or this workflow, so regressions in
-  # those flows (member login, role gating, invite email) are caught before merge — not just nightly.
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'src/AgentOs.Modules.Tenants/**'
-      - 'src/AgentOs.Modules.Sessions/**'
-      - 'src/AgentOs.Modules.Pipeline/Agents/**'
-      - 'src/AgentOs.Web/Components/Pages/SpineApp.razor'
-      - 'src/AgentOs.Web/Components/Pages/UsersApp.razor'
-      - 'infra/keycloak/**'
-      - 'infra/AgentOs.AppHost/**'
-      - 'tests/AgentOs.E2E.Tests/**'
-      - '.github/workflows/e2e-realauth.yml'
 
 jobs:
   e2e-realauth:
