@@ -393,32 +393,10 @@ label .required, .required {
 /* ===== Footer (KC version, info) — hide ===== */
 #kc-info { display: none; }
 
-/* ===== Dark mode — follows the OS preference (the KC login page has no data-theme
-   attribute, so prefers-color-scheme is the right trigger). Mirrors app Breeze Dark. ===== */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #1b1e23;  --bg-2: #232629;  --bg-3: #2a2e32;  --bg-sunk: #16191c;
-        --line: #3a3f44;  --line-strong: #4e555c;
-        --txt: #eff0f1;  --txt-soft: #bdc3c7;  --txt-dim: #7f8c8d;  --txt-faint: #5d646b;
-        --accent: #3daee9;  --accent-hover: #4cbcf2;  --accent-active: #2196e1;  --accent-soft: #1d3a4d;
-        --ok: #2ecc71;  --warn: #f39c12;  --err: #e74c3c;
-        --focus-ring: 0 0 0 2px rgba(61,174,233,.70);
-        --shadow-card: 0 24px 56px rgba(0,0,0,.55);
-        --wallpaper-bg: linear-gradient(180deg, #1a1d22 0%, #0e1014 100%);
-    }
-    .login-pf-page .card-pf,
-    #kc-form-wrapper {
-        background: rgba(35,38,41,.92);
-        border-color: rgba(255,255,255,.08);
-    }
-    #kc-header,
-    .login-pf-page-header { border-bottom-color: rgba(255,255,255,.10); }
-    #kc-info-wrapper { border-top-color: rgba(255,255,255,.10); }
-    #kc-current-locale-link { background: rgba(35,38,41,.70); }
-    input[type="text"], input[type="email"], input[type="password"],
-    input[type="number"], input[type="tel"], input[type="url"],
-    select, textarea, .pf-c-form-control, .form-control { background: var(--bg-3); }
-}
+/* Note: the desktop shell's theme is user-chosen (data-theme), default LIGHT, and is NOT
+   driven by the OS preference — so the login page must NOT follow prefers-color-scheme either,
+   or a dark-OS user gets a dark login over a light desktop. Login stays light to mirror the
+   app's default. (A synced dark login would need the persisted app theme, which Keycloak can't read.) */
 
 /* ===== Reduce motion ===== */
 @media (prefers-reduced-motion: reduce) {
