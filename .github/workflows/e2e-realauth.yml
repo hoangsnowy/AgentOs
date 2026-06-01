@@ -10,6 +10,20 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 2 * * *'   # nightly 02:00 UTC
+  # Also run on PRs that touch the auth / email / spine surface or this workflow, so regressions in
+  # those flows (member login, role gating, invite email) are caught before merge — not just nightly.
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/AgentOs.Modules.Tenants/**'
+      - 'src/AgentOs.Modules.Sessions/**'
+      - 'src/AgentOs.Modules.Pipeline/Agents/**'
+      - 'src/AgentOs.Web/Components/Pages/SpineApp.razor'
+      - 'src/AgentOs.Web/Components/Pages/UsersApp.razor'
+      - 'infra/keycloak/**'
+      - 'infra/AgentOs.AppHost/**'
+      - 'tests/AgentOs.E2E.Tests/**'
+      - '.github/workflows/e2e-realauth.yml'
 
 jobs:
   e2e-realauth:
