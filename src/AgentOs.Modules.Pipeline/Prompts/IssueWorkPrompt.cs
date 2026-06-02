@@ -1,21 +1,25 @@
-// M5 — system + user prompts for IssueWorkAgent.
-// The agent uses runner_shell to explore the repo, implement the fix, build, test, commit, and push.
+// M5 / multi-repo — system + user prompts for IssueWorkAgent, rendered PER REPO. The agent uses
+// runner_shell to explore the repo, implement the fix, build, test, commit, and push.
 // On success it replies with a JSON block: {"branch":"...","summary":"..."}.
 // On failure it replies with: {"branch":"","summary":"","error":"...reason..."}.
+// For a cross-service ticket (more than one repo) each repo gets its own run, with a note naming the
+// sibling repos so the agent can cross-link the PRs.
 
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using AgentOs.Domain.Sessions;
 
 namespace AgentOs.Modules.Pipeline.Prompts;
 
 internal static class IssueWorkPrompt
 {
-    internal static string System(IssueWorkRequest req) => string.Format(
+    internal static string System(IssueWorkRequest req, WorkRepo repo) => string.Format(
         CultureInfo.InvariantCulture,
         """
         You are an AI software engineer with shell access to a developer machine where the
         {0}/{1} repository (default branch: {2}) is checked out.
-
+        {5}
         Use the `runner_shell` tool to execute shell commands on that machine. Workflow:
 
         1. Discover the repository path: run `pwd`, then `ls`. If the repo is not in the
@@ -29,7 +33,7 @@ internal static class IssueWorkPrompt
         3. Create a feature branch:
            git checkout -b issue-{3}-ai-fix
 
-        4. Implement the fix for GitHub issue #{3}. Edit files directly:
+        4. Implement the fix for ticket #{3}. Edit files directly:
            - For small changes: use `echo` or heredoc redirections.
            - For larger changes: write a Python/PowerShell one-liner or use `tee`.
            - Prefer minimal, focused changes over large rewrites.
@@ -47,7 +51,7 @@ internal static class IssueWorkPrompt
 
         7. Commit:
            git add -A
-           git commit -m "fix: resolve issue #{3} - <short description>"
+           git commit -m "fix: resolve issue #{3} - <short description>"{6}
 
         8. Push:
            git push origin issue-{3}-ai-fix
@@ -58,26 +62,55 @@ internal static class IssueWorkPrompt
         If you cannot complete the task, reply with:
         {{"branch":"","summary":"","error":"<brief reason>"}}
         """,
-        req.WorkspaceOwner,
-        req.WorkspaceRepo,
-        req.WorkspaceDefaultBranch,
-        req.IssueNumber);
+        repo.Owner,
+        repo.Repo,
+        repo.DefaultBranch,
+        req.IssueNumber,
+        repo.Repo,
+        CrossServiceNote(req, repo),
+        CrossLinkCommitNote(req, repo));
 
-    internal static string User(IssueWorkRequest req) => string.Format(
+    internal static string User(IssueWorkRequest req, WorkRepo repo) => string.Format(
         CultureInfo.InvariantCulture,
         """
         Repository: {0}/{1}  (base branch: {2})
-        Issue #{3}: {4}
+        Ticket #{3}: {4}
 
         {5}
 
-        Implement a fix for this issue. Create branch `issue-{3}-ai-fix`, make the minimal
-        necessary changes, ensure the build passes, commit, and push the branch.
+        Implement a fix for this ticket in THIS repository. Create branch `issue-{3}-ai-fix`,
+        make the minimal necessary changes, ensure the build passes, commit, and push the branch.
         """,
-        req.WorkspaceOwner,
-        req.WorkspaceRepo,
-        req.WorkspaceDefaultBranch,
+        repo.Owner,
+        repo.Repo,
+        repo.DefaultBranch,
         req.IssueNumber,
         req.IssueTitle,
         string.IsNullOrWhiteSpace(req.IssueBody) ? "(no description provided)" : req.IssueBody);
+
+    private static string CrossServiceNote(IssueWorkRequest req, WorkRepo repo)
+    {
+        if (req.Repos.Count <= 1)
+        {
+            return string.Empty;
+        }
+        var siblings = string.Join(", ", req.Repos.Where(r => r.SessionRepoId != repo.SessionRepoId).Select(r => $"{r.Owner}/{r.Repo}"));
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "\nNOTE: ticket #{0} is a cross-service ticket spanning {1} repositories; you are handling {2}/{3}. The sibling repos are: {4}. Change only THIS repo.\n",
+            req.IssueNumber, req.Repos.Count, repo.Owner, repo.Repo, siblings);
+    }
+
+    private static string CrossLinkCommitNote(IssueWorkRequest req, WorkRepo repo)
+    {
+        if (req.Repos.Count <= 1)
+        {
+            return string.Empty;
+        }
+        var siblings = string.Join(", ", req.Repos.Where(r => r.SessionRepoId != repo.SessionRepoId).Select(r => $"{r.Owner}/{r.Repo}"));
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "\n           Mention the sibling repos ({0}) in the commit body so the PRs are linked.",
+            siblings);
+    }
 }

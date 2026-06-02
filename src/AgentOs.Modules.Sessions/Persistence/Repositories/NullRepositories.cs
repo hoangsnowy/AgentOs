@@ -58,6 +58,22 @@ internal sealed class NullSessionRepository : ISessionRepository
         string tenantId, Guid id, string status, string? prUrl, string? errorMessage,
         CancellationToken ct = default) =>
         Task.FromResult(false);
+
+    public Task<IReadOnlyList<SessionRepoEntity>> ListReposForTenantAsync(string tenantId, Guid sessionId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<SessionRepoEntity>>(Array.Empty<SessionRepoEntity>());
+
+    public Task<IReadOnlyList<SessionRepoEntity>> ListAllReposForTenantAsync(string tenantId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<SessionRepoEntity>>(Array.Empty<SessionRepoEntity>());
+
+    public Task AddRepoForTenantAsync(SessionRepoEntity repo, CancellationToken ct = default) => Task.CompletedTask;
+
+    public Task<bool> UpdateRepoRunResultAsync(
+        string tenantId, Guid sessionRepoId, string status, string? branchName, string? prUrl, string? errorMessage,
+        CancellationToken ct = default) =>
+        Task.FromResult(false);
+
+    public Task<bool> RecomputeSessionStatusForTenantAsync(string tenantId, Guid sessionId, CancellationToken ct = default) =>
+        Task.FromResult(false);
 }
 
 internal sealed class NullRunnerDirectory : IRunnerDirectory

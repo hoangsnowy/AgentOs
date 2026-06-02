@@ -1,9 +1,12 @@
-// M5 — issue-work agent. Runs the agentic LLM loop (using runner_shell) for a GitHub issue:
-// explores the repo, implements the fix, builds, tests, commits, and pushes a branch.
-// "Server thinks, runner does" — the LLM loop runs server-side; every shell command is
-// dispatched to the paired dev-machine runner via IToolGateway → runner_shell.
+// M5 / multi-repo — issue-work agent. Runs the agentic LLM loop (using runner_shell) for a ticket,
+// once PER target repo: explore the repo, implement the fix, build, test, commit, push a branch.
+// "Server thinks, runner does" — the LLM loop runs server-side; every shell command is dispatched to
+// the paired dev-machine runner via IToolGateway → runner_shell. Repos are handled sequentially
+// (smallest-viable: one bounded LLM run each, reusing the proven single-repo prompt + parser).
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,7 +18,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgentOs.Modules.Pipeline.Agents;
 
-/// <summary>Implements a GitHub issue fix via an agentic tool-use loop on the paired runner.</summary>
+/// <summary>Implements a ticket fix via an agentic tool-use loop on the paired runner, per target repo.</summary>
 public sealed class IssueWorkAgent : IIssueWorkAgent
 {
     private readonly ILlmClientFactory _factory;
@@ -43,43 +46,74 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        _logger.LogInformation(
-            "IssueWorkAgent: starting session {SessionId} for issue #{IssueNumber} on {Owner}/{Repo}",
-            request.SessionId, request.IssueNumber, request.WorkspaceOwner, request.WorkspaceRepo);
+        if (request.Repos.Count == 0)
+        {
+            return new IssueWorkResult(false, Array.Empty<RepoWorkOutcome>(), "No target repositories for this session.");
+        }
 
+        _logger.LogInformation(
+            "IssueWorkAgent: starting session {SessionId} for ticket #{IssueNumber} across {RepoCount} repo(s)",
+            request.SessionId, request.IssueNumber, request.Repos.Count);
+
+        ILlmClient llm;
+        try
+        {
+            llm = _factory.Create(_agentOpts.Provider);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "IssueWorkAgent: LLM client init failed for session {SessionId}", request.SessionId);
+            // No repo could run — report each as failed so the caller can surface it per repo.
+            var failed = request.Repos
+                .Select(r => new RepoWorkOutcome(r.SessionRepoId, false, r.Owner, r.Repo, "", "", $"LLM client init failed: {ex.Message}"))
+                .ToList();
+            return new IssueWorkResult(false, failed, $"LLM client init failed: {ex.Message}");
+        }
+
+        var outcomes = new List<RepoWorkOutcome>(request.Repos.Count);
+        foreach (var repo in request.Repos)
+        {
+            outcomes.Add(await RunOneAsync(llm, request, repo, ct).ConfigureAwait(false));
+        }
+
+        var ok = outcomes.All(o => o.Ok);
+        return new IssueWorkResult(ok, outcomes, ok ? null : "One or more repositories failed — see per-repo errors.");
+    }
+
+    private async Task<RepoWorkOutcome> RunOneAsync(ILlmClient llm, IssueWorkRequest request, WorkRepo repo, CancellationToken ct)
+    {
         var req = new LlmRequest(
-            SystemPrompt: IssueWorkPrompt.System(request),
-            UserPrompt: IssueWorkPrompt.User(request),
+            SystemPrompt: IssueWorkPrompt.System(request, repo),
+            UserPrompt: IssueWorkPrompt.User(request, repo),
             Model: _agentOpts.Model,
             Temperature: _agentOpts.Temperature,
             MaxTokens: _agentOpts.MaxTokens,
             Tools: ["runner_shell"]);
 
-        LlmResponse response;
         try
         {
-            var llm = _factory.Create(_agentOpts.Provider);
-            response = await llm.SendAsync(req, ct).ConfigureAwait(false);
+            var response = await llm.SendAsync(req, ct).ConfigureAwait(false);
+            return ParseOutcome(response.Content ?? "", request, repo);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "IssueWorkAgent: LLM call failed for session {SessionId}", request.SessionId);
-            return new IssueWorkResult(false, "", "", $"LLM call failed: {ex.Message}");
+            _logger.LogError(ex, "IssueWorkAgent: LLM call failed for session {SessionId} repo {Owner}/{Repo}",
+                request.SessionId, repo.Owner, repo.Repo);
+            return new RepoWorkOutcome(repo.SessionRepoId, false, repo.Owner, repo.Repo, "", "", $"LLM call failed: {ex.Message}");
         }
-
-        return ParseResponse(response.Content ?? "", request.SessionId);
     }
 
-    private IssueWorkResult ParseResponse(string content, Guid sessionId)
+    private RepoWorkOutcome ParseOutcome(string content, IssueWorkRequest request, WorkRepo repo)
     {
         // Locate the last JSON object in the response (the agent may emit reasoning before the JSON).
         var start = content.LastIndexOf('{');
         var end = content.LastIndexOf('}');
         if (start < 0 || end <= start)
         {
-            _logger.LogWarning("IssueWorkAgent: no JSON found in response for session {SessionId}", sessionId);
-            return new IssueWorkResult(false, "", content.Length > 200 ? content[..200] : content,
-                "Agent did not return a JSON summary.");
+            _logger.LogWarning("IssueWorkAgent: no JSON found for session {SessionId} repo {Owner}/{Repo}",
+                request.SessionId, repo.Owner, repo.Repo);
+            return new RepoWorkOutcome(repo.SessionRepoId, false, repo.Owner, repo.Repo, "",
+                content.Length > 200 ? content[..200] : content, "Agent did not return a JSON summary.");
         }
 
         var json = content[start..(end + 1)];
@@ -94,18 +128,21 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
 
             if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(branch))
             {
-                _logger.LogWarning("IssueWorkAgent: agent reported failure for session {SessionId}: {Error}",
-                    sessionId, error);
-                return new IssueWorkResult(false, branch, summary, error ?? "Agent did not push a branch.");
+                _logger.LogWarning("IssueWorkAgent: agent reported failure for session {SessionId} repo {Owner}/{Repo}: {Error}",
+                    request.SessionId, repo.Owner, repo.Repo, error);
+                return new RepoWorkOutcome(repo.SessionRepoId, false, repo.Owner, repo.Repo, branch, summary,
+                    error ?? "Agent did not push a branch.");
             }
 
-            _logger.LogInformation("IssueWorkAgent: session {SessionId} pushed branch '{Branch}'", sessionId, branch);
-            return new IssueWorkResult(true, branch, summary, null);
+            _logger.LogInformation("IssueWorkAgent: session {SessionId} repo {Owner}/{Repo} pushed branch '{Branch}'",
+                request.SessionId, repo.Owner, repo.Repo, branch);
+            return new RepoWorkOutcome(repo.SessionRepoId, true, repo.Owner, repo.Repo, branch, summary, null);
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "IssueWorkAgent: failed to parse JSON for session {SessionId}", sessionId);
-            return new IssueWorkResult(false, "", "", "Agent response was not valid JSON.");
+            _logger.LogWarning(ex, "IssueWorkAgent: failed to parse JSON for session {SessionId} repo {Owner}/{Repo}",
+                request.SessionId, repo.Owner, repo.Repo);
+            return new RepoWorkOutcome(repo.SessionRepoId, false, repo.Owner, repo.Repo, "", "", "Agent response was not valid JSON.");
         }
     }
 }
