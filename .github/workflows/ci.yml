@@ -10,6 +10,7 @@ jobs:
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -38,9 +39,51 @@ jobs:
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults
 
+      # ---- Lightweight UI E2E (dev-auth) ----------------------------------------------------------
+      # Boots the Web standalone (Auth:DevAutoLogin, no Keycloak/Postgres/Docker) and drives it with
+      # Playwright. Fast (~2 min) and reuses the Release build. This is the per-PR regression guard —
+      # it opens every desktop app, so circuit-crash regressions (e.g. an eager-DI ctor throwing on
+      # Spine open) fail the build here. The heavy real-auth full-stack suite stays manual-only
+      # (.github/workflows/e2e-realauth.yml).
+      - name: Install Playwright (chromium + OS deps)
+        run: pwsh tests/AgentOs.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Start standalone Web (dev-auth, no DB)
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+        run: |
+          nohup dotnet run --project src/AgentOs.Web --configuration Release --no-build --urls http://localhost:5199 > web.log 2>&1 &
+          echo "WEB_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for the Web
+        run: |
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -sf http://localhost:5199/ > /dev/null; then echo "Web ready"; ok=1; break; fi
+            sleep 3
+          done
+          if [ "$ok" != "1" ]; then echo "Web never became ready"; cat web.log; exit 1; fi
+
+      - name: Dev-auth UI E2E
+        env:
+          RUN_AGENTOS_E2E: "true"
+          AGENTOS_URL: "http://localhost:5199"
+        run: |
+          dotnet test tests/AgentOs.E2E.Tests \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=ui_e2e_results.trx" \
+            --results-directory ./TestResults
+
+      - name: Stop the Web
+        if: always()
+        run: kill "${WEB_PID}" 2>/dev/null || true
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: ./TestResults
+          path: |
+            ./TestResults
+            web.log
