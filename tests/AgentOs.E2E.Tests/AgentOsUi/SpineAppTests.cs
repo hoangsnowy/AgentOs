@@ -1,4 +1,4 @@
-// AgentOS UI — the Spine app (M2/M3): connected Projects, paired Runners, Sessions.
+// AgentOS UI — the Spine app: connected Boards (GitHub Projects v2), paired Runners, Sessions.
 // Same gate + fixture as the other desktop UI tests: skipped unless RUN_AGENTOS_E2E=true with a
 // Web running at AGENTOS_URL. The register-runner flow needs no DB — the one-time pairing token is
 // minted by the real IRunnerPairingService, so the token panel appears even against Null repos.
@@ -36,21 +36,21 @@ public sealed class SpineAppTests : IClassFixture<AgentOsPageFixture>
 
         var win = await OpenSpineAsync();
 
-        await Assertions.Expect(win.Locator(".spine-tab", new() { HasTextString = "Projects" })).ToBeVisibleAsync();
+        await Assertions.Expect(win.Locator(".spine-tab", new() { HasTextString = "Boards" })).ToBeVisibleAsync();
         await Assertions.Expect(win.Locator(".spine-tab", new() { HasTextString = "Runners" })).ToBeVisibleAsync();
         await Assertions.Expect(win.Locator(".spine-tab", new() { HasTextString = "Sessions" })).ToBeVisibleAsync();
     }
 
-    // The Projects tab shows the connect-a-repository form.
+    // The Boards tab shows the connect-a-board form.
     [Fact]
-    public async Task Spine_ProjectsTab_ShowsConnectForm()
+    public async Task Spine_BoardsTab_ShowsConnectForm()
     {
         if (!AgentOsPageFixture.IsEnabled) { Assert.Skip(AgentOsPageFixture.SkipReason); }
 
         var win = await OpenSpineAsync();
-        await win.Locator(".spine-tab", new() { HasTextString = "Projects" }).ClickAsync();
+        await win.Locator(".spine-tab", new() { HasTextString = "Boards" }).ClickAsync();
 
-        await Assertions.Expect(win.GetByPlaceholder("ghp_… / Azure PAT")).ToBeVisibleAsync();
+        await Assertions.Expect(win.GetByPlaceholder("ghp_… (needs repo + read:project)")).ToBeVisibleAsync();
         await Assertions.Expect(win.GetByRole(AriaRole.Button, new() { Name = "Connect" })).ToBeVisibleAsync();
     }
 
@@ -62,7 +62,7 @@ public sealed class SpineAppTests : IClassFixture<AgentOsPageFixture>
 
         var win = await OpenSpineAsync();
 
-        // Navigate to Runners tab (default is now Projects). Fill a label and register. (The register
+        // Navigate to Runners tab (default is now Boards). Fill a label and register. (The register
         // controls sit in the body interior, clear of the window's thin edge resize-handles.)
         await win.Locator(".spine-tab", new() { HasTextString = "Runners" }).ClickAsync();
         await win.GetByPlaceholder("Hoang's laptop").FillAsync("CI test runner");
