@@ -60,7 +60,13 @@ builder.AddProject<Projects.AgentOs_Api>("api")
     .WithEnvironment("Auth__Keycloak__Admin__Realm", "agentic")
     .WithEnvironment("Auth__Keycloak__Admin__Username", kcAdminUsername)
     .WithEnvironment("Auth__Keycloak__Admin__Password", kcAdminPassword)
-    .WithEnvironment("Auth__Keycloak__Admin__ClientId", "admin-cli");
+    .WithEnvironment("Auth__Keycloak__Admin__ClientId", "admin-cli")
+    // App-sent mail (MailKit) → MailHog in dev. Prod injects a real provider via secrets.
+    .WithEnvironment("Email__SmtpHost", "localhost")
+    .WithEnvironment("Email__SmtpPort", "1025")
+    .WithEnvironment("Email__From", "noreply@agentic.local")
+    .WithEnvironment("Email__FromName", "AgentOS")
+    .WaitFor(mailhog);
 
 builder.AddProject<Projects.AgentOs_Web>("web")
     .WithHttpsEndpoint(port: 5180, name: "https")
@@ -79,6 +85,12 @@ builder.AddProject<Projects.AgentOs_Web>("web")
     .WithEnvironment("Auth__Keycloak__Admin__Realm", "agentic")
     .WithEnvironment("Auth__Keycloak__Admin__Username", kcAdminUsername)
     .WithEnvironment("Auth__Keycloak__Admin__Password", kcAdminPassword)
-    .WithEnvironment("Auth__Keycloak__Admin__ClientId", "admin-cli");
+    .WithEnvironment("Auth__Keycloak__Admin__ClientId", "admin-cli")
+    // App-sent mail (MailKit) → MailHog in dev. Prod injects a real provider via secrets.
+    .WithEnvironment("Email__SmtpHost", "localhost")
+    .WithEnvironment("Email__SmtpPort", "1025")
+    .WithEnvironment("Email__From", "noreply@agentic.local")
+    .WithEnvironment("Email__FromName", "AgentOS")
+    .WaitFor(mailhog);
 
 builder.Build().Run();

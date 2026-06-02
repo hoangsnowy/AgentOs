@@ -1,0 +1,95 @@
+# Real-auth end-to-end against the FULL Aspire stack (Postgres + Keycloak + MailHog + Api + Web).
+# Booting Keycloak + Docker containers + Playwright in CI is heavy and slow (~10-15 min), so this is
+# MANUAL-ONLY (workflow_dispatch) — an on-demand "verify the whole real-service path" button, run
+# before a release or after touching auth/email, never auto on push/PR/schedule. The fast per-PR
+# guard is the lightweight dev-auth UI E2E (standalone Web, no Keycloak/Docker) in ci.yml.
+name: E2E (real-auth, full stack)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e-realauth:
+    name: Real-auth E2E (Aspire stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Trust HTTPS dev cert (the Web serves :5180 over HTTPS)
+        run: dotnet dev-certs https
+
+      - name: Restore
+        run: dotnet restore AgentOs.slnx
+
+      - name: Build (Debug)
+        run: dotnet build AgentOs.slnx --configuration Debug --no-restore
+
+      - name: Install Playwright + browser OS deps
+        run: pwsh tests/AgentOs.E2E.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Start Aspire AppHost (Postgres + Keycloak + MailHog + Api + Web)
+        run: |
+          nohup dotnet run --project infra/AgentOs.AppHost --configuration Debug --no-build > apphost.log 2>&1 &
+          echo "APPHOST_PID=$!" >> "$GITHUB_ENV"
+        env:
+          ASPIRE_ALLOW_UNSECURED_TRANSPORT: "true"
+          DOTNET_ENVIRONMENT: Development
+
+      - name: Wait for Keycloak realm + Web to be ready
+        run: |
+          echo "Waiting for Keycloak realm import (fresh volume => operator+member seed)..."
+          ok=0
+          for i in $(seq 1 72); do
+            if curl -sf http://localhost:8080/realms/agentic/.well-known/openid-configuration > /dev/null; then
+              echo "Keycloak realm 'agentic' is ready"; ok=1; break
+            fi
+            sleep 5
+          done
+          if [ "$ok" != "1" ]; then echo "Keycloak never became ready"; cat apphost.log; exit 1; fi
+
+          echo "Waiting for the Web on :5180..."
+          ok=0
+          for i in $(seq 1 36); do
+            if curl -skf https://localhost:5180/ > /dev/null; then
+              echo "Web is ready"; ok=1; break
+            fi
+            sleep 5
+          done
+          if [ "$ok" != "1" ]; then echo "Web never became ready"; cat apphost.log; exit 1; fi
+
+      - name: Run real-auth E2E (member role isolation + invitation email)
+        env:
+          RUN_AGENTOS_E2E_REAL: "true"
+          AGENTOS_REAL_URL: "https://localhost:5180"
+          MAILHOG_URL: "http://localhost:8025"
+        run: |
+          dotnet test tests/AgentOs.E2E.Tests \
+            --configuration Debug --no-build \
+            --filter "FullyQualifiedName~RealAuth" \
+            --logger "trx;LogFileName=realauth.trx" \
+            --results-directory ./TestResults
+
+      - name: AppHost logs (always)
+        if: always()
+        run: cat apphost.log || true
+
+      - name: Stop AppHost
+        if: always()
+        run: kill "${APPHOST_PID}" 2>/dev/null || true
+
+      - name: Upload results + logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realauth-e2e-results
+          path: |
+            ./TestResults
+            apphost.log

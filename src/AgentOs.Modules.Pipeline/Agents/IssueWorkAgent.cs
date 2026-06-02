@@ -18,7 +18,7 @@ namespace AgentOs.Modules.Pipeline.Agents;
 /// <summary>Implements a GitHub issue fix via an agentic tool-use loop on the paired runner.</summary>
 public sealed class IssueWorkAgent : IIssueWorkAgent
 {
-    private readonly ILlmClient _llm;
+    private readonly ILlmClientFactory _factory;
     private readonly AgentOptions _agentOpts;
     private readonly ILogger<IssueWorkAgent> _logger;
 
@@ -29,8 +29,12 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(options);
+        // Resolve the LLM client lazily in RunAsync — NOT here. This agent is injected into the Spine
+        // desktop app, so it is constructed eagerly when that window opens. Resolving a provider client
+        // in the ctor builds a pooled client (which throws when no API key is configured), and that
+        // exception would crash the Blazor circuit on open. The ctor must stay side-effect-free.
+        _factory = factory;
         _agentOpts = options.Value.IssueWork;
-        _llm = factory.Create(_agentOpts.Provider);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -54,7 +58,8 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         LlmResponse response;
         try
         {
-            response = await _llm.SendAsync(req, ct).ConfigureAwait(false);
+            var llm = _factory.Create(_agentOpts.Provider);
+            response = await llm.SendAsync(req, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

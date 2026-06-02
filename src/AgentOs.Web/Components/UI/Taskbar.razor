@@ -53,19 +53,15 @@
     [Parameter] public EventCallback OnToggleStart { get; set; }
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    private string _now = "";
-    private string _today = "";
     private string? _user;
     private bool _isAdmin;
     private string AvatarLetter => string.IsNullOrEmpty(_user) ? "?" : _user[..1].ToUpperInvariant();
 
-    private System.Threading.Timer? _timer;
-
     protected override void OnInitialized()
     {
-        UpdateClock();
-        _timer = new System.Threading.Timer(_ => InvokeAsync(() => { UpdateClock(); StateHasChanged(); }),
-            null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        // No clock here: the dock shows no time, so there is no per-second timer. The dock only needs
+        // to repaint when windows open/close (WM.Changed) — a 1s StateHasChanged was re-rendering the
+        // whole dock every second for nothing (idle SignalR churn). The TopBar owns the visible clock.
         WM.Changed += OnWmChanged;
     }
 
@@ -93,13 +89,6 @@
         }
     }
 
-    private void UpdateClock()
-    {
-        var now = DateTime.Now;
-        _now = now.ToString("HH:mm:ss");
-        _today = now.ToString("dddd, d MMMM yyyy");
-    }
-
     private void OnTaskClick(AppWindowState w)
     {
         if (w.Minimized) { WM.Restore(w.Id); }
@@ -116,7 +105,6 @@
 
     public void Dispose()
     {
-        _timer?.Dispose();
         WM.Changed -= OnWmChanged;
     }
 }

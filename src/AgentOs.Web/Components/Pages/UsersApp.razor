@@ -11,6 +11,8 @@
 @using AgentOs.Modules.Tenants.Keycloak
 @inject AgentOs.Modules.Tenants.Keycloak.IKeycloakAdminClient Kc
 @inject AgentOs.Modules.Tenants.ITenantSignupService Signup
+@inject AgentOs.Modules.Tenants.Email.IEmailSender Email
+@inject NavigationManager Nav
 @inject AgentOs.Web.Services.ToastService Toasts
 
 @if (!_resolved)
@@ -271,7 +273,7 @@ else
         }
     }
 
-    private void MintInvite()
+    private async Task MintInvite()
     {
         if (_busy) { return; }
         _busy = true;
@@ -279,13 +281,27 @@ else
         try
         {
             var ttl = TimeSpan.FromHours(Math.Clamp(_inviteTtl, 1, 168));
-            var token = Signup.CreateInvitation(
-                _tenantId,
-                _inviteRole,
-                string.IsNullOrWhiteSpace(_inviteEmail) ? null : _inviteEmail,
-                ttl);
+            var email = string.IsNullOrWhiteSpace(_inviteEmail) ? null : _inviteEmail.Trim();
+            var token = Signup.CreateInvitation(_tenantId, _inviteRole, email, ttl);
             _inviteExpiresAt = token.ExpiresAtUtc;
             _inviteUrl = $"/signup?invite={Uri.EscapeDataString(token.Token)}";
+
+            // Email the absolute link when an address is given. Best-effort: the URL stays on screen
+            // for copy/paste so the admin is never blocked if delivery is unconfigured or fails.
+            if (email is not null)
+            {
+                var absoluteUrl = Nav.ToAbsoluteUri(_inviteUrl).ToString();
+                try
+                {
+                    var (subject, htmlBody, textBody) = AgentOs.Modules.Tenants.Email.InvitationEmail.Build(_tenantId, _inviteRole, absoluteUrl);
+                    await Email.SendAsync(email, subject, htmlBody, textBody);
+                    Toasts.Show("Users", $"Invitation emailed to {email}.", ToastKind.Ok);
+                }
+                catch (Exception ex)
+                {
+                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+                }
+            }
         }
         catch (ArgumentException ex) { _inviteError = ex.Message; }
         finally { _busy = false; }

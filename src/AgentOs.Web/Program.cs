@@ -41,6 +41,22 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddDataProtection();
 
+// Response compression — Brotli + Gzip for dynamic responses (the initial Razor document, /health,
+// any non-static endpoint). NOTE: static assets are ALREADY compressed at build time by
+// MapStaticAssets, and Blazor Server's per-interaction traffic rides a WebSocket (which this
+// middleware does not touch), so this trims first-load transfer — it is not a fix for interaction
+// latency (that is build config + SignalR round-trips). Fastest level keeps CPU cost low.
+builder.Services.AddResponseCompression(o =>
+{
+    o.EnableForHttps = true;
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+});
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(
+    o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
+    o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+
 // Dev single-command run: auto-authenticate as a fixed developer principal so `dotnet run --project
 // src/AgentOs.Web` shows the desktop with no Keycloak / Postgres. Defaults ON in Development (so a fresh
 // clone just works — appsettings.Development.json is gitignored and can't be relied on); the AppHost
@@ -159,6 +175,10 @@ builder.Services.AddHttpClient();
 var app = builder.Build();
 
 await app.Services.InitializeModulesAsync();
+
+// Early in the pipeline so it wraps every downstream response. Skips assets MapStaticAssets already
+// served pre-compressed (their Content-Encoding is set), so there is no double-compression.
+app.UseResponseCompression();
 
 if (!app.Environment.IsDevelopment())
 {

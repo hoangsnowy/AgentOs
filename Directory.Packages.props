@@ -61,6 +61,10 @@
     <!-- GitHub integration (Octokit REST client) -->
     <PackageVersion Include="Octokit" Version="14.0.0" />
 
+    <!-- Email — MailKit SMTP for app-sent mail (invite links, notifications).
+         Dev → MailHog (localhost:1025, no auth/TLS); prod → a real provider via the Email config. -->
+    <PackageVersion Include="MailKit" Version="4.13.0" />
+
     <!-- Model Context Protocol — official C# SDK. Used by AgentOs.Modules.Mcp to consume tools
          exposed by external MCP servers (GitHub MCP, filesystem MCP, ...) and to expose AgentOs
          pipeline agents as MCP tools to external hosts (Claude Desktop, VS Code). -->
