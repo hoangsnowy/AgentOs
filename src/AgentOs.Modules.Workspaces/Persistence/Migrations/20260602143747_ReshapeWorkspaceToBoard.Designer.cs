@@ -3,6 +3,7 @@ using System;
 using AgentOs.Modules.Workspaces.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AgentOs.Modules.Workspaces.Persistence.Migrations
 {
     [DbContext(typeof(WorkspacesDbContext))]
-    partial class WorkspacesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260602143747_ReshapeWorkspaceToBoard")]
+    partial class ReshapeWorkspaceToBoard
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

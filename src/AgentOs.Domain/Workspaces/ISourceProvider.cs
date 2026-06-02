@@ -27,6 +27,19 @@ public interface ISourceProvider
 
     /// <summary>Read README + top-level layout to ground the Requirement agent.</summary>
     Task<RepoContext> ReadRepoContextAsync(WorkspaceDescriptor workspace, CancellationToken cancellationToken = default);
+
+    // ── Boards (GitHub Projects v2 / Azure DevOps board) ────────────────────────────────────────
+    // A board is the planning layer that spans many repos. These read the board and its items; the
+    // per-repo members above still drive validate/list/ground for the repos under the board.
+
+    /// <summary>List boards the credentials can see — drives the "connect a board" picker.</summary>
+    Task<IReadOnlyList<BoardSummary>> ListBoardsAsync(ConnectionCredentials credentials, CancellationToken cancellationToken = default);
+
+    /// <summary>Check the token can reach the board and resolve its node id + title.</summary>
+    Task<BoardValidation> ValidateBoardAsync(BoardDescriptor board, CancellationToken cancellationToken = default);
+
+    /// <summary>Read the board's items (tickets) across all repos it spans.</summary>
+    Task<BoardTickets> ReadBoardTicketsAsync(BoardDescriptor board, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Resolves the right <see cref="ISourceProvider"/> for a <see cref="SourceProviderKind"/>.</summary>

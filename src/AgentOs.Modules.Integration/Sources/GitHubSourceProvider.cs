@@ -97,6 +97,47 @@ public sealed class GitHubSourceProvider : ISourceProvider
             TopLevelPaths: topLevel);
     }
 
+    // ── Boards (GitHub Projects v2, via GraphQL — Octokit REST doesn't cover Projects v2) ────────
+
+    public async Task<IReadOnlyList<BoardSummary>> ListBoardsAsync(ConnectionCredentials credentials, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(credentials);
+        var owner = credentials.Owner;
+        if (string.IsNullOrWhiteSpace(owner))
+        {
+            return Array.Empty<BoardSummary>();
+        }
+
+        // Scope is unknown from a bare listing probe: try org, fall back to user (a NOT_FOUND on the
+        // org attempt just means the login is a user).
+        try
+        {
+            var org = await GitHubProjectsClient.ListBoardsAsync(owner, "org", credentials.AccessToken, credentials.Host, cancellationToken).ConfigureAwait(false);
+            if (org.Count > 0)
+            {
+                return org;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Not an org (or no org boards) — fall through to user scope.
+        }
+
+        return await GitHubProjectsClient.ListBoardsAsync(owner, "user", credentials.AccessToken, credentials.Host, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<BoardValidation> ValidateBoardAsync(BoardDescriptor board, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        return GitHubProjectsClient.ValidateBoardAsync(board, cancellationToken);
+    }
+
+    public Task<BoardTickets> ReadBoardTicketsAsync(BoardDescriptor board, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        return GitHubProjectsClient.ReadItemsAsync(board, cancellationToken);
+    }
+
     private static GitHubClient CreateClient(string token, string? host)
     {
         var header = new ProductHeaderValue(UserAgent);

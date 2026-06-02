@@ -2512,3 +2512,9 @@ input[type=range] { accent-color: var(--accent); }
     color: var(--text-primary); text-decoration: none;
 }
 .spine-issue-link:hover { text-decoration: underline; color: var(--accent, #3b82f6); }
+
+/* Spine — ticket filters (repo / label / status) */
+.spine-filters {
+    display: flex; flex-wrap: wrap; gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}

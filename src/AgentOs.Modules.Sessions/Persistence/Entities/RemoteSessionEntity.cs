@@ -31,4 +31,11 @@ public sealed class RemoteSessionEntity
     public int? IssueNumber { get; set; }
     public string? PrUrl { get; set; }
     public string? Error { get; set; }
+
+    // Board reshape — the repo this session targets, captured from the board ticket. Single-repo for
+    // now; a later stage generalizes to N repos via a child table (these stay as the primary repo).
+    // Nullable for pre-board / migrated sessions.
+    public string? RepoOwner { get; set; }
+    public string? RepoName { get; set; }
+    public string? RepoDefaultBranch { get; set; }
 }

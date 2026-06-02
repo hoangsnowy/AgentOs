@@ -1,7 +1,9 @@
-// M2 — the single connect-a-workspace flow, shared by the HTTP endpoint (tenant from ITenantContext)
-// and the desktop Spine app (tenant from the signed-in principal — a circuit has no HttpContext). It
-// validates the repo via the source provider, stores the access token ONLY in the encrypted AppConfig
-// store under the workspace's CredentialRef, and persists the row (which never carries the secret).
+// M2 / board reshape — the connect-a-board flow + add-a-repo flow, shared by the HTTP endpoints
+// (tenant from ITenantContext) and the desktop Spine app (tenant from the signed-in principal — a
+// circuit has no HttpContext). Connect validates the board via the source provider, stores the token
+// ONLY in the encrypted AppConfig store under the board's CredentialRef, and persists the row (which
+// never carries the secret). Adding a repo validates the repo with the board's stored token, then
+// persists a child row. Repo validation stays server-side so the UI never has to.
 
 using System;
 using System.Globalization;
@@ -14,15 +16,16 @@ using AgentOs.Modules.Workspaces.Persistence.Entities;
 
 namespace AgentOs.Modules.Workspaces;
 
-/// <summary>Connect-a-workspace input. <see cref="AccessToken"/> is validated, stored encrypted, and
-/// never persisted on the row or returned.</summary>
+/// <summary>Connect-a-board input. <see cref="AccessToken"/> is validated, stored encrypted, and never
+/// persisted on the row or returned. A board (GitHub Projects v2 / ADO board) spans many repos added
+/// separately via <see cref="IWorkspaceConnector.AddRepoAsync"/>.</summary>
 public sealed record WorkspaceConnectInput(
     string Name,
     SourceProviderKind Kind,
-    string Owner,
-    string Repo,
+    string ProjectOwner,
+    string ProjectScope,
+    int? ProjectNumber,
     string? Project,
-    string? DefaultBranch,
     string? Host,
     string AccessToken);
 
@@ -33,11 +36,23 @@ public sealed record WorkspaceConnectResult(bool Ok, WorkspaceEntity? Workspace,
     public static WorkspaceConnectResult Success(WorkspaceEntity workspace) => new(true, workspace, null);
 }
 
-/// <summary>Validates + persists a connected workspace for an explicit tenant.</summary>
+/// <summary>Outcome of adding a repo under a board.</summary>
+public sealed record RepoAddResult(bool Ok, WorkspaceRepoEntity? Repo, string? Error)
+{
+    public static RepoAddResult Fail(string error) => new(false, null, error);
+    public static RepoAddResult Success(WorkspaceRepoEntity repo) => new(true, repo, null);
+}
+
+/// <summary>Validates + persists a connected board and the repos under it, for an explicit tenant.</summary>
 public interface IWorkspaceConnector
 {
+    /// <summary>Connect a planning board. A board number is optional — without one it is a repos-only board (no tickets).</summary>
     Task<WorkspaceConnectResult> ConnectAsync(
         string tenantId, string? userId, WorkspaceConnectInput input, CancellationToken ct = default);
+
+    /// <summary>Validate a repo with the board's stored token and connect it under the board.</summary>
+    Task<RepoAddResult> AddRepoAsync(
+        string tenantId, Guid workspaceId, string owner, string repo, string? defaultBranch, CancellationToken ct = default);
 }
 
 internal sealed class WorkspaceConnector : IWorkspaceConnector
@@ -70,23 +85,31 @@ internal sealed class WorkspaceConnector : IWorkspaceConnector
         }
 
         var id = Guid.NewGuid();
-        var requestedBranch = string.IsNullOrWhiteSpace(input.DefaultBranch) ? "main" : input.DefaultBranch!;
-        var descriptor = new WorkspaceDescriptor(
-            id, tenantId, input.Kind, input.Owner, input.Repo, input.Project, requestedBranch, input.AccessToken, input.Host);
+        var scope = string.IsNullOrWhiteSpace(input.ProjectScope) ? "user" : input.ProjectScope;
+        var board = new BoardDescriptor(
+            id, tenantId, input.Kind, input.ProjectOwner, scope, input.ProjectNumber, null,
+            input.AccessToken, input.Project, input.Host);
         try
         {
-            descriptor.Validate();
+            board.Validate();
         }
         catch (ArgumentException ex)
         {
             return WorkspaceConnectResult.Fail(ex.Message);
         }
 
-        var validation = await provider.ValidateAsync(descriptor, ct).ConfigureAwait(false);
-        if (!validation.Ok)
+        // A board number is optional. With one, validate it (and cache the node id); without one this
+        // is a repos-only board whose token is first exercised when a repo is added.
+        string? nodeId = null;
+        if (input.ProjectNumber is not null)
         {
-            return WorkspaceConnectResult.Fail(
-                validation.Error ?? "Could not reach the repository with the supplied credentials.");
+            var validation = await provider.ValidateBoardAsync(board, ct).ConfigureAwait(false);
+            if (!validation.Ok)
+            {
+                return WorkspaceConnectResult.Fail(
+                    validation.Error ?? "Could not reach the board with the supplied credentials.");
+            }
+            nodeId = validation.NodeId;
         }
 
         var credentialRef = CredentialKey(id);
@@ -98,11 +121,11 @@ internal sealed class WorkspaceConnector : IWorkspaceConnector
             TenantId = tenantId,
             Name = input.Name,
             Kind = input.Kind,
-            Owner = input.Owner,
-            Repo = input.Repo,
+            ProjectOwner = input.ProjectOwner,
+            ProjectScope = scope,
+            ProjectNumber = input.ProjectNumber,
+            ProjectNodeId = nodeId,
             Project = input.Project,
-            DefaultBranch = validation.DefaultBranch ?? requestedBranch,
-            RemoteUrl = BuildRemoteUrl(input.Kind, input.Owner, input.Project, input.Repo, input.Host),
             CredentialRef = credentialRef,
             CreatedByUserId = userId,
             CreatedAtUtc = _clock.GetUtcNow(),
@@ -110,6 +133,66 @@ internal sealed class WorkspaceConnector : IWorkspaceConnector
         };
         await _repo.AddForTenantAsync(entity, ct).ConfigureAwait(false);
         return WorkspaceConnectResult.Success(entity);
+    }
+
+    public async Task<RepoAddResult> AddRepoAsync(
+        string tenantId, Guid workspaceId, string owner, string repo, string? defaultBranch, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
+        {
+            return RepoAddResult.Fail("Owner and repository are required.");
+        }
+
+        var board = await _repo.GetForTenantAsync(tenantId, workspaceId, ct).ConfigureAwait(false);
+        if (board is null)
+        {
+            return RepoAddResult.Fail("Board not found.");
+        }
+        if (!_providers.TryResolve(board.Kind, out var provider) || provider is null)
+        {
+            return RepoAddResult.Fail($"No source provider registered for '{board.Kind}'.");
+        }
+
+        var pat = await _credentials.GetForTenantAsync(tenantId, board.CredentialRef, ct).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(pat))
+        {
+            return RepoAddResult.Fail("Stored credentials for this board are missing; reconnect it.");
+        }
+
+        var requestedBranch = string.IsNullOrWhiteSpace(defaultBranch) ? "main" : defaultBranch!;
+        var descriptor = new WorkspaceDescriptor(
+            workspaceId, tenantId, board.Kind, owner, repo, board.Project, requestedBranch, pat);
+        try
+        {
+            descriptor.Validate();
+        }
+        catch (ArgumentException ex)
+        {
+            return RepoAddResult.Fail(ex.Message);
+        }
+
+        var validation = await provider.ValidateAsync(descriptor, ct).ConfigureAwait(false);
+        if (!validation.Ok)
+        {
+            return RepoAddResult.Fail(
+                validation.Error ?? "Could not reach the repository with the supplied credentials.");
+        }
+
+        var entity = new WorkspaceRepoEntity
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            WorkspaceId = workspaceId,
+            Owner = owner,
+            Repo = repo,
+            DefaultBranch = validation.DefaultBranch ?? requestedBranch,
+            RemoteUrl = BuildRemoteUrl(board.Kind, owner, board.Project, repo, host: null),
+            Private = false,
+            AddedAtUtc = _clock.GetUtcNow(),
+        };
+        await _repo.AddRepoForTenantAsync(entity, ct).ConfigureAwait(false);
+        return RepoAddResult.Success(entity);
     }
 
     internal static string CredentialKey(Guid id) =>

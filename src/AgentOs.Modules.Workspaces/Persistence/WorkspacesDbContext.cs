@@ -1,5 +1,6 @@
-// M2 — Workspaces persistence (schema workspaces). One aggregate: Workspace. Tenant-scoped via a
-// global query filter on TenantId, mirrored from the request's ITenantContext (same pattern as
+// M2 / board reshape — Workspaces persistence (schema workspaces). Two aggregates now: the board
+// (WorkspaceEntity) and the repos under it (WorkspaceRepoEntity). Both tenant-scoped via a global
+// query filter on TenantId, mirrored from the request's ITenantContext (same pattern as
 // PipelineDbContext / AppConfigDbContext).
 
 using System;
@@ -22,6 +23,8 @@ public sealed class WorkspacesDbContext : DbContext
 
     public DbSet<WorkspaceEntity> Workspaces => Set<WorkspaceEntity>();
 
+    public DbSet<WorkspaceRepoEntity> WorkspaceRepos => Set<WorkspaceRepoEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -36,16 +39,47 @@ public sealed class WorkspacesDbContext : DbContext
             e.Property(x => x.TenantId).IsRequired().HasMaxLength(64);
             e.Property(x => x.Name).IsRequired().HasMaxLength(200);
             e.Property(x => x.Kind).IsRequired();
-            e.Property(x => x.Owner).IsRequired().HasMaxLength(256);
-            e.Property(x => x.Repo).IsRequired().HasMaxLength(256);
+
+            // Board binding.
+            e.Property(x => x.ProjectOwner).IsRequired().HasMaxLength(256);
+            e.Property(x => x.ProjectScope).IsRequired().HasMaxLength(16);
+            e.Property(x => x.ProjectNumber);
+            e.Property(x => x.ProjectNodeId).HasMaxLength(256);
             e.Property(x => x.Project).HasMaxLength(256);
-            e.Property(x => x.DefaultBranch).IsRequired().HasMaxLength(256);
-            e.Property(x => x.RemoteUrl).IsRequired().HasMaxLength(2048);
+
+            // Legacy single-repo coordinates — nullable since the board carries no single repo.
+            e.Property(x => x.Owner).HasMaxLength(256);
+            e.Property(x => x.Repo).HasMaxLength(256);
+            e.Property(x => x.DefaultBranch).HasMaxLength(256);
+            e.Property(x => x.RemoteUrl).HasMaxLength(2048);
+
             e.Property(x => x.CredentialRef).IsRequired().HasMaxLength(256);
             e.Property(x => x.Status).IsRequired().HasMaxLength(32);
             e.Property(x => x.CreatedAtUtc).IsRequired();
             e.HasIndex(x => new { x.TenantId, x.CreatedAtUtc });
             e.HasQueryFilter(x => x.TenantId == tenantId);
+        });
+
+        modelBuilder.Entity<WorkspaceRepoEntity>(e =>
+        {
+            e.ToTable("workspace_repos");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TenantId).IsRequired().HasMaxLength(64);
+            e.Property(x => x.WorkspaceId).IsRequired();
+            e.Property(x => x.Owner).IsRequired().HasMaxLength(256);
+            e.Property(x => x.Repo).IsRequired().HasMaxLength(256);
+            e.Property(x => x.DefaultBranch).IsRequired().HasMaxLength(256);
+            e.Property(x => x.RemoteUrl).IsRequired().HasMaxLength(2048);
+            e.Property(x => x.Private).IsRequired();
+            e.Property(x => x.AddedAtUtc).IsRequired();
+            e.HasIndex(x => new { x.TenantId, x.WorkspaceId });
+            e.HasQueryFilter(x => x.TenantId == tenantId);
+
+            // Cascade-delete repos when their board is removed.
+            e.HasOne<WorkspaceEntity>()
+                .WithMany()
+                .HasForeignKey(x => x.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

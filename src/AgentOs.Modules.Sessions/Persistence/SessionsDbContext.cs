@@ -55,6 +55,9 @@ public sealed class SessionsDbContext : DbContext
             e.Property(x => x.Title).IsRequired().HasMaxLength(200);
             e.Property(x => x.Status).IsRequired().HasMaxLength(32);
             e.Property(x => x.CreatedAtUtc).IsRequired();
+            e.Property(x => x.RepoOwner).HasMaxLength(256);
+            e.Property(x => x.RepoName).HasMaxLength(256);
+            e.Property(x => x.RepoDefaultBranch).HasMaxLength(256);
             e.HasIndex(x => new { x.TenantId, x.CreatedAtUtc });
             e.HasQueryFilter(x => x.TenantId == tenantId);
         });

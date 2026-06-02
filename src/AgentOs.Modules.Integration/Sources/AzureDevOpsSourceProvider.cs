@@ -29,4 +29,15 @@ public sealed class AzureDevOpsSourceProvider : ISourceProvider
 
     public Task<RepoContext> ReadRepoContextAsync(WorkspaceDescriptor workspace, CancellationToken cancellationToken = default)
         => throw new NotSupportedException(NotImplementedMessage);
+
+    // ── Boards — same deferred posture as the repo members: validate fails cleanly, reads throw. ──
+
+    public Task<IReadOnlyList<BoardSummary>> ListBoardsAsync(ConnectionCredentials credentials, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(NotImplementedMessage);
+
+    public Task<BoardValidation> ValidateBoardAsync(BoardDescriptor board, CancellationToken cancellationToken = default)
+        => Task.FromResult(BoardValidation.Fail(NotImplementedMessage));
+
+    public Task<BoardTickets> ReadBoardTicketsAsync(BoardDescriptor board, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(NotImplementedMessage);
 }
