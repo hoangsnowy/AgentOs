@@ -35,6 +35,20 @@ builder.Logging.AddSimpleConsole(options =>
 
 builder.Services.AddOpenApi();
 builder.Services.AddDataProtection();
+
+// Response compression — Brotli + Gzip for REST/JSON + Scalar responses. The default compressible
+// MIME set excludes text/event-stream, so the streaming MCP endpoint (/mcp) is left uncompressed
+// and un-buffered. Fastest level keeps CPU overhead low.
+builder.Services.AddResponseCompression(o =>
+{
+    o.EnableForHttps = true;
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+});
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(
+    o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
+    o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
 if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
 {
     builder.Services.AddApplicationInsightsTelemetry();
@@ -66,6 +80,8 @@ builder.Services.AddMcpServer()
 var app = builder.Build();
 
 await app.Services.InitializeModulesAsync();
+
+app.UseResponseCompression();
 
 app.UseAuthentication();
 app.UseAuthorization();
