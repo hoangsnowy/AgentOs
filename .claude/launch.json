@@ -6,6 +6,12 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "infra/AgentOs.AppHost", "--launch-profile", "https", "-c", "Release"],
       "port": 5180
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/AgentOs.Web", "--launch-profile", "http", "--", "--Persistence:RequireDatabase=false"],
+      "port": 5180
     }
   ]
 }
