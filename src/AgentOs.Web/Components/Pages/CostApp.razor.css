@@ -1,0 +1,19 @@
+/* CostApp — layout only. All colours/spacing come from design tokens; tables/cards reuse the
+   shared .data-table / .metrics primitives from app.css (no new visual vocabulary). */
+
+.cost-actions {
+    display: inline-flex;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.cost-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+}
+
+@media (max-width: 720px) {
+    .cost-grid { grid-template-columns: 1fr; }
+}
