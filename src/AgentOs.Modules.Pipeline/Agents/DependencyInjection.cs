@@ -41,6 +41,10 @@ public static class AgentsServiceCollectionExtensions
         services.AddTransient<ITestingAgent, TestingAgent>();
         services.AddTransient<IQaAgent, QaAgent>();
 
+        // Bootstrap (idea → board tickets): the decomposer agent + the idea→preview service.
+        services.AddTransient<Decomposition.ITicketDecomposerAgent, Decomposition.TicketDecomposerAgent>();
+        services.AddTransient<Decomposition.IIdeaBootstrapService, Decomposition.IdeaBootstrapService>();
+
         // IOrchestratorAgent = PersistingOrchestratorAgent wrapping PipelineOrchestrator.
         // Persists run + metrics best-effort (no-op if the DB is not configured via AddPersistence).
         services.TryAddSingleton(TimeProvider.System);

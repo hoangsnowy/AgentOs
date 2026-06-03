@@ -114,4 +114,38 @@ public sealed class LabelSeedTests
 
         await Should.ThrowAsync<NotSupportedException>(() => provider.EnsureLabelsAsync(repo, StandardLabels.All));
     }
+
+    [Fact]
+    public async Task BoardWriteService_CreateTickets_DelegatesToResolvedProvider()
+    {
+        var provider = Substitute.For<ISourceProvider>();
+        provider.Kind.Returns(SourceProviderKind.GitHub);
+        var resolver = Substitute.For<ISourceProviderResolver>();
+        resolver.TryResolve(SourceProviderKind.GitHub, out Arg.Any<ISourceProvider?>()!)
+            .Returns(ci => { ci[1] = provider; return true; });
+
+        var board = new BoardDescriptor(Guid.NewGuid(), "t1", SourceProviderKind.GitHub, "octo", "org", 5, "node", "tok");
+        var repo = new WorkspaceDescriptor(Guid.NewGuid(), "t1", SourceProviderKind.GitHub, "octo", "api", null, "main", "tok");
+        var drafts = new[] { new TicketDraft("T", "B", ["type:feature"], true) };
+        IReadOnlyList<CreatedTicket> expected = [new CreatedTicket(1, "n", "https://x/1", "item1", "T")];
+        provider.CreateTicketsAsync(board, repo, Arg.Any<IReadOnlyList<TicketDraft>>(), Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        var svc = new BoardWriteService(resolver);
+        var result = await svc.CreateTicketsAsync(board, repo, drafts);
+
+        result.Count.ShouldBe(1);
+        result[0].Number.ShouldBe(1);
+        result[0].ItemNodeId.ShouldBe("item1");
+    }
+
+    [Fact]
+    public async Task AzureDevOps_CreateTickets_NotSupported()
+    {
+        var provider = new AzureDevOpsSourceProvider();
+        var board = new BoardDescriptor(Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "org", "org", null, null, "tok", "proj");
+        var repo = new WorkspaceDescriptor(Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "org", "repo", "proj", "main", "tok");
+
+        await Should.ThrowAsync<NotSupportedException>(() => provider.CreateTicketsAsync(board, repo, Array.Empty<TicketDraft>()));
+    }
 }

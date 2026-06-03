@@ -177,6 +177,62 @@ public sealed class GitHubSourceProvider : ISourceProvider
         return new LabelSyncResult(created, alreadyThere);
     }
 
+    public async Task<IReadOnlyList<CreatedTicket>> CreateTicketsAsync(BoardDescriptor board, WorkspaceDescriptor repo, IReadOnlyList<TicketDraft> drafts, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(repo);
+        ArgumentNullException.ThrowIfNull(drafts);
+
+        // Resolve the board node id once (issues are added to it after creation).
+        var boardNodeId = await ResolveBoardNodeIdAsync(board, cancellationToken).ConfigureAwait(false);
+        var client = CreateClient(repo.AccessToken, repo.Host);
+        var created = new List<CreatedTicket>();
+
+        foreach (var draft in drafts)
+        {
+            var newIssue = new NewIssue(draft.Title) { Body = draft.Body };
+            foreach (var label in draft.Labels)
+            {
+                newIssue.Labels.Add(label);
+            }
+
+            Issue issue;
+            try
+            {
+                issue = await client.Issue.Create(repo.Owner, repo.Repo, newIssue).ConfigureAwait(false);
+            }
+            catch (AuthorizationException)
+            {
+                throw new InvalidOperationException("GitHub rejected the token. Check it has 'repo' scope and isn't expired.");
+            }
+            catch (NotFoundException)
+            {
+                throw new InvalidOperationException($"Repository {repo.Owner}/{repo.Repo} was not found (or the token can't see it).");
+            }
+
+            var itemNodeId = await GitHubProjectsClient.AddItemToBoardAsync(
+                boardNodeId, issue.NodeId, board.AccessToken, board.Host, cancellationToken).ConfigureAwait(false);
+
+            created.Add(new CreatedTicket(issue.Number, issue.NodeId, issue.HtmlUrl, itemNodeId, issue.Title));
+        }
+
+        return created;
+    }
+
+    private static async Task<string> ResolveBoardNodeIdAsync(BoardDescriptor board, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(board.ProjectNodeId))
+        {
+            return board.ProjectNodeId;
+        }
+        var validation = await GitHubProjectsClient.ValidateBoardAsync(board, ct).ConfigureAwait(false);
+        if (!validation.Ok || string.IsNullOrEmpty(validation.NodeId))
+        {
+            throw new InvalidOperationException(validation.Error ?? "Could not resolve the board to add tickets to.");
+        }
+        return validation.NodeId;
+    }
+
     private static GitHubClient CreateClient(string token, string? host)
     {
         var header = new ProductHeaderValue(UserAgent);

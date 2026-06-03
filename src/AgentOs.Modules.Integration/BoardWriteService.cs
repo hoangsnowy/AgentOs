@@ -16,6 +16,9 @@ public interface IBoardWriteService
 {
     /// <summary>Idempotently seed <paramref name="labels"/> onto the repo (create missing, skip present).</summary>
     Task<LabelSyncResult> EnsureLabelsAsync(WorkspaceDescriptor repo, IReadOnlyList<LabelSpec> labels, CancellationToken cancellationToken = default);
+
+    /// <summary>Create <paramref name="drafts"/> as real issues on <paramref name="repo"/> and add them to <paramref name="board"/>.</summary>
+    Task<IReadOnlyList<CreatedTicket>> CreateTicketsAsync(BoardDescriptor board, WorkspaceDescriptor repo, IReadOnlyList<TicketDraft> drafts, CancellationToken cancellationToken = default);
 }
 
 /// <summary><see cref="IBoardWriteService"/> backed by the resolved <see cref="ISourceProvider"/>.</summary>
@@ -28,10 +31,17 @@ internal sealed class BoardWriteService : IBoardWriteService
     public Task<LabelSyncResult> EnsureLabelsAsync(WorkspaceDescriptor repo, IReadOnlyList<LabelSpec> labels, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(repo);
-        if (!_providers.TryResolve(repo.Kind, out var provider) || provider is null)
-        {
-            throw new InvalidOperationException($"No source provider registered for '{repo.Kind}'.");
-        }
-        return provider.EnsureLabelsAsync(repo, labels, cancellationToken);
+        return Resolve(repo.Kind).EnsureLabelsAsync(repo, labels, cancellationToken);
     }
+
+    public Task<IReadOnlyList<CreatedTicket>> CreateTicketsAsync(BoardDescriptor board, WorkspaceDescriptor repo, IReadOnlyList<TicketDraft> drafts, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        return Resolve(board.Kind).CreateTicketsAsync(board, repo, drafts, cancellationToken);
+    }
+
+    private ISourceProvider Resolve(SourceProviderKind kind)
+        => _providers.TryResolve(kind, out var provider) && provider is not null
+            ? provider
+            : throw new InvalidOperationException($"No source provider registered for '{kind}'.");
 }
