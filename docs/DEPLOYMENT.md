@@ -1,131 +1,163 @@
-# Deployment — Azure Container Apps
+# Deployment — Azure Container Apps (via `azd` + Aspire)
 
-> ⚠️ **Superseded.** Deployment moved to .NET Aspire + `azd` — see [infra/README.md](../infra/README.md).
-> The Bicep + GitHub Actions flow below was removed; this page is kept for historical reference only.
+Deployment is driven by **.NET Aspire + Azure Developer CLI (`azd`)**. The AppHost
+(`infra/AgentOs.AppHost`) is the single source of truth for the topology — `azd` provisions
+the whole app model (API + Web + managed Postgres + Container Apps env + ACR + managed identity)
+from it. No hand-written Bicep, no Dockerfile required. Topology details: [infra/README.md](../infra/README.md).
 
-## 1. One-time setup (Azure side)
+There are two ways in: **(A)** deploy from your machine (quickest way to *try* it), and
+**(B)** GitHub Actions continuous delivery (auto-deploy when `main` goes green).
 
-### 1.1 Service Principal + OIDC federated credential
+---
 
-GitHub Actions uses an OIDC token (NO client secret stored in GH).
+## Prerequisites
+
+- [Azure Developer CLI (`azd`)](https://aka.ms/azd) and the [Azure CLI (`az`)](https://aka.ms/azcli)
+- .NET 10 SDK
+- An Azure subscription you can create resources in (the first `azd up` creates a resource group,
+  ACR, Container Apps environment, Log Analytics, a Postgres flexible server, and a managed identity)
+
+---
+
+## A. Deploy from your machine (try it now)
 
 ```bash
-# Create the Azure AD application
+az login                       # or: azd auth login
+azd up                         # prompts: environment name, subscription, region → provisions + deploys
+```
+
+`azd up` prints the **API** and **Web** URLs when it finishes. Re-deploy after code changes with
+`azd deploy` (or `azd up` again).
+
+Set the LLM keys (stored as Container App env / Key Vault secrets), then redeploy:
+
+```bash
+azd env set Llm__Anthropic__ApiKey     "sk-ant-..."
+azd env set Llm__AzureOpenAI__ApiKey   "..."
+azd env set Llm__AzureOpenAI__Endpoint "https://<resource>.openai.azure.com"
+azd deploy
+```
+
+> The Web also runs offline (Demo mode) with no keys, so you can deploy first and add keys later.
+
+Tear everything down when done:
+
+```bash
+azd down --purge
+```
+
+---
+
+## B. Continuous delivery (GitHub Actions)
+
+The committed workflow [`.github/workflows/azd-deploy.yml`](../.github/workflows/azd-deploy.yml)
+runs `azd up` against your subscription. It triggers:
+
+- **automatically** after the **CI** workflow succeeds on `main` — *but only* when the repo
+  variable `AZURE_DEPLOY_ENABLED` is `true` (so `main` stays green before any Azure setup), and
+- **manually** any time via **Actions → Deploy (azd / Aspire) → Run workflow**.
+
+It authenticates with Azure over **OIDC** (no client secret stored in GitHub), runs `azd up`, then
+smoke-tests `GET /health`, `POST /auth/token`, and a tiny `POST /pipeline` run.
+
+### B.1 — Easiest: let `azd` wire the pipeline
+
+From a local clone already linked to the GitHub repo:
+
+```bash
+azd pipeline config
+```
+
+This creates the OIDC app registration + federated credential, assigns the role, and sets the
+GitHub repo **secrets** and **variables** below for you. Then do **B.3** (enable the gate).
+
+### B.2 — Manual setup (if you don't run `azd pipeline config`)
+
+```bash
+# 1) App registration + service principal
 APP_ID=$(az ad app create --display-name "agentos-github" --query appId -o tsv)
-SP_ID=$(az ad sp create --id "$APP_ID" --query id -o tsv)
-
-# Assign the Contributor role on the subscription (or the resource group for a narrower scope)
+az ad sp create --id "$APP_ID"
 SUB_ID=$(az account show --query id -o tsv)
-az role assignment create --role Contributor --assignee "$APP_ID" --scope "/subscriptions/$SUB_ID"
 
-# Federated credential — only allow workflows on the main branch (or an env tag)
+# 2) Role — azd creates role assignments for the managed identity (ACR pull, Key Vault), so
+#    Contributor is NOT enough. Use Owner (or Contributor + User Access Administrator).
+az role assignment create --role Owner --assignee "$APP_ID" --scope "/subscriptions/$SUB_ID"
+
+# 3) Federated credential — allow this repo's workflows on main (OIDC, no secret)
 az ad app federated-credential create --id "$APP_ID" --parameters '{
   "name": "github-main",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:<your-org>/agentos:ref:refs/heads/main",
+  "subject": "repo:hoangsnowy/AgentOs:ref:refs/heads/main",
   "audiences": ["api://AzureADTokenExchange"]
 }'
 
-# Get the info for the GH secrets
-echo "AZURE_CLIENT_ID = $APP_ID"
-echo "AZURE_TENANT_ID = $(az account show --query tenantId -o tsv)"
+echo "AZURE_CLIENT_ID       = $APP_ID"
+echo "AZURE_TENANT_ID       = $(az account show --query tenantId -o tsv)"
 echo "AZURE_SUBSCRIPTION_ID = $SUB_ID"
 ```
 
-### 1.2 GitHub repository secrets
+Then set the repo **secrets** and **variables** (Settings → Secrets and variables → Actions, or
+via `gh`):
 
-**Settings → Secrets and variables → Actions → New repository secret**:
-
-| Name | Value |
-|---|---|
-| `AZURE_CLIENT_ID` | App ID from the step above |
-| `AZURE_TENANT_ID` | Tenant ID |
-| `AZURE_SUBSCRIPTION_ID` | Subscription ID |
-
-### 1.3 First-time infrastructure deployment
-
-The `deploy.yml` workflow needs an existing resource group + ACR. Create them manually the first time:
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `AZURE_CLIENT_ID` | App ID from above |
+| Secret | `AZURE_TENANT_ID` | Tenant ID |
+| Secret | `AZURE_SUBSCRIPTION_ID` | Subscription ID |
+| Variable | `AZURE_ENV_NAME` | e.g. `agentos-dev` |
+| Variable | `AZURE_LOCATION` | e.g. `southeastasia` |
 
 ```bash
-az group create --name rg-Hoang-LuanVan --location southeastasia
-
-az deployment group create \
-  --resource-group rg-Hoang-LuanVan \
-  --template-file infra/main.bicep \
-  --parameters infra/main.parameters.json \
-  --parameters containerImage=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
+gh secret set AZURE_CLIENT_ID        --body "<app-id>"
+gh secret set AZURE_TENANT_ID        --body "<tenant-id>"
+gh secret set AZURE_SUBSCRIPTION_ID  --body "<sub-id>"
+gh variable set AZURE_ENV_NAME       --body "agentos-dev"
+gh variable set AZURE_LOCATION       --body "southeastasia"
+# Optional: a known operator password the /pipeline smoke step logs in with
+gh secret set AZD_OPERATOR_PASSWORD  --body "<password>"
 ```
 
-Then set the LLM secrets in Key Vault (see `infra/README.md` step 5).
-
-## 2. Subsequent deployments
-
-Every push to `main` (that does not touch `docs/` or `.md`) automatically triggers the workflow:
-
-1. Run `dotnet test` Release.
-2. Log in to Azure (OIDC).
-3. Build the Docker image, push to ACR with tag = `${{ github.sha }}`.
-4. Re-apply Bicep with the new image tag → Container App revision update.
-5. Print the container app FQDN.
-
-Trigger manually via **Actions → Deploy to Azure Container Apps → Run workflow**, choosing the environment `dev|staging|prod`.
-
-## 3. Smoke test post-deploy
+### B.3 — Turn auto-deploy on
 
 ```bash
-FQDN=$(az containerapp show -n agenticsdlc-dev -g rg-Hoang-LuanVan --query "properties.configuration.ingress.fqdn" -o tsv)
-
-curl "https://$FQDN/health"
-# → {"status":"Healthy","utc":"..."}
-
-curl -X POST "https://$FQDN/requirement" \
-  -H "Content-Type: application/json" \
-  -d '{"description":"Product management system","nMax":3}'
+gh variable set AZURE_DEPLOY_ENABLED --body true
 ```
 
-## 4. Roll back
+Until this is `true`, pushes to `main` will NOT auto-deploy (the deploy job is skipped). A manual
+**Run workflow** still works regardless, so you can try a one-off deploy before flipping it.
 
-Container Apps keeps every revision. Roll back via:
+### B.4 — Try it
+
+- **Manual:** Actions → *Deploy (azd / Aspire)* → **Run workflow** (on `main`).
+- **Automatic:** once `AZURE_DEPLOY_ENABLED=true`, merge to `main` → CI runs → on success the deploy
+  workflow runs `azd up` and smoke-tests the result.
+
+---
+
+## Operating the deployment
+
+Resource names come from your `AZURE_ENV_NAME`; `azd env get-values` lists URLs + names.
 
 ```bash
-# List revisions
-az containerapp revision list -n agenticsdlc-dev -g rg-Hoang-LuanVan \
-  --query "[].{name:name, active:properties.active, image:properties.template.containers[0].image, created:properties.createdTime}" \
-  -o table
+# Logs
+az containerapp logs show -n <api-app> -g <rg> --tail 100
 
-# Activate the old revision
-az containerapp revision activate \
-  --name <revision-name> \
-  --resource-group rg-Hoang-LuanVan \
-  -n agenticsdlc-dev
+# Roll back to a previous revision (Container Apps keeps every revision)
+az containerapp revision list     -n <api-app> -g <rg> -o table
+az containerapp revision activate -n <api-app> -g <rg> --revision <name>
+
+# Cost: each LLM call is logged with its USD cost; query App Insights `traces`, or use the
+# in-app admin Cost view (Desktop → Cost) once runs exist.
 ```
 
-## 5. Monitor
-
-- **Logs**: `az containerapp logs show -n agenticsdlc-dev -g rg-Hoang-LuanVan --tail 100`
-- **Application Insights**: <https://portal.azure.com> → Application Insights → `agenticsdlc-ai-dev`
-- **Live metrics**: Application Insights → Live Metrics
-- **Cost log**: query KQL in App Insights:
-  ```kusto
-  traces
-  | where message contains "RequirementAgent done" or message contains "CodingAgent done"
-  | extend cost = todouble(extract("\\$([0-9.]+)", 1, message))
-  | summarize total_cost = sum(cost), n = count() by bin(timestamp, 1h)
-  ```
-
-## 6. Cleanup
-
-```bash
-az group delete --name rg-Hoang-LuanVan --yes --no-wait
-# Key Vault soft-delete → purge after 7 days or proactively:
-# az keyvault purge --name <kv-name>
-```
+---
 
 ## Troubleshooting
 
-| Symptom | Common cause | Fix |
+| Symptom | Cause | Fix |
 |---|---|---|
-| Workflow fails at `az containerapp update` | ACR not set up | Run step 1.3 manually the first time |
-| Container app returns 503 after deploy | Probe `/health` timeout | Check the logs: `az containerapp logs show ...` |
-| LLM call returns 401 from the Container App | Key Vault secret not set | Set via `az keyvault secret set ...` + restart the revision |
-| App Insights cost spikes | Verbose log level | Reduce `Logging:LogLevel:Default` to `Warning` |
+| Deploy job didn't run on push to `main` | gate off | `gh variable set AZURE_DEPLOY_ENABLED --body true` |
+| `azd auth login` fails in CI | OIDC subject/role | Federated subject must match `repo:hoangsnowy/AgentOs:ref:refs/heads/main`; role must be Owner / +User Access Administrator |
+| `azd up` fails creating role assignments | SP lacks permission | Grant **Owner** or **User Access Administrator** (Contributor alone can't assign roles) |
+| Container App 503 after deploy | `/health` not ready | `az containerapp logs show …` — check startup + DB connection |
+| LLM call returns 401 in cloud | key not set | `azd env set Llm__Anthropic__ApiKey …` then `azd deploy` |
