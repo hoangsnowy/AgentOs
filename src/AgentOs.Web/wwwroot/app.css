@@ -2535,3 +2535,21 @@ input[type=range] { accent-color: var(--accent); }
 /* Spine — per-repo breakdown inside a session row */
 .spine-session-repo { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); margin: 2px 0; }
 .spine-session-repo-err { color: var(--color-err, #e55); font-weight: 700; cursor: help; }
+
+/* Live run activity feed (M6) — a session's streamed progress, under its row. */
+.spine-activity-tr td { padding-top: 0; }
+.spine-activity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 140px;
+    overflow-y: auto;
+    padding: var(--space-2);
+    background: var(--bg-sunk);
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+}
+.spine-activity-row { display: flex; gap: var(--space-2); color: var(--txt-soft); }
+.spine-activity-time { color: var(--txt-dim); flex: 0 0 auto; }

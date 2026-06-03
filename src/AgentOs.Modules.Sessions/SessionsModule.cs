@@ -32,6 +32,11 @@ public sealed class SessionsModule : IModule, IEndpointModule, IInitializableMod
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IRunnerPairingService, RunnerPairingService>();
 
+        // M6 — live session-run event feed (singleton, in-memory): the issue-work agent + the run
+        // worker publish progress to it and the desktop subscribes for live updates. Always registered
+        // (stateless fan-out, no DB) so streaming works in both the full stack and the no-DB dev path.
+        services.TryAddSingleton<ISessionRunFeed, InMemorySessionRunFeed>();
+
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         if (!string.IsNullOrWhiteSpace(connectionString))
         {
