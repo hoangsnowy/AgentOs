@@ -1,10 +1,9 @@
-@* SpineApp — Projects (connected repos) → Issues (GitHub) → AI sessions (M2/M3/M4/M5).
-   Primary flow: select a project, browse its open GitHub Issues, click "Work on this" to
-   start an AI session, then "Run" to trigger the IssueWorkAgent → branch → PR.
-   Reads data in-process via module repositories. A Blazor Server circuit has no HttpContext,
-   so ITenantContext is blank here — we read the tenant + user from AuthenticationState and
-   call repos via tenant-explicit overloads.
-   M5 adds: Run button (Draft sessions), PR link (Done sessions), 5-second poll when Running. *@
+@* SpineApp — Boards (a connected GitHub Projects v2 board, spanning many repos) → Tickets (board
+   items across repos) → AI sessions. A board has a Repositories sub-list (the services under it) and
+   a unified Tickets list filtered by repo / label / status. "Work on this" starts a session against
+   the ticket's repo, then "Run" triggers the IssueWorkAgent → branch → PR.
+   A Blazor Server circuit has no HttpContext, so ITenantContext is blank here — we read the tenant +
+   user from AuthenticationState and call repos via tenant-explicit overloads. *@
 
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
@@ -23,7 +22,7 @@
 @inject ISessionRepository Sessions
 @inject IRunnerPairingService Pairing
 @inject IAppConfigStore ConfigStore
-@inject IGitHubIssueService IssueService
+@inject IBoardTicketService BoardTicketSvc
 @inject AgentOs.Web.Services.ToastService Toasts
 @inject AgentOs.Domain.Sessions.IIssueWorkAgent IssueWorkAgent
 @inject AgentOs.Domain.Workspaces.IPrCreationService PrCreation
@@ -33,7 +32,7 @@
 <header class="page-head">
     <div>
         <h1 class="page-title">Spine · <code>@_tenantId</code></h1>
-        <p class="page-sub">Projects → Issues → AI sessions. Remote repo-execution path (M2/M3/M4).</p>
+        <p class="page-sub">Boards → Tickets → AI sessions. Remote repo-execution path.</p>
     </div>
     <Btn OnClick="ReloadAll" Disabled="_loading">
         <Icon Name="arrow-clockwise" Size="14" /> Refresh
@@ -41,8 +40,8 @@
 </header>
 
 <div class="spine-tabs">
-    <button class="spine-tab @(_tab == Tab.Projects ? "active" : "")" @onclick="@(() => { _tab = Tab.Projects; _selectedProject = null; })">
-        Projects <Badge>@(_workspaces?.Count ?? 0)</Badge>
+    <button class="spine-tab @(_tab == Tab.Boards ? "active" : "")" @onclick="@(() => { _tab = Tab.Boards; _selectedBoard = null; })">
+        Boards <Badge>@(_boards?.Count ?? 0)</Badge>
     </button>
     <button class="spine-tab @(_tab == Tab.Runners ? "active" : "")" @onclick="@(() => _tab = Tab.Runners)">
         Runners <Badge>@(_runners?.Count ?? 0)</Badge>
@@ -57,79 +56,91 @@
     <Spinner />
 }
 
-@* ── PROJECTS TAB ──────────────────────────────────────────────────────────────────────── *@
-else if (_tab == Tab.Projects)
+@* ── BOARDS TAB ───────────────────────────────────────────────────────────────────────────── *@
+else if (_tab == Tab.Boards)
 {
-    @if (_selectedProject is null)
+    @if (_selectedBoard is null)
     {
-        @* Projects list view *@
-        <Panel Title="Connect a repository">
+        @* Boards list view *@
+        <Panel Title="Connect a board">
             <div class="form-grid">
                 <Field Label="Provider">
                     <select class="prefs-select" @bind="_wsKind">
-                        <option value="@SourceProviderKind.GitHub">GitHub</option>
+                        <option value="@SourceProviderKind.GitHub">GitHub Projects</option>
                         <option value="@SourceProviderKind.AzureDevOps">Azure DevOps</option>
                     </select>
                 </Field>
                 <Field Label="Name">
-                    <input @bind="_wsName" placeholder="my-service" />
+                    <input @bind="_wsName" placeholder="My product board" />
                 </Field>
-                <Field Label="@(_wsKind == SourceProviderKind.AzureDevOps ? "Organization" : "Owner")">
-                    <input @bind="_wsOwner" placeholder="octocat" />
+                <Field Label="@(_wsKind == SourceProviderKind.AzureDevOps ? "Organization" : "Owner (org or user)")">
+                    <input @bind="_wsProjectOwner" placeholder="octo-org" />
                 </Field>
-                <Field Label="Repository">
-                    <input @bind="_wsRepo" placeholder="hello-world" />
-                </Field>
+                @if (_wsKind == SourceProviderKind.GitHub)
+                {
+                    <Field Label="Scope">
+                        <select class="prefs-select" @bind="_wsScope">
+                            <option value="org">Organization</option>
+                            <option value="user">User</option>
+                        </select>
+                    </Field>
+                }
                 @if (_wsKind == SourceProviderKind.AzureDevOps)
                 {
                     <Field Label="Project">
                         <input @bind="_wsProject" placeholder="MyProject" />
                     </Field>
                 }
-                <Field Label="Default branch">
-                    <input @bind="_wsBranch" placeholder="main" />
+                <Field Label="Board number">
+                    <input @bind="_wsNumberText" placeholder="5 (optional — leave blank for repos-only)" />
                 </Field>
                 <Field Label="Access token (PAT)">
-                    <input type="password" @bind="_wsToken" placeholder="ghp_… / Azure PAT" autocomplete="off" />
+                    <input type="password" @bind="_wsToken" placeholder="ghp_… (needs repo + read:project)" autocomplete="off" />
                 </Field>
             </div>
             <div class="form-actions">
-                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="ConnectWorkspace" Disabled="_busy">
+                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="ConnectBoard" Disabled="_busy">
                     @(_busy ? "Connecting…" : "Connect")
                 </Btn>
             </div>
-            <p class="muted spine-form-hint">Token is validated, then stored encrypted — never shown again or kept on the row.</p>
+            <p class="muted spine-form-hint">Token is validated, then stored encrypted — never shown again or kept on the row. A GitHub board number is its Projects v2 number (in the project URL).</p>
         </Panel>
 
-        @if (_workspaces is null) { <Spinner /> }
+        @if (_boards is null) { <Spinner /> }
         else
         {
-            <Panel Title="Projects">
+            <Panel Title="Boards">
             <table class="data-table">
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Repository</th>
-                        <th>Branch</th>
+                        <th>Board</th>
                         <th>Status</th>
-                        <th class="actions">Issues</th>
+                        <th class="actions">Open</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var w in _workspaces)
+                    @foreach (var b in _boards)
                     {
                         <tr>
-                            <td><strong>@w.Name</strong></td>
-                            <td><code>@w.Owner/@w.Repo</code></td>
-                            <td>@w.DefaultBranch</td>
-                            <td><Badge>@w.Status</Badge></td>
-                            <td class="actions">
-                                @if (w.Kind == SourceProviderKind.GitHub)
+                            <td><strong>@b.Name</strong></td>
+                            <td>
+                                <code>@b.ProjectOwner</code>
+                                @if (b.ProjectNumber is not null)
                                 {
-                                    <Btn Size="Btn.ButtonSize.Sm"
-                                         OnClick="@(() => SelectProject(w))"
-                                         Disabled="@(w.Status != "Active")">
-                                        Issues <Icon Name="arrow-right" Size="13" />
+                                    <span class="muted"> #@b.ProjectNumber</span>
+                                }
+                                else
+                                {
+                                    <span class="muted"> · repos only</span>
+                                }
+                            </td>
+                            <td><Badge>@b.Status</Badge></td>
+                            <td class="actions">
+                                @if (b.Kind == SourceProviderKind.GitHub)
+                                {
+                                    <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => SelectBoard(b))">
+                                        Open <Icon Name="arrow-right" Size="13" />
                                     </Btn>
                                 }
                                 else
@@ -139,9 +150,9 @@ else if (_tab == Tab.Projects)
                             </td>
                         </tr>
                     }
-                    @if (_workspaces.Count == 0)
+                    @if (_boards.Count == 0)
                     {
-                        <tr><td colspan="5" class="data-empty">No projects yet — connect one above.</td></tr>
+                        <tr><td colspan="4" class="data-empty">No boards yet — connect one above.</td></tr>
                     }
                 </tbody>
             </table>
@@ -150,78 +161,182 @@ else if (_tab == Tab.Projects)
     }
     else
     {
-        @* Issues sub-view for the selected project *@
+        @* Board detail: repositories + unified tickets *@
         <div class="spine-back-bar">
-            <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => { _selectedProject = null; _issues = null; _issueError = null; })">
-                <Icon Name="arrow-left" Size="13" /> @_selectedProject.Name
+            <Btn Size="Btn.ButtonSize.Sm" OnClick="CloseBoard">
+                <Icon Name="arrow-left" Size="13" /> @_selectedBoard.Name
             </Btn>
-            <span class="spine-back-repo muted"><code>@_selectedProject.Owner/@_selectedProject.Repo</code></span>
+            <span class="spine-back-repo muted">
+                <code>@_selectedBoard.ProjectOwner@(_selectedBoard.ProjectNumber is not null ? $" #{_selectedBoard.ProjectNumber}" : "")</code>
+            </span>
         </div>
 
-        @if (_loadingIssues)
+        @* Repositories under the board *@
+        <Panel Title="Repositories">
+            <div class="form-grid">
+                <Field Label="Owner">
+                    <input @bind="_addRepoOwner" placeholder="octo-org" />
+                </Field>
+                <Field Label="Repository">
+                    <input @bind="_addRepoName" placeholder="api-service" />
+                </Field>
+                <Field Label="Default branch">
+                    <input @bind="_addRepoBranch" placeholder="main" />
+                </Field>
+            </div>
+            <div class="form-actions">
+                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="AddRepo" Disabled="_busy">
+                    @(_busy ? "Adding…" : "Add repository")
+                </Btn>
+            </div>
+            @if (_repos is null) { <Spinner /> }
+            else
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Repository</th><th>Branch</th><th class="actions">Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _repos)
+                        {
+                            <tr>
+                                <td><code>@r.Owner/@r.Repo</code></td>
+                                <td>@r.DefaultBranch</td>
+                                <td class="actions">
+                                    <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Danger"
+                                         OnClick="@(() => RemoveRepo(r))" Disabled="@(_busyId == r.Id)">
+                                        <Icon Name="x" Size="13" /> Remove
+                                    </Btn>
+                                </td>
+                            </tr>
+                        }
+                        @if (_repos.Count == 0)
+                        {
+                            <tr><td colspan="3" class="data-empty">No repositories under this board yet — add the services it spans.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </Panel>
+
+        @* Unified tickets across the board's repos *@
+        @if (_selectedBoard.ProjectNumber is null)
+        {
+            <Panel Title="Tickets">
+                <p class="muted">This is a repos-only board. Reconnect it with a GitHub Projects v2 board number to pull tickets.</p>
+            </Panel>
+        }
+        else if (_loadingTickets)
         {
             <Spinner />
         }
-        else if (_issueError is not null)
+        else if (_ticketError is not null)
         {
-            <Panel Title="Issues">
-                <p class="login-error">@_issueError</p>
+            <Panel Title="Tickets">
+                <p class="login-error">@_ticketError</p>
                 <div class="form-actions">
-                    <Btn OnClick="@(() => SelectProject(_selectedProject))">Retry</Btn>
+                    <Btn OnClick="@(() => SelectBoard(_selectedBoard))">Retry</Btn>
                 </div>
             </Panel>
         }
-        else if (_issues is not null)
+        else if (_tickets is not null)
         {
-            <Panel Title="@($"Open Issues · {_selectedProject.Name}")">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th style="width:60px">#</th>
-                        <th>Title</th>
-                        <th>Labels</th>
-                        <th>Assignee</th>
-                        <th class="actions">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var issue in _issues)
-                    {
+            <Panel Title="@($"Tickets · {_selectedBoard.Name}")">
+                <div class="spine-filters">
+                    <Field Label="Repository">
+                        <select class="prefs-select" @bind="_filterRepo">
+                            <option value="">All repos</option>
+                            @foreach (var repo in TicketRepos())
+                            {
+                                <option value="@repo">@repo</option>
+                            }
+                        </select>
+                    </Field>
+                    <Field Label="Label">
+                        <select class="prefs-select" @bind="_filterLabel">
+                            <option value="">All labels</option>
+                            @foreach (var label in TicketLabels())
+                            {
+                                <option value="@label">@label</option>
+                            }
+                        </select>
+                    </Field>
+                    <Field Label="Status">
+                        <select class="prefs-select" @bind="_filterStatus">
+                            <option value="">All statuses</option>
+                            @foreach (var status in TicketStatuses())
+                            {
+                                <option value="@status">@status</option>
+                            }
+                        </select>
+                    </Field>
+                </div>
+                <table class="data-table">
+                    <thead>
                         <tr>
-                            <td class="muted">#@issue.Number</td>
-                            <td>
-                                <a href="@issue.HtmlUrl" target="_blank" rel="noopener" class="spine-issue-link">
-                                    @issue.Title
-                                </a>
-                            </td>
-                            <td>
-                                @foreach (var label in issue.Labels.Take(3))
-                                {
-                                    <Badge>@label</Badge>
-                                }
-                            </td>
-                            <td class="muted">@(issue.AssigneeLogin ?? "—")</td>
-                            <td class="actions">
-                                <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Primary"
-                                     OnClick="@(() => StartIssueSession(issue))"
-                                     Disabled="_busy">
-                                    Work on this <Icon Name="arrow-right" Size="13" />
-                                </Btn>
-                            </td>
+                            <th style="width:64px">#</th>
+                            <th>Title</th>
+                            <th>Repo</th>
+                            <th>Labels</th>
+                            <th>Status</th>
+                            <th>Assignee</th>
+                            <th class="actions">Action</th>
                         </tr>
-                    }
-                    @if (_issues.Count == 0)
-                    {
-                        <tr><td colspan="5" class="data-empty">No open issues — project is all clear!</td></tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var ticket in FilteredTickets())
+                        {
+                            <tr>
+                                <td class="muted">@(ticket.Number is null ? "draft" : $"#{ticket.Number}")</td>
+                                <td>
+                                    @if (ticket.Kind == BoardTicketKind.DraftIssue || string.IsNullOrEmpty(ticket.HtmlUrl))
+                                    {
+                                        @ticket.Title
+                                    }
+                                    else
+                                    {
+                                        <a href="@ticket.HtmlUrl" target="_blank" rel="noopener" class="spine-issue-link">@ticket.Title</a>
+                                    }
+                                </td>
+                                <td>
+                                    @if (ticket.RepoOwner is not null)
+                                    {
+                                        <code>@ticket.RepoOwner/@ticket.RepoName</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @foreach (var label in ticket.Labels.Take(3))
+                                    {
+                                        <Badge>@label</Badge>
+                                    }
+                                </td>
+                                <td>@if (ticket.Status is not null) { <Badge>@ticket.Status</Badge> } else { <span class="muted">—</span> }</td>
+                                <td class="muted">@(ticket.AssigneeLogin ?? "—")</td>
+                                <td class="actions">
+                                    <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Primary"
+                                         OnClick="@(() => OpenWorkDialog(ticket))"
+                                         Disabled="@(_busy || ticket.Kind == BoardTicketKind.DraftIssue || ticket.RepoOwner is null)">
+                                        Work on this <Icon Name="arrow-right" Size="13" />
+                                    </Btn>
+                                </td>
+                            </tr>
+                        }
+                        @if (!FilteredTickets().Any())
+                        {
+                            <tr><td colspan="7" class="data-empty">No tickets match — the board is clear or your filters are too narrow.</td></tr>
+                        }
+                    </tbody>
+                </table>
             </Panel>
         }
     }
 }
 
-@* ── RUNNERS TAB ───────────────────────────────────────────────────────────────────────── *@
+@* ── RUNNERS TAB ───────────────────────────────────────────────────────────────────────────── *@
 else if (_tab == Tab.Runners)
 {
     <Panel Title="Register a runner (a paired dev machine)">
@@ -284,7 +399,7 @@ REMOTE_AGENT_TOKEN=@_newRunner.Value.Token</textarea>
     }
 }
 
-@* ── SESSIONS TAB ──────────────────────────────────────────────────────────────────────── *@
+@* ── SESSIONS TAB ──────────────────────────────────────────────────────────────────────────── *@
 else if (_tab == Tab.Sessions)
 {
     @if (_sessions is null) { <Spinner /> }
@@ -295,7 +410,8 @@ else if (_tab == Tab.Sessions)
             <thead>
                 <tr>
                     <th>Title</th>
-                    <th>Project</th>
+                    <th>Board</th>
+                    <th>Repos</th>
                     @if (_isAdmin) { <th>Member</th> }
                     <th>Status</th>
                     <th>Created</th>
@@ -313,15 +429,38 @@ else if (_tab == Tab.Sessions)
                                 <br /><span class="muted" style="font-size:11px;color:var(--color-err,#e55)">@s.Error</span>
                             }
                         </td>
-                        <td><code>@WorkspaceName(s.WorkspaceId)</code></td>
-                        @if (_isAdmin) { <td><code>@(string.IsNullOrEmpty(s.MemberUserId) ? "—" : s.MemberUserId)</code></td> }
+                        <td><code>@BoardName(s.WorkspaceId)</code></td>
                         <td>
-                            <Badge>@s.Status</Badge>
-                            @if (!string.IsNullOrEmpty(s.PrUrl))
+                            @{ var sessionRepos = SessionReposFor(s.Id); }
+                            @if (sessionRepos.Count > 0)
                             {
-                                <br /><a href="@s.PrUrl" target="_blank" rel="noopener" style="font-size:11px">View PR</a>
+                                @foreach (var r in sessionRepos)
+                                {
+                                    <div class="spine-session-repo">
+                                        <code>@r.Owner/@r.Repo</code>
+                                        <Badge>@r.Status</Badge>
+                                        @if (!string.IsNullOrEmpty(r.PrUrl))
+                                        {
+                                            <a href="@r.PrUrl" target="_blank" rel="noopener">PR</a>
+                                        }
+                                        @if (!string.IsNullOrEmpty(r.Error))
+                                        {
+                                            <span class="muted spine-session-repo-err" title="@r.Error">!</span>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else if (!string.IsNullOrEmpty(s.RepoName))
+                            {
+                                <code>@s.RepoOwner/@s.RepoName</code>
+                            }
+                            else
+                            {
+                                <span class="muted">—</span>
                             }
                         </td>
+                        @if (_isAdmin) { <td><code>@(string.IsNullOrEmpty(s.MemberUserId) ? "—" : s.MemberUserId)</code></td> }
+                        <td><Badge>@s.Status</Badge></td>
                         <td>@s.CreatedAtUtc.ToString("u")</td>
                         <td class="actions">
                             @if (s.Status == "Draft")
@@ -339,19 +478,44 @@ else if (_tab == Tab.Sessions)
                         </td>
                     </tr>
                 }
-                @if (_sessions.Count == 0) { <tr><td colspan="@(_isAdmin ? 6 : 5)" class="data-empty">No sessions yet. Browse a project's issues to start one.</td></tr> }
+                @if (_sessions.Count == 0) { <tr><td colspan="@(_isAdmin ? 7 : 6)" class="data-empty">No sessions yet. Open a board and start one from a ticket.</td></tr> }
             </tbody>
         </table>
         </Panel>
     }
 }
 
+@* ── Work dialog: pick which repo(s) the ticket maps to ──────────────────────────────────── *@
+<Dialog Show="_showWorkDialog" Title="@($"Work on #{_workTicket?.Number}")" OnClose="CloseWorkDialog">
+    <ChildContent>
+        <p class="muted">Pick the repositories this ticket spans. The AI works each one and opens a PR per repo.</p>
+        <div class="spine-repo-picker">
+            @foreach (var opt in _workRepoOptions)
+            {
+                <label class="spine-repo-option">
+                    <input type="checkbox" @bind="opt.Selected" />
+                    <code>@opt.Owner/@opt.Repo</code>
+                    <span class="muted">@opt.DefaultBranch</span>
+                </label>
+            }
+            @if (_workRepoOptions.Count == 0)
+            {
+                <p class="muted">No repositories available — add one under the board first.</p>
+            }
+        </div>
+    </ChildContent>
+    <Footer>
+        <Btn OnClick="CloseWorkDialog">Cancel</Btn>
+        <Btn Variant="Btn.ButtonVariant.Primary" OnClick="ConfirmWorkSession" Disabled="_busy">Create session</Btn>
+    </Footer>
+</Dialog>
+
 @code {
-    private enum Tab { Projects, Runners, Sessions }
+    private enum Tab { Boards, Runners, Sessions }
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    private Tab _tab = Tab.Projects;
+    private Tab _tab = Tab.Boards;
     private bool _resolved;
     private bool _loading;
     private bool _busy;
@@ -362,27 +526,53 @@ else if (_tab == Tab.Sessions)
     private bool _isAdmin;
 
     // ── Data ────────────────────────────────────────────────────────────────────────────────
-    private IReadOnlyList<WorkspaceEntity>? _workspaces;
+    private IReadOnlyList<WorkspaceEntity>? _boards;
     private IReadOnlyList<RunnerEntity>? _runners;
     private IReadOnlyList<RemoteSessionEntity>? _sessions;
+    private IReadOnlyList<SessionRepoEntity>? _sessionRepos;
 
-    // ── Projects → Issues state ─────────────────────────────────────────────────────────────
-    private WorkspaceEntity? _selectedProject;
-    private IReadOnlyList<GitHubIssue>? _issues;
-    private bool _loadingIssues;
-    private string? _issueError;
+    // ── Board detail (repos + tickets) ────────────────────────────────────────────────────────
+    private WorkspaceEntity? _selectedBoard;
+    private IReadOnlyList<WorkspaceRepoEntity>? _repos;
+    private IReadOnlyList<BoardTicket>? _tickets;
+    private bool _loadingTickets;
+    private string? _ticketError;
+
+    // ── Work dialog (ticket → repo multi-select) ───────────────────────────────────────────────
+    private BoardTicket? _workTicket;
+    private bool _showWorkDialog;
+    private readonly List<RepoOption> _workRepoOptions = new();
+
+    private sealed class RepoOption
+    {
+        public string Owner { get; set; } = "";
+        public string Repo { get; set; } = "";
+        public string DefaultBranch { get; set; } = "main";
+        public Guid? WorkspaceRepoId { get; set; }
+        public bool Selected { get; set; }
+    }
+
+    // Ticket filters (client-side over the loaded list).
+    private string _filterRepo = "";
+    private string _filterLabel = "";
+    private string _filterStatus = "";
+
+    // ── Add-repo form ─────────────────────────────────────────────────────────────────────────
+    private string _addRepoOwner = "";
+    private string _addRepoName = "";
+    private string _addRepoBranch = "";
 
     // ── Runner registration form ─────────────────────────────────────────────────────────────
     private string _runnerLabel = "";
     private (Guid Id, string Token)? _newRunner;
 
-    // ── Connect workspace form ───────────────────────────────────────────────────────────────
+    // ── Connect board form ───────────────────────────────────────────────────────────────────
     private SourceProviderKind _wsKind = SourceProviderKind.GitHub;
     private string _wsName = "";
-    private string _wsOwner = "";
-    private string _wsRepo = "";
+    private string _wsProjectOwner = "";
+    private string _wsScope = "org";
+    private string _wsNumberText = "";
     private string _wsProject = "";
-    private string _wsBranch = "";
     private string _wsToken = "";
 
     // ── Polling timer (runs while any session is in "Running" state) ─────────────────────────
@@ -402,7 +592,6 @@ else if (_tab == Tab.Sessions)
         }
         _resolved = true;
         await ReloadAll();
-        // Start the poll timer stopped; RunSession will start it when needed.
         _pollTimer = new System.Threading.Timer(
             _ => InvokeAsync(PollRunningSessions),
             null,
@@ -417,13 +606,14 @@ else if (_tab == Tab.Sessions)
         _loading = true;
         try
         {
-            _workspaces = await Workspaces.ListForTenantAsync(_tenantId);
+            _boards = await Workspaces.ListForTenantAsync(_tenantId);
 
             var allRunners = await Runners.ListForTenantAsync(_tenantId);
             _runners = _isAdmin ? allRunners : allRunners.Where(r => r.OwnerUserId == _userId).ToList();
 
             var allSessions = await Sessions.ListForTenantAsync(_tenantId);
             _sessions = _isAdmin ? allSessions : allSessions.Where(s => s.MemberUserId == _userId).ToList();
+            _sessionRepos = await Sessions.ListAllReposForTenantAsync(_tenantId);
         }
         catch (Exception ex)
         {
@@ -441,8 +631,8 @@ else if (_tab == Tab.Sessions)
         {
             var all = await Sessions.ListForTenantAsync(_tenantId);
             _sessions = _isAdmin ? all : all.Where(s => s.MemberUserId == _userId).ToList();
+            _sessionRepos = await Sessions.ListAllReposForTenantAsync(_tenantId);
             StateHasChanged();
-            // Stop polling when no sessions are still running.
             if (_sessions.All(s => s.Status != "Running"))
             {
                 _pollTimer?.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
@@ -454,76 +644,240 @@ else if (_tab == Tab.Sessions)
         }
     }
 
-    private void StartPolling()
+    private void StartPolling() => _pollTimer?.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+
+    private string BoardName(Guid id) =>
+        _boards?.FirstOrDefault(w => w.Id == id)?.Name ?? id.ToString("N")[..8];
+
+    // ── Board detail ───────────────────────────────────────────────────────────────────────────
+
+    private void CloseBoard()
     {
-        // Fire after 5s, repeat every 5s.
-        _pollTimer?.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        _selectedBoard = null;
+        _repos = null;
+        _tickets = null;
+        _ticketError = null;
+        _filterRepo = _filterLabel = _filterStatus = "";
     }
 
-    private string WorkspaceName(Guid id) =>
-        _workspaces?.FirstOrDefault(w => w.Id == id)?.Name ?? id.ToString("N")[..8];
-
-    // ── Projects → Issues ────────────────────────────────────────────────────────────────────
-
-    private async Task SelectProject(WorkspaceEntity project)
+    private async Task SelectBoard(WorkspaceEntity board)
     {
-        _selectedProject = project;
-        _issues = null;
-        _issueError = null;
-        _loadingIssues = true;
+        _selectedBoard = board;
+        _repos = null;
+        _tickets = null;
+        _ticketError = null;
+        _filterRepo = _filterLabel = _filterStatus = "";
+        _loadingTickets = board.ProjectNumber is not null;
         StateHasChanged();
 
         try
         {
-            var pat = await ConfigStore.GetForTenantAsync(_tenantId, project.CredentialRef);
+            _repos = await Workspaces.ListReposForTenantAsync(_tenantId, board.Id);
+
+            if (board.ProjectNumber is null)
+            {
+                return; // Repos-only board — no tickets to load.
+            }
+
+            var pat = await ConfigStore.GetForTenantAsync(_tenantId, board.CredentialRef);
             if (string.IsNullOrEmpty(pat))
             {
-                _issueError = "Could not retrieve workspace credentials. Reconnect the project.";
+                _ticketError = "Could not retrieve board credentials. Reconnect the board.";
                 return;
             }
 
-            var descriptor = new WorkspaceDescriptor(
-                project.Id, _tenantId, project.Kind, project.Owner, project.Repo,
-                project.Project, project.DefaultBranch, pat);
-
-            _issues = await IssueService.ListOpenIssuesAsync(descriptor);
+            var descriptor = new BoardDescriptor(
+                board.Id, _tenantId, board.Kind, board.ProjectOwner, board.ProjectScope,
+                board.ProjectNumber, board.ProjectNodeId, pat, board.Project);
+            var result = await BoardTicketSvc.ListTicketsAsync(descriptor);
+            _tickets = result.Items;
         }
         catch (Exception ex)
         {
-            _issueError = $"Failed to load issues: {ex.Message}";
+            _ticketError = $"Failed to load tickets: {ex.Message}";
         }
         finally
         {
-            _loadingIssues = false;
+            _loadingTickets = false;
         }
     }
 
-    private async Task StartIssueSession(GitHubIssue issue)
+    private IEnumerable<string> TicketRepos() => _tickets is null
+        ? Array.Empty<string>()
+        : _tickets.Where(t => t.RepoOwner is not null)
+            .Select(t => $"{t.RepoOwner}/{t.RepoName}")
+            .Distinct()
+            .OrderBy(s => s);
+
+    private IEnumerable<string> TicketLabels() => _tickets is null
+        ? Array.Empty<string>()
+        : _tickets.SelectMany(t => t.Labels).Distinct().OrderBy(s => s);
+
+    private IEnumerable<string> TicketStatuses() => _tickets is null
+        ? Array.Empty<string>()
+        : _tickets.Where(t => t.Status is not null).Select(t => t.Status!).Distinct().OrderBy(s => s);
+
+    private IEnumerable<BoardTicket> FilteredTickets()
     {
-        if (_busy || _selectedProject is null) { return; }
+        if (_tickets is null) { return Array.Empty<BoardTicket>(); }
+        return _tickets.Where(t =>
+            (string.IsNullOrEmpty(_filterRepo) || $"{t.RepoOwner}/{t.RepoName}" == _filterRepo)
+            && (string.IsNullOrEmpty(_filterLabel) || t.Labels.Contains(_filterLabel))
+            && (string.IsNullOrEmpty(_filterStatus) || t.Status == _filterStatus));
+    }
+
+    // ── Repos under a board ──────────────────────────────────────────────────────────────────────
+
+    private async Task AddRepo()
+    {
+        if (_busy || _selectedBoard is null) { return; }
+        if (string.IsNullOrWhiteSpace(_addRepoOwner) || string.IsNullOrWhiteSpace(_addRepoName))
+        {
+            Toasts.Show("Spine", "Owner and repository are required.", ToastKind.Err);
+            return;
+        }
         _busy = true;
         try
         {
-            var entity = new RemoteSessionEntity
+            var result = await Connector.AddRepoAsync(
+                _tenantId, _selectedBoard.Id, _addRepoOwner.Trim(), _addRepoName.Trim(),
+                string.IsNullOrWhiteSpace(_addRepoBranch) ? null : _addRepoBranch.Trim());
+            if (result.Ok)
             {
-                Id = Guid.NewGuid(),
+                Toasts.Show("Spine", $"Added {_addRepoOwner.Trim()}/{_addRepoName.Trim()}.", ToastKind.Ok);
+                _addRepoOwner = _addRepoName = _addRepoBranch = "";
+                _repos = await Workspaces.ListReposForTenantAsync(_tenantId, _selectedBoard.Id);
+            }
+            else
+            {
+                Toasts.Show("Spine", result.Error ?? "Could not add the repository.", ToastKind.Err);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveRepo(WorkspaceRepoEntity repo)
+    {
+        if (_selectedBoard is null) { return; }
+        _busyId = repo.Id;
+        try
+        {
+            await Workspaces.RemoveRepoForTenantAsync(_tenantId, repo.Id);
+            Toasts.Show("Spine", $"Removed {repo.Owner}/{repo.Repo}.", ToastKind.Ok);
+            _repos = await Workspaces.ListReposForTenantAsync(_tenantId, _selectedBoard.Id);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    // ── Tickets → session ────────────────────────────────────────────────────────────────────────
+
+    // Open the repo-picker dialog for a ticket: offer the board's repos + the ticket's own repo,
+    // pre-selecting the ticket's repo.
+    private void OpenWorkDialog(BoardTicket ticket)
+    {
+        if (ticket.RepoOwner is null || ticket.RepoName is null) { return; }
+        _workTicket = ticket;
+        _workRepoOptions.Clear();
+        foreach (var r in _repos ?? Array.Empty<WorkspaceRepoEntity>())
+        {
+            _workRepoOptions.Add(new RepoOption
+            {
+                Owner = r.Owner,
+                Repo = r.Repo,
+                DefaultBranch = r.DefaultBranch,
+                WorkspaceRepoId = r.Id,
+                Selected = r.Owner == ticket.RepoOwner && r.Repo == ticket.RepoName,
+            });
+        }
+        // The ticket's own repo may not be a curated board repo — add it (pre-selected).
+        if (!_workRepoOptions.Any(o => o.Owner == ticket.RepoOwner && o.Repo == ticket.RepoName))
+        {
+            _workRepoOptions.Insert(0, new RepoOption
+            {
+                Owner = ticket.RepoOwner,
+                Repo = ticket.RepoName,
+                DefaultBranch = "main",
+                Selected = true,
+            });
+        }
+        _showWorkDialog = true;
+    }
+
+    private void CloseWorkDialog()
+    {
+        _showWorkDialog = false;
+        _workTicket = null;
+    }
+
+    private async Task ConfirmWorkSession()
+    {
+        if (_busy || _selectedBoard is null || _workTicket is null) { return; }
+        var selected = _workRepoOptions.Where(o => o.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            Toasts.Show("Spine", "Select at least one repository.", ToastKind.Err);
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var ticket = _workTicket;
+            var sessionId = Guid.NewGuid();
+            var primary = selected.FirstOrDefault(o => o.Owner == ticket.RepoOwner && o.Repo == ticket.RepoName) ?? selected[0];
+
+            var session = new RemoteSessionEntity
+            {
+                Id = sessionId,
                 TenantId = _tenantId,
-                WorkspaceId = _selectedProject.Id,
+                WorkspaceId = _selectedBoard.Id,
                 MemberUserId = _userId,
-                Title = $"#{issue.Number} {issue.Title}",
+                Title = $"#{ticket.Number} {ticket.Title}",
                 Status = "Draft",
-                IssueNumber = issue.Number,
+                IssueNumber = ticket.Number,
+                RepoOwner = primary.Owner,
+                RepoName = primary.Repo,
+                RepoDefaultBranch = primary.DefaultBranch,
+                BoardItemNodeId = ticket.ItemNodeId,
+                TicketKind = ticket.Kind.ToString(),
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 CreatedByUserId = string.IsNullOrEmpty(_userId) ? null : _userId,
             };
-            await Sessions.AddForTenantAsync(entity);
-            Toasts.Show("Spine", $"Session created for issue #{issue.Number}. Switch to Sessions tab to track it.", ToastKind.Ok);
+            await Sessions.AddForTenantAsync(session);
 
-            var allSessions = await Sessions.ListForTenantAsync(_tenantId);
-            _sessions = _isAdmin ? allSessions : allSessions.Where(s => s.MemberUserId == _userId).ToList();
+            foreach (var opt in selected)
+            {
+                await Sessions.AddRepoForTenantAsync(new SessionRepoEntity
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = _tenantId,
+                    SessionId = sessionId,
+                    WorkspaceRepoId = opt.WorkspaceRepoId,
+                    Owner = opt.Owner,
+                    Repo = opt.Repo,
+                    DefaultBranch = opt.DefaultBranch,
+                    Status = "Pending",
+                });
+            }
+
+            Toasts.Show("Spine", $"Session created for #{ticket.Number} across {selected.Count} repo(s). Switch to Sessions to run it.", ToastKind.Ok);
+            CloseWorkDialog();
+            await ReloadAll();
             _tab = Tab.Sessions;
-            _selectedProject = null;
-            _issues = null;
+            CloseBoard();
         }
         catch (Exception ex)
         {
@@ -535,7 +889,11 @@ else if (_tab == Tab.Sessions)
         }
     }
 
-    // ── Run session (M5 — fire-and-forget AI pipeline) ──────────────────────────────────────
+    private IReadOnlyList<SessionRepoEntity> SessionReposFor(Guid sessionId) =>
+        _sessionRepos?.Where(r => r.SessionId == sessionId).OrderBy(r => r.Owner).ThenBy(r => r.Repo).ToList()
+        ?? (IReadOnlyList<SessionRepoEntity>)Array.Empty<SessionRepoEntity>();
+
+    // ── Run session (fire-and-forget AI pipeline) ──────────────────────────────────────────────
 
     private async Task RunSession(RemoteSessionEntity session)
     {
@@ -543,33 +901,37 @@ else if (_tab == Tab.Sessions)
         _busyId = session.Id;
         try
         {
-            // Look up workspace + PAT.
-            var ws = _workspaces?.FirstOrDefault(w => w.Id == session.WorkspaceId);
-            if (ws is null)
+            var board = _boards?.FirstOrDefault(w => w.Id == session.WorkspaceId);
+            if (board is null)
             {
-                Toasts.Show("Spine", "Workspace not found — reload and try again.", ToastKind.Err);
+                Toasts.Show("Spine", "Board not found — reload and try again.", ToastKind.Err);
                 return;
             }
-            var pat = await ConfigStore.GetForTenantAsync(_tenantId, ws.CredentialRef);
+            var children = await Sessions.ListReposForTenantAsync(_tenantId, session.Id);
+            if (children.Count == 0)
+            {
+                Toasts.Show("Spine", "This session has no target repos. Recreate it from a board ticket.", ToastKind.Err);
+                return;
+            }
+            var pat = await ConfigStore.GetForTenantAsync(_tenantId, board.CredentialRef);
             if (string.IsNullOrEmpty(pat))
             {
-                Toasts.Show("Spine", "Could not retrieve workspace credentials. Reconnect the project.", ToastKind.Err);
+                Toasts.Show("Spine", "Could not retrieve board credentials. Reconnect the board.", ToastKind.Err);
                 return;
             }
 
-            // Mark session Running immediately so UI reflects it.
             await Sessions.UpdateRunResultAsync(_tenantId, session.Id, "Running", null, null);
             var all = await Sessions.ListForTenantAsync(_tenantId);
             _sessions = _isAdmin ? all : all.Where(s => s.MemberUserId == _userId).ToList();
             Toasts.Show("Spine", $"Session #{session.IssueNumber} is running — AI agent dispatched to runner.", ToastKind.Ok);
             StartPolling();
 
-            // Fire-and-forget background work. Use a fresh DI scope so the LLM client +
-            // repositories are properly scoped, independent of this Blazor circuit.
+            // Fire-and-forget background work in a fresh DI scope (independent of this circuit).
             var capturedTenantId = _tenantId;
             var capturedSession = session;
-            var capturedWs = ws;
+            var capturedBoard = board;
             var capturedPat = pat;
+            var capturedChildren = children;
             _ = Task.Run(async () =>
             {
                 try
@@ -579,41 +941,57 @@ else if (_tab == Tab.Sessions)
                     var prService = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Workspaces.IPrCreationService>();
                     var sessRepo = scope.ServiceProvider.GetRequiredService<AgentOs.Modules.Sessions.Persistence.ISessionRepository>();
 
+                    var workRepos = capturedChildren
+                        .Select(c => new AgentOs.Domain.Sessions.WorkRepo(c.Id, c.Owner, c.Repo, c.DefaultBranch))
+                        .ToList();
                     var issueRequest = new AgentOs.Domain.Sessions.IssueWorkRequest(
                         SessionId: capturedSession.Id,
                         TenantId: capturedTenantId,
                         MemberId: capturedSession.MemberUserId,
-                        WorkspaceOwner: capturedWs.Owner,
-                        WorkspaceRepo: capturedWs.Repo,
-                        WorkspaceDefaultBranch: capturedWs.DefaultBranch,
+                        Repos: workRepos,
                         IssueNumber: capturedSession.IssueNumber ?? 0,
                         IssueTitle: capturedSession.Title,
-                        IssueBody: "");
+                        IssueBody: "",
+                        TicketKind: capturedSession.TicketKind ?? "Issue");
 
                     var workResult = await agent.RunAsync(issueRequest).ConfigureAwait(false);
-                    if (!workResult.Ok)
+
+                    // One PR per repo that pushed a branch; write each repo's result back incrementally
+                    // (per-repo try/catch so one failure doesn't sink the others).
+                    foreach (var outcome in workResult.Repos)
                     {
-                        await sessRepo.UpdateRunResultAsync(capturedTenantId, capturedSession.Id,
-                            "Failed", null, workResult.Error ?? "Agent failed without a reason.").ConfigureAwait(false);
-                        return;
+                        if (!outcome.Ok)
+                        {
+                            await sessRepo.UpdateRepoRunResultAsync(capturedTenantId, outcome.SessionRepoId,
+                                "Failed", outcome.BranchName, null, outcome.Error ?? "Agent failed.").ConfigureAwait(false);
+                            continue;
+                        }
+
+                        var childBranch = capturedChildren.FirstOrDefault(c => c.Id == outcome.SessionRepoId)?.DefaultBranch ?? "main";
+                        var descriptor = new AgentOs.Domain.Workspaces.WorkspaceDescriptor(
+                            capturedBoard.Id, capturedTenantId, capturedBoard.Kind,
+                            outcome.Owner, outcome.Repo, capturedBoard.Project, childBranch, capturedPat);
+
+                        try
+                        {
+                            var prResult = await prService.CreateFromBranchAsync(
+                                descriptor,
+                                outcome.BranchName,
+                                $"fix: #{capturedSession.IssueNumber} {capturedSession.Title}",
+                                outcome.Summary).ConfigureAwait(false);
+
+                            await sessRepo.UpdateRepoRunResultAsync(capturedTenantId, outcome.SessionRepoId,
+                                prResult.Ok ? "Done" : "Failed", outcome.BranchName, prResult.HtmlUrl,
+                                prResult.Ok ? null : prResult.Error).ConfigureAwait(false);
+                        }
+                        catch (Exception prEx)
+                        {
+                            await sessRepo.UpdateRepoRunResultAsync(capturedTenantId, outcome.SessionRepoId,
+                                "Failed", outcome.BranchName, null, $"PR creation failed: {prEx.Message}").ConfigureAwait(false);
+                        }
                     }
 
-                    var descriptor = new AgentOs.Domain.Workspaces.WorkspaceDescriptor(
-                        capturedWs.Id, capturedTenantId, capturedWs.Kind,
-                        capturedWs.Owner, capturedWs.Repo, capturedWs.Project,
-                        capturedWs.DefaultBranch, capturedPat);
-
-                    var prResult = await prService.CreateFromBranchAsync(
-                        descriptor,
-                        workResult.BranchName,
-                        $"fix: {capturedSession.Title}",
-                        workResult.Summary).ConfigureAwait(false);
-
-                    await sessRepo.UpdateRunResultAsync(
-                        capturedTenantId, capturedSession.Id,
-                        prResult.Ok ? "Done" : "Failed",
-                        prResult.HtmlUrl,
-                        prResult.Ok ? null : prResult.Error).ConfigureAwait(false);
+                    await sessRepo.RecomputeSessionStatusForTenantAsync(capturedTenantId, capturedSession.Id).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -638,7 +1016,7 @@ else if (_tab == Tab.Sessions)
         }
     }
 
-    // ── Runner management ────────────────────────────────────────────────────────────────────
+    // ── Runner management ────────────────────────────────────────────────────────────────────────
 
     private async Task RegisterRunner()
     {
@@ -700,7 +1078,7 @@ else if (_tab == Tab.Sessions)
         }
     }
 
-    // ── Sessions ─────────────────────────────────────────────────────────────────────────────
+    // ── Sessions ─────────────────────────────────────────────────────────────────────────────────
 
     private async Task CloseSession(RemoteSessionEntity s)
     {
@@ -722,31 +1100,42 @@ else if (_tab == Tab.Sessions)
         }
     }
 
-    // ── Connect workspace ────────────────────────────────────────────────────────────────────
+    // ── Connect board ────────────────────────────────────────────────────────────────────────────
 
-    private async Task ConnectWorkspace()
+    private async Task ConnectBoard()
     {
         if (_busy) { return; }
-        if (string.IsNullOrWhiteSpace(_wsName) || string.IsNullOrWhiteSpace(_wsOwner)
-            || string.IsNullOrWhiteSpace(_wsRepo) || string.IsNullOrWhiteSpace(_wsToken))
+        if (string.IsNullOrWhiteSpace(_wsName) || string.IsNullOrWhiteSpace(_wsProjectOwner)
+            || string.IsNullOrWhiteSpace(_wsToken))
         {
-            Toasts.Show("Spine", "Name, owner, repository and token are required.", ToastKind.Err);
+            Toasts.Show("Spine", "Name, owner and token are required.", ToastKind.Err);
             return;
+        }
+        int? number = null;
+        if (!string.IsNullOrWhiteSpace(_wsNumberText))
+        {
+            if (!int.TryParse(_wsNumberText.Trim(), out var n) || n <= 0)
+            {
+                Toasts.Show("Spine", "Board number must be a positive integer.", ToastKind.Err);
+                return;
+            }
+            number = n;
         }
         _busy = true;
         try
         {
             var input = new WorkspaceConnectInput(
-                _wsName.Trim(), _wsKind, _wsOwner.Trim(), _wsRepo.Trim(),
+                _wsName.Trim(), _wsKind, _wsProjectOwner.Trim(),
+                _wsKind == SourceProviderKind.GitHub ? _wsScope : "org",
+                number,
                 string.IsNullOrWhiteSpace(_wsProject) ? null : _wsProject.Trim(),
-                string.IsNullOrWhiteSpace(_wsBranch) ? null : _wsBranch.Trim(),
                 null, _wsToken);
             var result = await Connector.ConnectAsync(_tenantId, string.IsNullOrEmpty(_userId) ? null : _userId, input);
             if (result.Ok)
             {
                 Toasts.Show("Spine", $"Connected '{_wsName.Trim()}'.", ToastKind.Ok);
-                _wsName = _wsOwner = _wsRepo = _wsProject = _wsBranch = _wsToken = "";
-                _workspaces = await Workspaces.ListForTenantAsync(_tenantId);
+                _wsName = _wsProjectOwner = _wsNumberText = _wsProject = _wsToken = "";
+                _boards = await Workspaces.ListForTenantAsync(_tenantId);
             }
             else
             {

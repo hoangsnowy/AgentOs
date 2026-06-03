@@ -24,6 +24,7 @@ public sealed class SessionsDbContext : DbContext
 
     public DbSet<RunnerEntity> Runners => Set<RunnerEntity>();
     public DbSet<RemoteSessionEntity> Sessions => Set<RemoteSessionEntity>();
+    public DbSet<SessionRepoEntity> SessionRepos => Set<SessionRepoEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -55,8 +56,36 @@ public sealed class SessionsDbContext : DbContext
             e.Property(x => x.Title).IsRequired().HasMaxLength(200);
             e.Property(x => x.Status).IsRequired().HasMaxLength(32);
             e.Property(x => x.CreatedAtUtc).IsRequired();
+            e.Property(x => x.RepoOwner).HasMaxLength(256);
+            e.Property(x => x.RepoName).HasMaxLength(256);
+            e.Property(x => x.RepoDefaultBranch).HasMaxLength(256);
+            e.Property(x => x.BoardItemNodeId).HasMaxLength(256);
+            e.Property(x => x.TicketKind).HasMaxLength(32);
             e.HasIndex(x => new { x.TenantId, x.CreatedAtUtc });
             e.HasQueryFilter(x => x.TenantId == tenantId);
+        });
+
+        modelBuilder.Entity<SessionRepoEntity>(e =>
+        {
+            e.ToTable("session_repos");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TenantId).IsRequired().HasMaxLength(64);
+            e.Property(x => x.SessionId).IsRequired();
+            e.Property(x => x.WorkspaceRepoId);
+            e.Property(x => x.Owner).IsRequired().HasMaxLength(256);
+            e.Property(x => x.Repo).IsRequired().HasMaxLength(256);
+            e.Property(x => x.DefaultBranch).IsRequired().HasMaxLength(256);
+            e.Property(x => x.Status).IsRequired().HasMaxLength(32);
+            e.Property(x => x.BranchName).HasMaxLength(256);
+            e.Property(x => x.PrUrl).HasMaxLength(2048);
+            e.HasIndex(x => new { x.TenantId, x.SessionId });
+            e.HasQueryFilter(x => x.TenantId == tenantId);
+
+            // Cascade-delete a session's repo rows when the session is removed.
+            e.HasOne<RemoteSessionEntity>()
+                .WithMany()
+                .HasForeignKey(x => x.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

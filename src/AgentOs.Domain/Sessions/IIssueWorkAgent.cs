@@ -1,42 +1,58 @@
-// M5 — contract for the issue-work agent: given a GitHub issue + workspace coordinates, run the
-// agentic LLM loop (using runner_shell) to implement a fix, push a branch, and return the branch
-// name for the caller to open a PR against.
+// M5 / multi-repo — contract for the issue-work agent: given a ticket + the repos it targets, run the
+// agentic LLM loop (using runner_shell) per repo to implement a fix and push a branch in each, then
+// return a per-repo outcome the caller turns into one PR per repo (cross-linked).
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace AgentOs.Domain.Sessions;
 
-/// <summary>Request to the issue-work agent.</summary>
+/// <summary>One repository a session targets.</summary>
+/// <param name="SessionRepoId">The session-repo row this maps to (for per-repo result write-back).</param>
+/// <param name="Owner">GitHub owner / org.</param>
+/// <param name="Repo">Repository name.</param>
+/// <param name="DefaultBranch">Base branch the fix branch is cut from.</param>
+public sealed record WorkRepo(Guid SessionRepoId, string Owner, string Repo, string DefaultBranch);
+
+/// <summary>Request to the issue-work agent — a ticket plus the repos it should be implemented in.</summary>
 /// <param name="SessionId">Correlating session row for evidence / logging.</param>
 /// <param name="TenantId">Owning tenant.</param>
 /// <param name="MemberId">User who owns the session (used for runner targeting).</param>
-/// <param name="WorkspaceOwner">GitHub owner / org.</param>
-/// <param name="WorkspaceRepo">Repository name.</param>
-/// <param name="WorkspaceDefaultBranch">Base branch the fix branch is cut from.</param>
-/// <param name="IssueNumber">GitHub issue number.</param>
-/// <param name="IssueTitle">Issue title (short context for the LLM).</param>
-/// <param name="IssueBody">Issue body / description (full context for the LLM).</param>
+/// <param name="Repos">The repos to implement the fix in (one branch + PR each).</param>
+/// <param name="IssueNumber">Ticket number.</param>
+/// <param name="IssueTitle">Ticket title (short context for the LLM).</param>
+/// <param name="IssueBody">Ticket body / description (full context for the LLM).</param>
+/// <param name="TicketKind">Issue / PullRequest / DraftIssue (informational).</param>
 public sealed record IssueWorkRequest(
     Guid SessionId,
     string TenantId,
     string MemberId,
-    string WorkspaceOwner,
-    string WorkspaceRepo,
-    string WorkspaceDefaultBranch,
+    IReadOnlyList<WorkRepo> Repos,
     int IssueNumber,
     string IssueTitle,
-    string IssueBody);
+    string IssueBody,
+    string TicketKind = "Issue");
 
-/// <summary>Result from the issue-work agent.</summary>
-/// <param name="Ok">True when the agent pushed a branch successfully.</param>
-/// <param name="BranchName">Pushed branch name (e.g. <c>issue-42-ai-fix</c>). Empty on failure.</param>
-/// <param name="Summary">One-sentence description of what was changed.</param>
-/// <param name="Error">Failure reason; null when <see cref="Ok"/> is true.</param>
-public sealed record IssueWorkResult(bool Ok, string BranchName, string Summary, string? Error);
+/// <summary>The agent's outcome for one repo.</summary>
+/// <param name="SessionRepoId">The session-repo row this outcome belongs to.</param>
+/// <param name="Ok">True when a branch was pushed for this repo.</param>
+/// <param name="Owner">Repo owner.</param>
+/// <param name="Repo">Repo name.</param>
+/// <param name="BranchName">Pushed branch (e.g. <c>issue-42-ai-fix</c>). Empty on failure.</param>
+/// <param name="Summary">One-sentence description of the change.</param>
+/// <param name="Error">Failure reason; null when <see cref="Ok"/>.</param>
+public sealed record RepoWorkOutcome(
+    Guid SessionRepoId, bool Ok, string Owner, string Repo, string BranchName, string Summary, string? Error);
 
-/// <summary>Runs the agentic LLM loop for a GitHub issue against the paired dev-machine runner.</summary>
+/// <summary>Result from the issue-work agent across all target repos.</summary>
+/// <param name="Ok">True when every target repo pushed a branch.</param>
+/// <param name="Repos">Per-repo outcomes.</param>
+/// <param name="Error">Aggregate failure reason; null when <see cref="Ok"/>.</param>
+public sealed record IssueWorkResult(bool Ok, IReadOnlyList<RepoWorkOutcome> Repos, string? Error);
+
+/// <summary>Runs the agentic LLM loop for a ticket against the paired dev-machine runner, per target repo.</summary>
 public interface IIssueWorkAgent
 {
     Task<IssueWorkResult> RunAsync(IssueWorkRequest request, CancellationToken ct = default);

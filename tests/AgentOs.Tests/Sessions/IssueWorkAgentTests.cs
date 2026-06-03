@@ -1,7 +1,8 @@
-// M5 — unit tests for IssueWorkAgent.
-// Uses a mock ILlmClient so no real LLM calls are made.
+// M5 / multi-repo — unit tests for IssueWorkAgent. Uses a mock ILlmClient so no real LLM calls run.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
@@ -21,12 +22,19 @@ public class IssueWorkAgentTests
         SessionId: Guid.NewGuid(),
         TenantId: "test-tenant",
         MemberId: "user-1",
-        WorkspaceOwner: "acme",
-        WorkspaceRepo: "my-service",
-        WorkspaceDefaultBranch: "main",
+        Repos: [new WorkRepo(Guid.NewGuid(), "acme", "my-service", "main")],
         IssueNumber: issueNumber,
         IssueTitle: $"Bug #{issueNumber}: Something is broken",
         IssueBody: "When X happens, Y fails.");
+
+    private static IssueWorkRequest MakeMultiRepoRequest(int issueNumber, params string[] repos) => new(
+        SessionId: Guid.NewGuid(),
+        TenantId: "test-tenant",
+        MemberId: "user-1",
+        Repos: repos.Select(r => new WorkRepo(Guid.NewGuid(), "acme", r, "main")).ToList(),
+        IssueNumber: issueNumber,
+        IssueTitle: "Cross-service ticket",
+        IssueBody: "Touches several services.");
 
     private static IssueWorkAgent MakeAgent(ILlmClient llm) =>
         new(AgentTestHelpers.FactoryReturning(llm),
@@ -36,7 +44,7 @@ public class IssueWorkAgentTests
     // ── Success path ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task RunAsync_SuccessJson_ReturnsBranchAndSummary()
+    public async Task RunAsync_SuccessJson_ReturnsBranchAndSummaryPerRepo()
     {
         var llm = Substitute.For<ILlmClient>();
         llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
@@ -46,15 +54,16 @@ public class IssueWorkAgentTests
         var result = await MakeAgent(llm).RunAsync(MakeRequest());
 
         result.Ok.ShouldBeTrue();
-        result.BranchName.ShouldBe("issue-42-ai-fix");
-        result.Summary.ShouldBe("Replaced null check with guard clause.");
         result.Error.ShouldBeNull();
+        var repo = result.Repos.ShouldHaveSingleItem();
+        repo.Ok.ShouldBeTrue();
+        repo.BranchName.ShouldBe("issue-42-ai-fix");
+        repo.Summary.ShouldBe("Replaced null check with guard clause.");
     }
 
     [Fact]
     public async Task RunAsync_JsonEmbeddedInText_ExtractsLastJsonBlock()
     {
-        // Agent might emit reasoning before the JSON.
         var response = "I explored the repo and found the issue.\n" +
                        "{\"branch\":\"issue-42-ai-fix\",\"summary\":\"Added missing null check.\"}";
 
@@ -65,7 +74,57 @@ public class IssueWorkAgentTests
         var result = await MakeAgent(llm).RunAsync(MakeRequest());
 
         result.Ok.ShouldBeTrue();
-        result.BranchName.ShouldBe("issue-42-ai-fix");
+        result.Repos[0].BranchName.ShouldBe("issue-42-ai-fix");
+    }
+
+    // ── Multi-repo ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RunAsync_MultipleRepos_RunsEachAndAggregatesOk()
+    {
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
+           .Returns(AgentTestHelpers.StubResponse(
+               """{"branch":"issue-7-ai-fix","summary":"Done."}"""));
+
+        var result = await MakeAgent(llm).RunAsync(MakeMultiRepoRequest(7, "api", "web", "worker"));
+
+        result.Ok.ShouldBeTrue();
+        result.Repos.Count.ShouldBe(3);
+        result.Repos.ShouldAllBe(r => r.Ok);
+        await llm.Received(3).SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_OneRepoFails_AggregateFails_OthersStillReported()
+    {
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
+           .Returns(
+               AgentTestHelpers.StubResponse("""{"branch":"issue-9-ai-fix","summary":"Fixed api."}"""),
+               AgentTestHelpers.StubResponse("""{"branch":"","summary":"","error":"Build failed in web."}"""));
+
+        var result = await MakeAgent(llm).RunAsync(MakeMultiRepoRequest(9, "api", "web"));
+
+        result.Ok.ShouldBeFalse();
+        result.Repos.Count.ShouldBe(2);
+        result.Repos[0].Ok.ShouldBeTrue();
+        result.Repos[1].Ok.ShouldBeFalse();
+        result.Repos[1].Error!.ShouldContain("Build failed");
+    }
+
+    [Fact]
+    public async Task RunAsync_NoRepos_ReturnsFailure()
+    {
+        var llm = Substitute.For<ILlmClient>();
+        var request = new IssueWorkRequest(
+            Guid.NewGuid(), "t", "u", Array.Empty<WorkRepo>(), 1, "T", "B");
+
+        var result = await MakeAgent(llm).RunAsync(request);
+
+        result.Ok.ShouldBeFalse();
+        result.Repos.ShouldBeEmpty();
+        await llm.DidNotReceive().SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>());
     }
 
     // ── Failure paths ─────────────────────────────────────────────────────────────────────────
@@ -81,8 +140,8 @@ public class IssueWorkAgentTests
         var result = await MakeAgent(llm).RunAsync(MakeRequest());
 
         result.Ok.ShouldBeFalse();
-        result.Error.ShouldNotBeNull();
-        result.Error!.ShouldContain("CS0103");
+        result.Repos[0].Error.ShouldNotBeNull();
+        result.Repos[0].Error!.ShouldContain("CS0103");
     }
 
     [Fact]
@@ -95,7 +154,7 @@ public class IssueWorkAgentTests
         var result = await MakeAgent(llm).RunAsync(MakeRequest());
 
         result.Ok.ShouldBeFalse();
-        result.Error.ShouldNotBeNullOrWhiteSpace();
+        result.Repos[0].Error.ShouldNotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -109,7 +168,7 @@ public class IssueWorkAgentTests
         var result = await MakeAgent(llm).RunAsync(MakeRequest());
 
         result.Ok.ShouldBeFalse();
-        result.BranchName.ShouldBeEmpty();
+        result.Repos[0].BranchName.ShouldBeEmpty();
     }
 
     // ── Request shape ─────────────────────────────────────────────────────────────────────────
@@ -131,7 +190,7 @@ public class IssueWorkAgentTests
     }
 
     [Fact]
-    public async Task RunAsync_SystemPromptContainsIssueNumber()
+    public async Task RunAsync_PromptContainsIssueNumberAndRepo()
     {
         LlmRequest? captured = null;
         var llm = Substitute.For<ILlmClient>();

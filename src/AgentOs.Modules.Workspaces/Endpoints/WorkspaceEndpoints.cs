@@ -1,10 +1,10 @@
-// M2 — Workspaces HTTP endpoints. Connect a GitHub/Azure DevOps repo as a workspace, list/get/
-// remove them, list connectable repos for a token, and read a repo's context to ground the
-// Requirement agent. Auth: Member policy; tenant resolved from the token by ITenantContext.
+// M2 / board reshape — Workspaces HTTP endpoints. Connect a GitHub Projects v2 board (or, later, an
+// ADO board) as a workspace, list/get/remove boards, manage the repos under a board, list connectable
+// repos/boards for a token, and read a repo's context to ground the Requirement agent. Auth: Member
+// policy; tenant resolved from the token by ITenantContext.
 //
 // Secret handling: the access token is validated, then stored ONLY in the encrypted AppConfig store
-// under the workspace's CredentialRef. It is never written to the workspace row and never returned
-// in any response DTO. It is rehydrated just-in-time when a provider call needs it.
+// under the board's CredentialRef. It is never written to a row and never returned in any DTO.
 
 using System;
 using System.Collections.Generic;
@@ -34,7 +34,11 @@ internal static class WorkspaceEndpoints
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPost(string.Empty, ConnectAsync);
         group.MapDelete("/{id:guid}", RemoveAsync);
-        group.MapPost("/repos", ListReposAsync);
+        group.MapPost("/repos", ListReposForTokenAsync);
+        group.MapPost("/boards", ListBoardsForTokenAsync);
+        group.MapGet("/{id:guid}/repos", ListBoardReposAsync);
+        group.MapPost("/{id:guid}/repos", AddRepoAsync);
+        group.MapDelete("/{id:guid}/repos/{repoId:guid}", RemoveRepoAsync);
         group.MapGet("/{id:guid}/context", ContextAsync);
     }
 
@@ -62,13 +66,13 @@ internal static class WorkspaceEndpoints
         }
 
         var input = new WorkspaceConnectInput(
-            request.Name, request.Kind, request.Owner, request.Repo,
-            request.Project, request.DefaultBranch, request.Host, request.AccessToken);
+            request.Name, request.Kind, request.ProjectOwner, request.ProjectScope,
+            request.ProjectNumber, request.Project, request.Host, request.AccessToken);
         var result = await connector.ConnectAsync(tenant.TenantId, tenant.UserId, input, ct).ConfigureAwait(false);
 
         return result.Ok && result.Workspace is not null
             ? Results.Created($"/workspaces/{result.Workspace.Id}", WorkspaceDto.From(result.Workspace))
-            : Results.BadRequest(result.Error ?? "Could not connect the workspace.");
+            : Results.BadRequest(result.Error ?? "Could not connect the board.");
     }
 
     private static async Task<IResult> RemoveAsync(
@@ -87,7 +91,7 @@ internal static class WorkspaceEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> ListReposAsync(
+    private static async Task<IResult> ListReposForTokenAsync(
         ListReposRequest request,
         ISourceProviderResolver providers,
         CancellationToken ct)
@@ -104,6 +108,53 @@ internal static class WorkspaceEndpoints
         var creds = new ConnectionCredentials(request.Kind, request.AccessToken, request.Owner, request.Host);
         var repos = await provider.ListRepositoriesAsync(creds, ct).ConfigureAwait(false);
         return Results.Ok(repos);
+    }
+
+    private static async Task<IResult> ListBoardsForTokenAsync(
+        ListReposRequest request,
+        ISourceProviderResolver providers,
+        CancellationToken ct)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.AccessToken))
+        {
+            return Results.BadRequest("accessToken is required.");
+        }
+        if (!providers.TryResolve(request.Kind, out var provider) || provider is null)
+        {
+            return Results.BadRequest($"No source provider registered for '{request.Kind}'.");
+        }
+
+        var creds = new ConnectionCredentials(request.Kind, request.AccessToken, request.Owner, request.Host);
+        var boards = await provider.ListBoardsAsync(creds, ct).ConfigureAwait(false);
+        return Results.Ok(boards);
+    }
+
+    private static async Task<IResult> ListBoardReposAsync(
+        Guid id, IWorkspaceRepository repo, ITenantContext tenant, CancellationToken ct)
+    {
+        var repos = await repo.ListReposForTenantAsync(tenant.TenantId, id, ct).ConfigureAwait(false);
+        return Results.Ok(repos.Select(RepoDto.From).ToList());
+    }
+
+    private static async Task<IResult> AddRepoAsync(
+        Guid id, AddRepoRequest request, IWorkspaceConnector connector, ITenantContext tenant, CancellationToken ct)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Owner) || string.IsNullOrWhiteSpace(request.Repo))
+        {
+            return Results.BadRequest("owner and repo are required.");
+        }
+        var result = await connector.AddRepoAsync(tenant.TenantId, id, request.Owner, request.Repo, request.DefaultBranch, ct)
+            .ConfigureAwait(false);
+        return result.Ok && result.Repo is not null
+            ? Results.Created($"/workspaces/{id}/repos/{result.Repo.Id}", RepoDto.From(result.Repo))
+            : Results.BadRequest(result.Error ?? "Could not add the repository.");
+    }
+
+    private static async Task<IResult> RemoveRepoAsync(
+        Guid id, Guid repoId, IWorkspaceRepository repo, ITenantContext tenant, CancellationToken ct)
+    {
+        var removed = await repo.RemoveRepoForTenantAsync(tenant.TenantId, repoId, ct).ConfigureAwait(false);
+        return removed ? Results.NoContent() : Results.NotFound();
     }
 
     private static async Task<IResult> ContextAsync(
@@ -124,51 +175,74 @@ internal static class WorkspaceEndpoints
             return Results.BadRequest($"No source provider registered for '{row.Kind}'.");
         }
 
+        var repos = await repo.ListReposForTenantAsync(tenant.TenantId, id, ct).ConfigureAwait(false);
+        if (repos.Count == 0)
+        {
+            return Results.BadRequest("This board has no repositories connected yet.");
+        }
+        var first = repos[0];
+
         var token = await credentials.GetAsync(row.CredentialRef, ct).ConfigureAwait(false);
         if (string.IsNullOrEmpty(token))
         {
-            return Results.BadRequest("Stored credentials for this workspace are missing; reconnect it.");
+            return Results.BadRequest("Stored credentials for this board are missing; reconnect it.");
         }
 
         var descriptor = new WorkspaceDescriptor(
-            row.Id, tenant.TenantId, row.Kind, row.Owner, row.Repo,
-            row.Project, row.DefaultBranch, token, null);
+            row.Id, tenant.TenantId, row.Kind, first.Owner, first.Repo,
+            row.Project, first.DefaultBranch, token, null);
         var context = await provider.ReadRepoContextAsync(descriptor, ct).ConfigureAwait(false);
         return Results.Ok(context);
     }
 }
 
-/// <summary>Connect-a-workspace request body.</summary>
+/// <summary>Connect-a-board request body.</summary>
 internal sealed record ConnectWorkspaceRequest(
     string Name,
     SourceProviderKind Kind,
-    string Owner,
-    string Repo,
+    string ProjectOwner,
+    string ProjectScope,
+    int? ProjectNumber,
     string? Project,
-    string? DefaultBranch,
     string? Host,
     string AccessToken);
 
-/// <summary>List-connectable-repos request body (a token probe, no repo chosen yet).</summary>
+/// <summary>Add-a-repo-under-a-board request body.</summary>
+internal sealed record AddRepoRequest(string Owner, string Repo, string? DefaultBranch);
+
+/// <summary>List-connectable-repos / list-boards request body (a token probe).</summary>
 internal sealed record ListReposRequest(
     SourceProviderKind Kind,
     string AccessToken,
     string? Owner,
     string? Host);
 
-/// <summary>Workspace projection returned to clients — never carries the access token or CredentialRef.</summary>
+/// <summary>Board projection returned to clients — never carries the access token or CredentialRef.</summary>
 internal sealed record WorkspaceDto(
     Guid Id,
     string Name,
     SourceProviderKind Kind,
-    string Owner,
-    string Repo,
+    string ProjectOwner,
+    string ProjectScope,
+    int? ProjectNumber,
     string? Project,
-    string DefaultBranch,
-    string RemoteUrl,
     string Status,
     DateTimeOffset CreatedAtUtc)
 {
     public static WorkspaceDto From(WorkspaceEntity e) => new(
-        e.Id, e.Name, e.Kind, e.Owner, e.Repo, e.Project, e.DefaultBranch, e.RemoteUrl, e.Status, e.CreatedAtUtc);
+        e.Id, e.Name, e.Kind, e.ProjectOwner, e.ProjectScope, e.ProjectNumber, e.Project, e.Status, e.CreatedAtUtc);
+}
+
+/// <summary>Repo-under-a-board projection.</summary>
+internal sealed record RepoDto(
+    Guid Id,
+    string Owner,
+    string Repo,
+    string DefaultBranch,
+    string RemoteUrl,
+    bool Private,
+    DateTimeOffset AddedAtUtc)
+{
+    public static RepoDto From(WorkspaceRepoEntity r) => new(
+        r.Id, r.Owner, r.Repo, r.DefaultBranch, r.RemoteUrl, r.Private, r.AddedAtUtc);
 }

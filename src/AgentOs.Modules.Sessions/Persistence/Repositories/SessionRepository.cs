@@ -113,4 +113,91 @@ internal sealed class SessionRepository : ISessionRepository
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
         return true;
     }
+
+    // ── Multi-repo ───────────────────────────────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<SessionRepoEntity>> ListReposForTenantAsync(string tenantId, Guid sessionId, CancellationToken ct = default)
+    {
+        return await _db.SessionRepos
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(r => r.TenantId == tenantId && r.SessionId == sessionId)
+            .OrderBy(r => r.Owner).ThenBy(r => r.Repo)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<SessionRepoEntity>> ListAllReposForTenantAsync(string tenantId, CancellationToken ct = default)
+    {
+        return await _db.SessionRepos
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(r => r.TenantId == tenantId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task AddRepoForTenantAsync(SessionRepoEntity repo, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(repo);
+        _db.SessionRepos.Add(repo);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<bool> UpdateRepoRunResultAsync(
+        string tenantId, Guid sessionRepoId, string status, string? branchName, string? prUrl, string? errorMessage,
+        CancellationToken ct = default)
+    {
+        var row = await _db.SessionRepos
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(r => r.Id == sessionRepoId && r.TenantId == tenantId, ct)
+            .ConfigureAwait(false);
+        if (row is null)
+        {
+            return false;
+        }
+        row.Status = status;
+        row.BranchName = branchName;
+        row.PrUrl = prUrl;
+        row.Error = errorMessage;
+        if (status is "Done" or "Failed")
+        {
+            row.CompletedAtUtc = DateTimeOffset.UtcNow;
+        }
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return true;
+    }
+
+    public async Task<bool> RecomputeSessionStatusForTenantAsync(string tenantId, Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await _db.Sessions
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.TenantId == tenantId, ct)
+            .ConfigureAwait(false);
+        if (session is null)
+        {
+            return false;
+        }
+
+        var repos = await _db.SessionRepos
+            .IgnoreQueryFilters()
+            .Where(r => r.TenantId == tenantId && r.SessionId == sessionId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        if (repos.Count == 0)
+        {
+            return false;
+        }
+
+        session.Status = repos.Any(r => r.Status == "Failed") ? "Failed"
+            : repos.All(r => r.Status == "Done") ? "Done"
+            : "Running";
+
+        // Mirror the first PR + first error onto the parent for back-compat display.
+        session.PrUrl = repos.FirstOrDefault(r => !string.IsNullOrEmpty(r.PrUrl))?.PrUrl;
+        session.Error = repos.FirstOrDefault(r => !string.IsNullOrEmpty(r.Error))?.Error;
+
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return true;
+    }
 }

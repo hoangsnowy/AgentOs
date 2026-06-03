@@ -2512,3 +2512,23 @@ input[type=range] { accent-color: var(--accent); }
     color: var(--text-primary); text-decoration: none;
 }
 .spine-issue-link:hover { text-decoration: underline; color: var(--accent, #3b82f6); }
+
+/* Spine — ticket filters (repo / label / status) */
+.spine-filters {
+    display: flex; flex-wrap: wrap; gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+/* Spine — repo multi-select picker (work dialog) */
+.spine-repo-picker { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-3) 0; }
+.spine-repo-option {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-subtle); border-radius: var(--radius-2, 8px);
+    cursor: pointer;
+}
+.spine-repo-option:hover { border-color: var(--accent, #3b82f6); }
+
+/* Spine — per-repo breakdown inside a session row */
+.spine-session-repo { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); margin: 2px 0; }
+.spine-session-repo-err { color: var(--color-err, #e55); font-weight: 700; cursor: help; }

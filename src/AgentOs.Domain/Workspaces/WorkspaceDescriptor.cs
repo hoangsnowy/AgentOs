@@ -55,4 +55,17 @@ public sealed record WorkspaceDescriptor(
             throw new ArgumentException("Project is required for Azure DevOps.", nameof(Project));
         }
     }
+
+    /// <summary>
+    /// Build a repo-level descriptor for one repo under a <paramref name="board"/>. This is the
+    /// insulation point that lets per-repo provider calls (validate, read-context, PR creation) keep
+    /// their existing signatures while the workspace is now a board that spans many repos.
+    /// </summary>
+    public static WorkspaceDescriptor ForRepo(BoardDescriptor board, string owner, string repo, string defaultBranch)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        return new WorkspaceDescriptor(
+            board.Id, board.TenantId, board.Kind, owner, repo, board.Project,
+            string.IsNullOrWhiteSpace(defaultBranch) ? "main" : defaultBranch, board.AccessToken, board.Host);
+    }
 }

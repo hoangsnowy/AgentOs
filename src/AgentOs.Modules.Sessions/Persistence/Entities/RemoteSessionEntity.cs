@@ -31,4 +31,15 @@ public sealed class RemoteSessionEntity
     public int? IssueNumber { get; set; }
     public string? PrUrl { get; set; }
     public string? Error { get; set; }
+
+    // Board reshape — the PRIMARY repo this session targets (the ticket's own repo). A session can now
+    // fan out to N repos (SessionRepoEntity children); these stay as the primary for back-compat
+    // display. Nullable for pre-board / migrated sessions.
+    public string? RepoOwner { get; set; }
+    public string? RepoName { get; set; }
+    public string? RepoDefaultBranch { get; set; }
+
+    // Multi-repo — the board item this session came from (for traceability) + its kind.
+    public string? BoardItemNodeId { get; set; }
+    public string? TicketKind { get; set; }
 }

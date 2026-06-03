@@ -32,4 +32,24 @@ public interface ISessionRepository
     Task<bool> UpdateRunResultAsync(
         string tenantId, Guid id, string status, string? prUrl, string? errorMessage,
         CancellationToken ct = default);
+
+    // ---- Multi-repo: the repos a session targets, each with its own branch / PR / status. ----
+
+    /// <summary>List a session's target repos, for an explicit tenant.</summary>
+    Task<IReadOnlyList<SessionRepoEntity>> ListReposForTenantAsync(string tenantId, Guid sessionId, CancellationToken ct = default);
+
+    /// <summary>List ALL session-repo rows for a tenant (the Sessions tab groups them by session).</summary>
+    Task<IReadOnlyList<SessionRepoEntity>> ListAllReposForTenantAsync(string tenantId, CancellationToken ct = default);
+
+    /// <summary>Persist a target repo under a session (its <see cref="SessionRepoEntity.TenantId"/> is set by the caller).</summary>
+    Task AddRepoForTenantAsync(SessionRepoEntity repo, CancellationToken ct = default);
+
+    /// <summary>Write back one repo's run result (status + branch + PR + error).</summary>
+    Task<bool> UpdateRepoRunResultAsync(
+        string tenantId, Guid sessionRepoId, string status, string? branchName, string? prUrl, string? errorMessage,
+        CancellationToken ct = default);
+
+    /// <summary>Roll the child repo statuses up into the parent session: any Failed → Failed; all Done → Done;
+    /// else Running. Also mirrors the first repo's PR onto the parent for back-compat display.</summary>
+    Task<bool> RecomputeSessionStatusForTenantAsync(string tenantId, Guid sessionId, CancellationToken ct = default);
 }
