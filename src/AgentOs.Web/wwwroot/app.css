@@ -2570,4 +2570,5 @@ input[type=range] { accent-color: var(--accent); }
 }
 .spine-spec h3 { margin: 0 0 var(--space-1); font-size: var(--fs-sm); }
 .spine-ticket-title { width: 100%; }
+.spine-runall { margin-bottom: var(--space-3); }
 .spine-ai-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-tertiary); white-space: nowrap; }

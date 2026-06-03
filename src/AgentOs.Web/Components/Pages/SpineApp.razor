@@ -279,6 +279,15 @@ else if (_tab == Tab.Boards)
                         </select>
                     </Field>
                 </div>
+                @{ var readyCount = ReadyTickets().Count; }
+                @if (readyCount > 0)
+                {
+                    <div class="form-actions spine-runall">
+                        <Btn Variant="Btn.ButtonVariant.Primary" OnClick="RunAllReady" Disabled="_busy">
+                            <Icon Name="lightning" Size="13" /> Run all ai:ready (@readyCount)
+                        </Btn>
+                    </div>
+                }
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -428,11 +437,14 @@ else if (_tab == Tab.Idea)
             @if (_ideaError is not null) { <p class="login-error">@_ideaError</p> }
             <div class="form-actions">
                 <Btn OnClick="@(() => { _ideaStep = IdeaStep.Input; _ideaError = null; })" Disabled="_ideaBusy">Back</Btn>
-                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="CreateTickets" Disabled="@(_ideaBusy || _draftRows.Count == 0)">
-                    @(_ideaBusy ? "Creating…" : $"Create {_draftRows.Count} ticket(s)")
+                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="@(() => CreateTickets(true))" Disabled="@(_ideaBusy || _draftRows.Count == 0)">
+                    @(_ideaBusy ? "Working…" : "Create & run all ready")
+                </Btn>
+                <Btn OnClick="@(() => CreateTickets(false))" Disabled="@(_ideaBusy || _draftRows.Count == 0)">
+                    Create only
                 </Btn>
             </div>
-            <p class="muted spine-form-hint">Creates real GitHub issues on the selected repo and adds them to the board. The standard labels are seeded first.</p>
+            <p class="muted spine-form-hint">Creates real GitHub issues on the selected repo and adds them to the board (labels seeded first). <strong>Create &amp; run</strong> then starts an AI session on every <code>ai:ready</code> ticket — review the list above first; this is the one human gate.</p>
         }
         else if (_ideaStep == IdeaStep.Result)
         {
@@ -1137,7 +1149,9 @@ else if (_tab == Tab.Sessions)
     }
 
     // Seed labels, then create the (edited) tickets as real issues on the chosen repo + add to board.
-    private async Task CreateTickets()
+    // When runReady, auto-run a session per ai:ready ticket — the review step was the human gate, so
+    // this is the autonomous idea→PRs path.
+    private async Task CreateTickets(bool runReady)
     {
         if (_ideaBusy) { return; }
         var board = IdeaBoards().FirstOrDefault(b => b.Id.ToString() == _ideaBoardId);
@@ -1158,9 +1172,9 @@ else if (_tab == Tab.Sessions)
                 return;
             }
 
+            var branch = string.IsNullOrWhiteSpace(repo.DefaultBranch) ? "main" : repo.DefaultBranch;
             var repoDesc = new WorkspaceDescriptor(
-                repo.Id, _tenantId, board.Kind, repo.Owner, repo.Repo, board.Project,
-                string.IsNullOrWhiteSpace(repo.DefaultBranch) ? "main" : repo.DefaultBranch, pat);
+                repo.Id, _tenantId, board.Kind, repo.Owner, repo.Repo, board.Project, branch, pat);
             var boardDesc = new BoardDescriptor(
                 board.Id, _tenantId, board.Kind, board.ProjectOwner, board.ProjectScope,
                 board.ProjectNumber, board.ProjectNodeId, pat, board.Project);
@@ -1175,6 +1189,33 @@ else if (_tab == Tab.Sessions)
             _createdTickets = await BoardWriteSvc.CreateTicketsAsync(boardDesc, repoDesc, drafts);
 
             Toasts.Show("Spine", $"Created {_createdTickets.Count} ticket(s) on {repo.Owner}/{repo.Repo}.", ToastKind.Ok);
+
+            // Auto-run: one session per ai:ready created ticket (created order matches the drafts sent).
+            if (runReady)
+            {
+                var repoOpt = new RepoOption { Owner = repo.Owner, Repo = repo.Repo, DefaultBranch = branch, WorkspaceRepoId = repo.Id, Selected = true };
+                var sessions = new List<RemoteSessionEntity>();
+                for (var i = 0; i < _createdTickets.Count && i < drafts.Count; i++)
+                {
+                    if (!drafts[i].AiReady) { continue; }
+                    var t = _createdTickets[i];
+                    sessions.Add(await PersistSessionAsync(
+                        board.Id, t.Number, $"#{t.Number} {t.Title}", t.ItemNodeId, "Issue", [repoOpt]));
+                }
+                if (sessions.Count > 0)
+                {
+                    Toasts.Show("Spine", $"Running {sessions.Count} ai:ready ticket(s)…", ToastKind.Ok);
+                    await ReloadAll();
+                    ResetIdea();
+                    _tab = Tab.Sessions;
+                    foreach (var s in sessions)
+                    {
+                        await RunSession(s);
+                    }
+                    return;
+                }
+            }
+
             _ideaStep = IdeaStep.Result;
         }
         catch (Exception ex)
@@ -1251,44 +1292,15 @@ else if (_tab == Tab.Sessions)
         try
         {
             var ticket = _workTicket;
-            var sessionId = Guid.NewGuid();
-            var primary = selected.FirstOrDefault(o => o.Owner == ticket.RepoOwner && o.Repo == ticket.RepoName) ?? selected[0];
+            // The ticket's own repo becomes the session's primary repo — put it first.
+            var ordered = selected
+                .OrderByDescending(o => o.Owner == ticket.RepoOwner && o.Repo == ticket.RepoName)
+                .ToList();
+            await PersistSessionAsync(
+                _selectedBoard.Id, ticket.Number, $"#{ticket.Number} {ticket.Title}",
+                ticket.ItemNodeId, ticket.Kind.ToString(), ordered);
 
-            var session = new RemoteSessionEntity
-            {
-                Id = sessionId,
-                TenantId = _tenantId,
-                WorkspaceId = _selectedBoard.Id,
-                MemberUserId = _userId,
-                Title = $"#{ticket.Number} {ticket.Title}",
-                Status = "Draft",
-                IssueNumber = ticket.Number,
-                RepoOwner = primary.Owner,
-                RepoName = primary.Repo,
-                RepoDefaultBranch = primary.DefaultBranch,
-                BoardItemNodeId = ticket.ItemNodeId,
-                TicketKind = ticket.Kind.ToString(),
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-                CreatedByUserId = string.IsNullOrEmpty(_userId) ? null : _userId,
-            };
-            await Sessions.AddForTenantAsync(session);
-
-            foreach (var opt in selected)
-            {
-                await Sessions.AddRepoForTenantAsync(new SessionRepoEntity
-                {
-                    Id = Guid.NewGuid(),
-                    TenantId = _tenantId,
-                    SessionId = sessionId,
-                    WorkspaceRepoId = opt.WorkspaceRepoId,
-                    Owner = opt.Owner,
-                    Repo = opt.Repo,
-                    DefaultBranch = opt.DefaultBranch,
-                    Status = "Pending",
-                });
-            }
-
-            Toasts.Show("Spine", $"Session created for #{ticket.Number} across {selected.Count} repo(s). Switch to Sessions to run it.", ToastKind.Ok);
+            Toasts.Show("Spine", $"Session created for #{ticket.Number} across {ordered.Count} repo(s). Switch to Sessions to run it.", ToastKind.Ok);
             CloseWorkDialog();
             await ReloadAll();
             _tab = Tab.Sessions;
@@ -1297,6 +1309,111 @@ else if (_tab == Tab.Sessions)
         catch (Exception ex)
         {
             Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Persist a session (+ its repo rows) for a ticket; returns the entity so the caller can run it.
+    // The single source of truth for "ticket → session", shared by Work-on-this, Run-all-ready, and
+    // the idea-wizard auto-run. repos[0] is the primary repo.
+    private async Task<RemoteSessionEntity> PersistSessionAsync(
+        Guid workspaceId, int? issueNumber, string title, string? itemNodeId, string ticketKind,
+        IReadOnlyList<RepoOption> repos)
+    {
+        var sessionId = Guid.NewGuid();
+        var primary = repos[0];
+        var session = new RemoteSessionEntity
+        {
+            Id = sessionId,
+            TenantId = _tenantId,
+            WorkspaceId = workspaceId,
+            MemberUserId = _userId,
+            Title = title,
+            Status = "Draft",
+            IssueNumber = issueNumber,
+            RepoOwner = primary.Owner,
+            RepoName = primary.Repo,
+            RepoDefaultBranch = primary.DefaultBranch,
+            BoardItemNodeId = itemNodeId,
+            TicketKind = ticketKind,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedByUserId = string.IsNullOrEmpty(_userId) ? null : _userId,
+        };
+        await Sessions.AddForTenantAsync(session);
+
+        foreach (var opt in repos)
+        {
+            await Sessions.AddRepoForTenantAsync(new SessionRepoEntity
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantId,
+                SessionId = sessionId,
+                WorkspaceRepoId = opt.WorkspaceRepoId,
+                Owner = opt.Owner,
+                Repo = opt.Repo,
+                DefaultBranch = opt.DefaultBranch,
+                Status = "Pending",
+            });
+        }
+        return session;
+    }
+
+    // The ai:ready tickets on the board that the spine can run unattended (real issue, has a repo).
+    private List<BoardTicket> ReadyTickets() => _tickets is null
+        ? new List<BoardTicket>()
+        : _tickets.Where(t => t.Labels.Contains(StandardLabels.AiReady)
+            && t.Kind != BoardTicketKind.DraftIssue && t.RepoOwner is not null && t.RepoName is not null).ToList();
+
+    private RepoOption RepoOptionForTicket(BoardTicket ticket)
+    {
+        var curated = (_repos ?? Array.Empty<WorkspaceRepoEntity>())
+            .FirstOrDefault(r => r.Owner == ticket.RepoOwner && r.Repo == ticket.RepoName);
+        return new RepoOption
+        {
+            Owner = ticket.RepoOwner!,
+            Repo = ticket.RepoName!,
+            DefaultBranch = curated?.DefaultBranch ?? "main",
+            WorkspaceRepoId = curated?.Id,
+            Selected = true,
+        };
+    }
+
+    // Batch: create a session per ai:ready ticket and run them all (the "server thinks, runner does"
+    // path, unattended). Shares PersistSessionAsync + RunSession with the single-ticket flow.
+    private async Task RunAllReady()
+    {
+        if (_busy || _selectedBoard is null) { return; }
+        var ready = ReadyTickets();
+        if (ready.Count == 0)
+        {
+            Toasts.Show("Spine", "No ai:ready tickets to run.", ToastKind.Err);
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var sessions = new List<RemoteSessionEntity>();
+            foreach (var ticket in ready)
+            {
+                sessions.Add(await PersistSessionAsync(
+                    _selectedBoard.Id, ticket.Number, $"#{ticket.Number} {ticket.Title}",
+                    ticket.ItemNodeId, ticket.Kind.ToString(), [RepoOptionForTicket(ticket)]));
+            }
+            Toasts.Show("Spine", $"Running {sessions.Count} ai:ready ticket(s)…", ToastKind.Ok);
+            await ReloadAll();
+            _tab = Tab.Sessions;
+            CloseBoard();
+            foreach (var s in sessions)
+            {
+                await RunSession(s);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err);
         }
         finally
         {
