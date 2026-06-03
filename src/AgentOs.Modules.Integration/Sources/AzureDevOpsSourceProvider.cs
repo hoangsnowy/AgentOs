@@ -40,4 +40,7 @@ public sealed class AzureDevOpsSourceProvider : ISourceProvider
 
     public Task<BoardTickets> ReadBoardTicketsAsync(BoardDescriptor board, CancellationToken cancellationToken = default)
         => throw new NotSupportedException(NotImplementedMessage);
+
+    public Task<LabelSyncResult> EnsureLabelsAsync(WorkspaceDescriptor repo, IReadOnlyList<LabelSpec> labels, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException(NotImplementedMessage);
 }

@@ -23,6 +23,7 @@
 @inject IRunnerPairingService Pairing
 @inject IAppConfigStore ConfigStore
 @inject IBoardTicketService BoardTicketSvc
+@inject IBoardWriteService BoardWriteSvc
 @inject AgentOs.Web.Services.ToastService Toasts
 @inject ISessionRunFeed Feed
 @inject IServiceScopeFactory ScopeFactory
@@ -202,6 +203,10 @@ else if (_tab == Tab.Boards)
                                 <td><code>@r.Owner/@r.Repo</code></td>
                                 <td>@r.DefaultBranch</td>
                                 <td class="actions">
+                                    <Btn Size="Btn.ButtonSize.Sm"
+                                         OnClick="@(() => SeedLabels(r))" Disabled="@(_busyId == r.Id)">
+                                        <Icon Name="tag" Size="13" /> Seed labels
+                                    </Btn>
                                     <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Danger"
                                          OnClick="@(() => RemoveRepo(r))" Disabled="@(_busyId == r.Id)">
                                         <Icon Name="x" Size="13" /> Remove
@@ -875,6 +880,40 @@ else if (_tab == Tab.Sessions)
         catch (Exception ex)
         {
             Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    // Seed the standard label taxonomy onto one repo under the board. Idempotent: already-present
+    // labels are skipped. Writes to real GitHub, so it surfaces scope/credential errors as toasts.
+    private async Task SeedLabels(WorkspaceRepoEntity repo)
+    {
+        if (_selectedBoard is null) { return; }
+        _busyId = repo.Id;
+        try
+        {
+            var pat = await ConfigStore.GetForTenantAsync(_tenantId, _selectedBoard.CredentialRef);
+            if (string.IsNullOrEmpty(pat))
+            {
+                Toasts.Show("Spine", "Could not retrieve board credentials. Reconnect the board.", ToastKind.Err);
+                return;
+            }
+
+            var descriptor = new WorkspaceDescriptor(
+                repo.Id, _tenantId, _selectedBoard.Kind, repo.Owner, repo.Repo, _selectedBoard.Project,
+                string.IsNullOrWhiteSpace(repo.DefaultBranch) ? "main" : repo.DefaultBranch, pat);
+            var result = await BoardWriteSvc.EnsureLabelsAsync(descriptor, StandardLabels.All);
+
+            Toasts.Show("Spine",
+                $"{repo.Owner}/{repo.Repo}: {result.Created.Count} label(s) created, {result.Existing.Count} already present.",
+                ToastKind.Ok);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err);
         }
         finally
         {

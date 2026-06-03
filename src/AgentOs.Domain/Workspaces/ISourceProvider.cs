@@ -40,6 +40,16 @@ public interface ISourceProvider
 
     /// <summary>Read the board's items (tickets) across all repos it spans.</summary>
     Task<BoardTickets> ReadBoardTicketsAsync(BoardDescriptor board, CancellationToken cancellationToken = default);
+
+    // ── Writes (bootstrap) ───────────────────────────────────────────────────────────────────────
+    // The first write members: stamping a standard label taxonomy and creating tickets from a
+    // generated RequirementSpec. Labels are repo-scoped, so they take a WorkspaceDescriptor.
+
+    /// <summary>
+    /// Idempotently ensure each <paramref name="labels"/> entry exists on the repo (create the
+    /// missing ones, skip those already present, matched by name case-insensitively).
+    /// </summary>
+    Task<LabelSyncResult> EnsureLabelsAsync(WorkspaceDescriptor repo, IReadOnlyList<LabelSpec> labels, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Resolves the right <see cref="ISourceProvider"/> for a <see cref="SourceProviderKind"/>.</summary>

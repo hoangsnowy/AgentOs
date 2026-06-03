@@ -138,6 +138,45 @@ public sealed class GitHubSourceProvider : ISourceProvider
         return GitHubProjectsClient.ReadItemsAsync(board, cancellationToken);
     }
 
+    // ── Writes (bootstrap) ───────────────────────────────────────────────────────────────────────
+
+    public async Task<LabelSyncResult> EnsureLabelsAsync(WorkspaceDescriptor repo, IReadOnlyList<LabelSpec> labels, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(repo);
+        ArgumentNullException.ThrowIfNull(labels);
+        var client = CreateClient(repo.AccessToken, repo.Host);
+
+        IReadOnlyList<Label> existing;
+        try
+        {
+            existing = await client.Issue.Labels.GetAllForRepository(repo.Owner, repo.Repo).ConfigureAwait(false);
+        }
+        catch (AuthorizationException)
+        {
+            throw new InvalidOperationException("GitHub rejected the token. Check it has 'repo' scope and isn't expired.");
+        }
+        catch (NotFoundException)
+        {
+            throw new InvalidOperationException($"Repository {repo.Owner}/{repo.Repo} was not found (or the token can't see it).");
+        }
+
+        var (toCreate, alreadyThere) = LabelSync.Partition(existing.Select(l => l.Name), labels);
+
+        var created = new List<string>();
+        foreach (var spec in toCreate)
+        {
+            var newLabel = new NewLabel(spec.Name, LabelSync.NormalizeColor(spec.Color));
+            if (!string.IsNullOrWhiteSpace(spec.Description))
+            {
+                newLabel.Description = spec.Description;
+            }
+            await client.Issue.Labels.Create(repo.Owner, repo.Repo, newLabel).ConfigureAwait(false);
+            created.Add(spec.Name);
+        }
+
+        return new LabelSyncResult(created, alreadyThere);
+    }
+
     private static GitHubClient CreateClient(string token, string? host)
     {
         var header = new ProductHeaderValue(UserAgent);
