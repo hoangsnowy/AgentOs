@@ -5,18 +5,19 @@ name: Deploy (azd / Aspire)
 #
 # One-time setup (easiest): run `azd pipeline config` locally — it wires OIDC + repo vars/secrets.
 # Manual setup: repo secrets AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID (existing),
-#               repo variables AZURE_ENV_NAME (e.g. agentic-sdlc-dev) + AZURE_LOCATION (e.g. southeastasia).
+#               repo variables AZURE_ENV_NAME (e.g. agentos-dev) + AZURE_LOCATION (e.g. southeastasia).
 # NOTE: the OIDC service principal needs Owner or "User Access Administrator" (azd creates role
 #       assignments for the managed identity → ACR pull + Key Vault). Contributor alone is not enough.
 
 on:
+  # Manual "try a deploy" — always allowed (needs the Azure creds + env vars below configured).
   workflow_dispatch:
-  # push trigger disabled — re-enable when Azure creds are configured
-  # push:
-  #   branches: [ main ]
-  #   paths-ignore:
-  #     - 'docs/**'
-  #     - '**.md'
+  # Continuous delivery: after CI succeeds on main, deploy — but only once the gate variable
+  # AZURE_DEPLOY_ENABLED is set to 'true' (so main stays green before Azure creds exist).
+  workflow_run:
+    workflows: [ "CI" ]
+    types: [ completed ]
+    branches: [ main ]
 
 permissions:
   id-token: write
@@ -26,6 +27,9 @@ jobs:
   deploy:
     name: Provision & Deploy
     runs-on: ubuntu-latest
+    # Auto-deploy only when CI passed on main AND the deploy gate is on. A manual run always proceeds.
+    # Flip the gate once setup is done:  gh variable set AZURE_DEPLOY_ENABLED --body true
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && vars.AZURE_DEPLOY_ENABLED == 'true') }}
     env:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
