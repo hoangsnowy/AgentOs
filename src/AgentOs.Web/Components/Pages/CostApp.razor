@@ -1,0 +1,170 @@
+@* CostApp — admin view of LLM spend across the 5-agent pipeline. Reads the persisted run_metrics
+   (one row per LLM call) and shows headline totals + breakdowns by agent / provider / model / day.
+   Admin-gated (AdminOnly in AppCatalog + a re-check here). Tenant is read from AuthenticationState —
+   a circuit has no HttpContext — and passed to the tenant-explicit GetCostSummaryForTenantAsync. *@
+
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Modules.Pipeline.Persistence
+@inject IPipelineRunRepository Runs
+@inject AgentOs.Web.Services.ToastService Toasts
+
+@if (!_resolved)
+{
+    <Spinner />
+}
+else if (!_isAdmin)
+{
+    <div class="login-error">Admin role required to view LLM cost.</div>
+}
+else
+{
+    <header class="page-head">
+        <div>
+            <h1 class="page-title">Cost · <code>@_tenantId</code></h1>
+            <p class="page-sub">LLM spend across the 5-agent pipeline — @_rangeLabel.</p>
+        </div>
+        <div class="cost-actions">
+            <Btn Size="Btn.ButtonSize.Sm" Variant="@RangeVariant(7)"  OnClick="() => SetRange(7)"  Disabled="_loading">7d</Btn>
+            <Btn Size="Btn.ButtonSize.Sm" Variant="@RangeVariant(30)" OnClick="() => SetRange(30)" Disabled="_loading">30d</Btn>
+            <Btn Size="Btn.ButtonSize.Sm" Variant="@RangeVariant(0)"  OnClick="() => SetRange(0)"  Disabled="_loading">All</Btn>
+            <Btn OnClick="Reload" Disabled="_loading"><Icon Name="arrow-clockwise" Size="14" /> Refresh</Btn>
+        </div>
+    </header>
+
+    @if (_summary is null)
+    {
+        <Spinner />
+    }
+    else if (_summary.CallCount == 0)
+    {
+        <div class="muted spine-empty">
+            No LLM calls recorded @(_days == 0 ? "yet" : "in " + _rangeLabel).
+            Cost appears here after a pipeline run.
+        </div>
+    }
+    else
+    {
+        <div class="metrics">
+            <div class="metric">
+                <div class="v">@Money(_summary.TotalCostUsd)</div>
+                <div class="k">Total cost (USD)</div>
+            </div>
+            <div class="metric">
+                <div class="v">@Num(_summary.TotalTokensIn) → @Num(_summary.TotalTokensOut)</div>
+                <div class="k">Tokens in → out</div>
+            </div>
+            <div class="metric">
+                <div class="v">@Num(_summary.RunCount)</div>
+                <div class="k">Pipeline runs</div>
+            </div>
+            <div class="metric">
+                <div class="v">@Num(_summary.CallCount)</div>
+                <div class="k">LLM calls</div>
+            </div>
+        </div>
+
+        <div class="cost-grid">
+            @foreach (var bd in Breakdowns())
+            {
+                <Panel Title="@bd.Title">
+                    @if (bd.Rows.Count == 0)
+                    {
+                        <div class="muted">No data.</div>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>@bd.Header</th>
+                                    <th class="num">Cost</th>
+                                    <th class="num">In</th>
+                                    <th class="num">Out</th>
+                                    <th class="num">Calls</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var b in bd.Rows)
+                                {
+                                    <tr>
+                                        <td><code>@b.Key</code></td>
+                                        <td class="num">@Money(b.CostUsd)</td>
+                                        <td class="num">@Num(b.TokensIn)</td>
+                                        <td class="num">@Num(b.TokensOut)</td>
+                                        <td class="num">@Num(b.Calls)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </Panel>
+            }
+        </div>
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _resolved;
+    private bool _isAdmin;
+    private bool _loading;
+    private string _tenantId = "default";
+    private int _days;                       // 0 = all time (default)
+    private string _rangeLabel = "all time";
+    private CostSummary? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsInRole("admin");
+            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
+        }
+        _resolved = true;
+        if (_isAdmin) { await LoadAsync(); }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            DateTimeOffset? since = _days > 0 ? DateTimeOffset.UtcNow.AddDays(-_days) : null;
+            _summary = await Runs.GetCostSummaryForTenantAsync(_tenantId, since);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Cost", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SetRange(int days)
+    {
+        _days = days;
+        _rangeLabel = days switch { 0 => "all time", 7 => "last 7 days", _ => $"last {days} days" };
+        await LoadAsync();
+    }
+
+    private async Task Reload() => await LoadAsync();
+
+    private Btn.ButtonVariant RangeVariant(int days) =>
+        _days == days ? Btn.ButtonVariant.Primary : Btn.ButtonVariant.Default;
+
+    private IEnumerable<(string Title, string Header, IReadOnlyList<CostBucket> Rows)> Breakdowns() =>
+    [
+        ("By agent",    "Agent",    _summary!.ByAgent),
+        ("By provider", "Provider", _summary!.ByProvider),
+        ("By model",    "Model",    _summary!.ByModel),
+        ("By day",      "Day",      _summary!.ByDay),
+    ];
+
+    private static string Money(decimal v) => "$" + v.ToString("0.0000", CultureInfo.InvariantCulture);
+    private static string Num(int v) => v.ToString("N0", CultureInfo.InvariantCulture);
+}
