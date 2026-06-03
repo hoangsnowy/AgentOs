@@ -1153,6 +1153,8 @@ select {
     background: rgba(35,38,41,.92);
     border-color: rgba(255,255,255,.10);
 }
+/* Wider variant for the signup card (more fields than login). */
+.login-card-wide { width: 420px; }
 .login-brand {
     display: flex; align-items: center; gap: 12px;
     padding-bottom: 14px;

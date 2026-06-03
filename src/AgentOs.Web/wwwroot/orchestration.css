@@ -1,4 +1,4 @@
-/* Agent Studio editor theme — light by default; dark via [data-theme="dark"]. */
+/* AgentOS orchestration editor theme — light by default; dark via [data-theme="dark"]. */
 
 :root[data-theme="dark"] {
     /* surfaces */
