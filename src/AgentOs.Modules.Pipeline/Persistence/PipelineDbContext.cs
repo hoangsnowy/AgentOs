@@ -60,7 +60,9 @@ internal sealed class PipelineDbContext : DbContext
             e.Property(x => x.Provider).HasMaxLength(64).IsRequired();
             e.Property(x => x.CostUsd).HasPrecision(18, 6);
             e.HasIndex(x => x.RunId);
-            e.HasIndex(x => x.TenantId);
+            // Composite supports the cost summary's TenantId filter + TimestampUtc range/group (and the
+            // leftmost-prefix covers plain TenantId lookups, so no separate TenantId index is needed).
+            e.HasIndex(x => new { x.TenantId, x.TimestampUtc });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 

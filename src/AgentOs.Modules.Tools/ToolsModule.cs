@@ -31,16 +31,24 @@ public sealed class ToolsModule : IModule, IInitializableModule
         // Evidence sink: durable EF-backed when a DB is configured, else the in-memory ring buffer
         // (dev / CI). The schema `tools` keeps tool-invocation evidence as a first-class audit trail.
         var connectionString = configuration.GetConnectionString("DefaultConnection");
+        // The inner sink is the real persistence (durable EF when a DB is wired, else the in-memory ring).
+        // It is wrapped by BufferedToolInvocationLog so the gateway's AppendAsync is a non-blocking enqueue
+        // (M6 perf — keeps per-tool-call DB writes off the run's critical path; drained on a background loop
+        // started in InitializeAsync).
         if (!string.IsNullOrWhiteSpace(connectionString))
         {
             services.AddDbContext<ToolsDbContext>(opt =>
                 opt.UseNpgsql(connectionString, npg =>
                     npg.MigrationsHistoryTable("__EFMigrationsHistory", schema: "tools")));
-            services.TryAddSingleton<IToolInvocationLog, EfToolInvocationLog>();
+            services.TryAddSingleton<EfToolInvocationLog>();
+            services.TryAddSingleton<IToolInvocationLog>(sp =>
+                new BufferedToolInvocationLog(sp.GetRequiredService<EfToolInvocationLog>()));
         }
         else
         {
-            services.TryAddSingleton<IToolInvocationLog, InMemoryToolInvocationLog>();
+            services.TryAddSingleton<InMemoryToolInvocationLog>();
+            services.TryAddSingleton<IToolInvocationLog>(sp =>
+                new BufferedToolInvocationLog(sp.GetRequiredService<InMemoryToolInvocationLog>()));
         }
 
         // M1 — the shared policy-gate + invoke + evidence seam. Every governed execution path
@@ -60,6 +68,9 @@ public sealed class ToolsModule : IModule, IInitializableModule
         {
             registry.Register(tool);
         }
+
+        // Start the single background drain loop for the buffered evidence log.
+        (services.GetService<IToolInvocationLog>() as BufferedToolInvocationLog)?.StartDraining();
 
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetService<ToolsDbContext>();

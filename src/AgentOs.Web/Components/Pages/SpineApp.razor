@@ -548,7 +548,9 @@ else if (_tab == Tab.Sessions)
 
     // ── Live run activity (M6 — a live event stream backs the feed; the poll is now just a backstop) ──
     private readonly Dictionary<Guid, List<SessionRunEvent>> _activity = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<SessionRunEvent> _incoming = new();
     private System.Threading.CancellationTokenSource? _cts;
+    private System.Threading.Timer? _renderTimer;   // coalesces feed renders (~150ms) to avoid burst thrash
 
     // ── Board detail (repos + tickets) ────────────────────────────────────────────────────────
     private WorkspaceEntity? _selectedBoard;
@@ -620,11 +622,16 @@ else if (_tab == Tab.Sessions)
         // Subscribe to the live session-run stream for this tenant (background loop, tied to the circuit).
         _cts = new System.Threading.CancellationTokenSource();
         _ = ListenAsync(_cts.Token);
+        // Coalesce feed renders: fold queued events + render at most once per ~150ms (see FlushFeed).
+        _renderTimer = new System.Threading.Timer(
+            _ => InvokeAsync(FlushFeed), null,
+            TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(150));
     }
 
     public void Dispose()
     {
         _pollTimer?.Dispose();
+        _renderTimer?.Dispose();
         if (_cts is not null)
         {
             _cts.Cancel();
@@ -684,37 +691,47 @@ else if (_tab == Tab.Sessions)
     {
         try
         {
+            // Lean producer: just enqueue. FlushFeed (the ~150ms render timer) folds events into _activity
+            // and renders ONCE per tick, so an event burst during a run can't thrash the circuit.
             await foreach (var ev in Feed.Subscribe(_tenantId, ct))
             {
-                var captured = ev;
-                await InvokeAsync(async () =>
-                {
-                    // Surface activity only for sessions this user can see (the stream is per-tenant).
-                    if (_sessions is null || !_sessions.Any(s => s.Id == captured.SessionId))
-                    {
-                        return;
-                    }
-                    if (!_activity.TryGetValue(captured.SessionId, out var list))
-                    {
-                        list = new List<SessionRunEvent>();
-                        _activity[captured.SessionId] = list;
-                    }
-                    list.Add(captured);
-                    if (list.Count > 40) { list.RemoveRange(0, list.Count - 40); }
-
-                    // The DB stays authoritative — re-read on terminal/per-repo events so PR links + final
-                    // status are right even if a stream event was dropped.
-                    if (captured.Kind is SessionRunEventKind.RepoDone
-                        or SessionRunEventKind.Done or SessionRunEventKind.Failed)
-                    {
-                        await ReloadSessionsState();
-                    }
-                    StateHasChanged();
-                });
+                _incoming.Enqueue(ev);
             }
         }
         catch (OperationCanceledException) { /* circuit closing — expected */ }
         catch { /* stream fault — the backstop poll still reconciles from the DB */ }
+    }
+
+    // Runs on the circuit thread (via InvokeAsync from the render timer): drain queued events, fold them
+    // into the per-session feed, and render at most once per tick.
+    private async Task FlushFeed()
+    {
+        if (_incoming.IsEmpty) { return; }
+
+        var changed = false;
+        var sawTerminal = false;
+        while (_incoming.TryDequeue(out var ev))
+        {
+            // Surface activity only for sessions this user can see (the stream is per-tenant).
+            if (_sessions is null || !_sessions.Any(s => s.Id == ev.SessionId)) { continue; }
+            if (!_activity.TryGetValue(ev.SessionId, out var list))
+            {
+                list = new List<SessionRunEvent>();
+                _activity[ev.SessionId] = list;
+            }
+            list.Add(ev);
+            if (list.Count > 40) { list.RemoveRange(0, list.Count - 40); }
+            changed = true;
+            if (ev.Kind is SessionRunEventKind.RepoDone or SessionRunEventKind.Done or SessionRunEventKind.Failed)
+            {
+                sawTerminal = true;
+            }
+        }
+
+        // The DB stays authoritative — re-read on terminal/per-repo events so PR links + final status are
+        // right even if a stream event was dropped.
+        if (sawTerminal) { await ReloadSessionsState(); }
+        if (changed || sawTerminal) { StateHasChanged(); }
     }
 
     private async Task ReloadSessionsState()
