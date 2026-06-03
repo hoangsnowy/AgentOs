@@ -1,6 +1,6 @@
 # AgentOS Design System
 
-> Single source of truth for the AgentOS "Agent Studio" UI. Read this before adding any screen,
+> Single source of truth for the AgentOS desktop UI. Read this before adding any screen,
 > component, or style. If a value isn't here, it goes through a **token** — never a magic number.
 
 ## North star
