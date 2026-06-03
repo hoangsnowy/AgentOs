@@ -118,4 +118,68 @@ internal sealed class PipelineRunRepository(PipelineDbContext db, ITenantContext
                 x.UserStoryText.Length > 120 ? x.UserStoryText.Substring(0, 120) : x.UserStoryText))
             .ToListAsync(ct);
     }
+
+    public async Task<CostSummary> GetCostSummaryForTenantAsync(
+        string tenantId, DateTimeOffset? since = null, CancellationToken ct = default)
+    {
+        // Tenant-explicit: bypass the ITenantContext-driven global query filter (a Blazor circuit has
+        // no HttpContext, so ITenantContext is blank) and scope to the tenant the caller passed in.
+        var q = db.RunMetrics
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(m => m.TenantId == tenantId);
+        if (since is { } cutoff)
+        {
+            q = q.Where(m => m.TimestampUtc >= cutoff);
+        }
+
+        var rows = await q
+            .Select(m => new CostRow(
+                m.RunId, m.AgentName, m.Provider, m.Model,
+                m.TokensIn, m.TokensOut, m.CostUsd, m.TimestampUtc))
+            .ToListAsync(ct);
+
+        if (rows.Count == 0)
+        {
+            return CostSummary.Empty;
+        }
+
+        List<CostBucket> By(Func<CostRow, string> key) =>
+            [.. rows
+                .GroupBy(key)
+                .Select(g => new CostBucket(
+                    g.Key,
+                    g.Sum(r => r.CostUsd),
+                    g.Sum(r => r.TokensIn),
+                    g.Sum(r => r.TokensOut),
+                    g.Count()))
+                .OrderByDescending(b => b.CostUsd)];
+
+        var byDay = rows
+            .GroupBy(r => r.TimestampUtc.UtcDateTime.Date)
+            .Select(g => new CostBucket(
+                g.Key.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                g.Sum(r => r.CostUsd),
+                g.Sum(r => r.TokensIn),
+                g.Sum(r => r.TokensOut),
+                g.Count()))
+            .OrderBy(b => b.Key, StringComparer.Ordinal)
+            .ToList();
+
+        return new CostSummary(
+            rows.Sum(r => r.CostUsd),
+            rows.Sum(r => r.TokensIn),
+            rows.Sum(r => r.TokensOut),
+            rows.Count,
+            rows.Select(r => r.RunId).Distinct().Count(),
+            By(r => r.Agent),
+            By(r => r.Provider),
+            By(r => r.Model),
+            byDay);
+    }
+
+    // Flattened metric row for in-memory grouping (one materialize, then group 4 ways).
+    private readonly record struct CostRow(
+        Guid RunId, string Agent, string Provider, string Model,
+        int TokensIn, int TokensOut, decimal CostUsd, DateTimeOffset TimestampUtc);
 }

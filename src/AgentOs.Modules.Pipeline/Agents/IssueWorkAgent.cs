@@ -24,11 +24,13 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
     private readonly ILlmClientFactory _factory;
     private readonly AgentOptions _agentOpts;
     private readonly ILogger<IssueWorkAgent> _logger;
+    private readonly ISessionRunFeed? _feed;
 
     public IssueWorkAgent(
         ILlmClientFactory factory,
         IOptions<AgentsOptions> options,
-        ILogger<IssueWorkAgent> logger)
+        ILogger<IssueWorkAgent> logger,
+        ISessionRunFeed? feed = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(options);
@@ -39,7 +41,13 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         _factory = factory;
         _agentOpts = options.Value.IssueWork;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        // Optional: the live progress feed (null in unit tests / hosts that don't register it).
+        _feed = feed;
     }
+
+    // Best-effort publish to the live session-run feed — never throws, no-op when unsubscribed.
+    private void Emit(IssueWorkRequest req, SessionRunEventKind kind, string message, string? repo = null) =>
+        _feed?.Publish(new SessionRunEvent(req.TenantId, req.SessionId, kind, message, DateTimeOffset.UtcNow, repo));
 
     /// <inheritdoc />
     public async Task<IssueWorkResult> RunAsync(IssueWorkRequest request, CancellationToken ct = default)
@@ -55,6 +63,8 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
             "IssueWorkAgent: starting session {SessionId} for ticket #{IssueNumber} across {RepoCount} repo(s)",
             request.SessionId, request.IssueNumber, request.Repos.Count);
 
+        Emit(request, SessionRunEventKind.Running, $"Dispatched to runner — {request.Repos.Count} repo(s).");
+
         ILlmClient llm;
         try
         {
@@ -63,6 +73,7 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         catch (Exception ex)
         {
             _logger.LogError(ex, "IssueWorkAgent: LLM client init failed for session {SessionId}", request.SessionId);
+            Emit(request, SessionRunEventKind.Step, $"LLM client init failed: {ex.Message}");
             // No repo could run — report each as failed so the caller can surface it per repo.
             var failed = request.Repos
                 .Select(r => new RepoWorkOutcome(r.SessionRepoId, false, r.Owner, r.Repo, "", "", $"LLM client init failed: {ex.Message}"))
@@ -73,7 +84,15 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         var outcomes = new List<RepoWorkOutcome>(request.Repos.Count);
         foreach (var repo in request.Repos)
         {
-            outcomes.Add(await RunOneAsync(llm, request, repo, ct).ConfigureAwait(false));
+            var repoLabel = $"{repo.Owner}/{repo.Repo}";
+            Emit(request, SessionRunEventKind.RepoStarted, $"{repoLabel} — implementing…", repoLabel);
+            var outcome = await RunOneAsync(llm, request, repo, ct).ConfigureAwait(false);
+            Emit(request, SessionRunEventKind.Step,
+                outcome.Ok
+                    ? $"{repoLabel} — pushed branch {outcome.BranchName}"
+                    : $"{repoLabel} — agent failed: {outcome.Error}",
+                repoLabel);
+            outcomes.Add(outcome);
         }
 
         var ok = outcomes.All(o => o.Ok);

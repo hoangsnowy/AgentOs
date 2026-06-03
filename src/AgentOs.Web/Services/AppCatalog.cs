@@ -39,6 +39,7 @@ public static class AppCatalog
         new("spine",    "Spine",    "git-pull-request", "Boards → tickets → AI sessions", "Agents", 940, 640),
         new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: true, AdminOnly: true),
         new("evidence", "Evidence", "lock",  "Tool-invocation audit trail",   "Admin", 960, 620, Pinned: true, AdminOnly: true),
+        new("cost",     "Cost",     "graph", "LLM spend by agent, provider, model", "Admin", 1000, 660, Pinned: true, AdminOnly: true),
         new("settings", "Settings", "gear",  "LLM keys, providers, GitHub",   "System", 760, 600),
         new("system",   "System",   "wrench","OS appearance, themes, about",  "System", 760, 600),
     };

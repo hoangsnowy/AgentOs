@@ -919,6 +919,7 @@ select {
 .data-table tbody tr:last-child td { border-bottom: 0; }
 .data-table tbody tr:hover td { background: var(--bg-3); }
 .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table th.num { text-align: right; }
 .data-table td.actions { text-align: right; white-space: nowrap; }
 .data-table .row-actions { display: inline-flex; gap: var(--space-1); justify-content: flex-end; }
 .data-table code { font-family: var(--mono); background: var(--bg-3); padding: 1px 6px; border-radius: var(--r-2); font-size: 12px; }
@@ -1152,6 +1153,8 @@ select {
     background: rgba(35,38,41,.92);
     border-color: rgba(255,255,255,.10);
 }
+/* Wider variant for the signup card (more fields than login). */
+.login-card-wide { width: 420px; }
 .login-brand {
     display: flex; align-items: center; gap: 12px;
     padding-bottom: 14px;
@@ -2532,3 +2535,21 @@ input[type=range] { accent-color: var(--accent); }
 /* Spine — per-repo breakdown inside a session row */
 .spine-session-repo { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); margin: 2px 0; }
 .spine-session-repo-err { color: var(--color-err, #e55); font-weight: 700; cursor: help; }
+
+/* Live run activity feed (M6) — a session's streamed progress, under its row. */
+.spine-activity-tr td { padding-top: 0; }
+.spine-activity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 140px;
+    overflow-y: auto;
+    padding: var(--space-2);
+    background: var(--bg-sunk);
+    border: 1px solid var(--line);
+    border-radius: var(--r-2);
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+}
+.spine-activity-row { display: flex; gap: var(--space-2); color: var(--txt-soft); }
+.spine-activity-time { color: var(--txt-dim); flex: 0 0 auto; }
