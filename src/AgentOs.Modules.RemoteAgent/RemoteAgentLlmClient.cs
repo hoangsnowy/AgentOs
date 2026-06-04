@@ -39,7 +39,10 @@ public sealed class RemoteAgentLlmClient : ILlmClient
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
 
-        var target = new RunnerTarget(_tenant.TenantId, _tenant.UserId ?? string.Empty);
+        // Background session work (a Blazor circuit's Task.Run) has no HttpContext, so ITenantContext is
+        // blank there; the session seeds AmbientIdentity so the dispatch targets the member's own runner.
+        var amb = AmbientIdentity.Current;
+        var target = new RunnerTarget(amb?.TenantId ?? _tenant.TenantId, amb?.UserId ?? _tenant.UserId ?? string.Empty);
         if (!_broker.HasRunnerFor(target))
         {
             throw new LlmException(

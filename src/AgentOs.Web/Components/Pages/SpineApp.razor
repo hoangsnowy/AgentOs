@@ -1495,6 +1495,9 @@ else if (_tab == Tab.Sessions)
                 try
                 {
                     using var scope = ScopeFactory.CreateScope();
+                    // No HttpContext in this Task.Run, so seed the captured tenant + member as the ambient
+                    // identity — the LLM tool tenant + the runner dispatch read it to target the right runner.
+                    using var _identity = AgentOs.SharedKernel.Identity.AmbientIdentity.Push(capturedTenantId, capturedSession.MemberUserId);
                     var agent = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Sessions.IIssueWorkAgent>();
                     var prService = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Workspaces.IPrCreationService>();
                     var sessRepo = scope.ServiceProvider.GetRequiredService<AgentOs.Modules.Sessions.Persistence.ISessionRepository>();
