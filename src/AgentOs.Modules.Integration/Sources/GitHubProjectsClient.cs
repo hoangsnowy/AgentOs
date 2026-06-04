@@ -70,6 +70,29 @@ internal static class GitHubProjectsClient
         }
         """;
 
+    private const string AddItemMutation = """
+        mutation($projectId:ID!,$contentId:ID!){
+          addProjectV2ItemById(input:{projectId:$projectId, contentId:$contentId}){ item { id } }
+        }
+        """;
+
+    /// <summary>Add an issue/PR (by its content node id) to a board; returns the new board ITEM node id.</summary>
+    public static async Task<string> AddItemToBoardAsync(
+        string projectNodeId, string contentNodeId, string token, string? host, CancellationToken ct)
+    {
+        var data = await PostAsync(
+            AddItemMutation, new { projectId = projectNodeId, contentId = contentNodeId }, token, host, ct,
+            forbiddenHint: "Adding a ticket to the board needs the 'write:project' (Projects: Write) scope.").ConfigureAwait(false);
+
+        if (data.TryGetProperty("addProjectV2ItemById", out var add) && add.ValueKind == JsonValueKind.Object
+            && add.TryGetProperty("item", out var item) && item.ValueKind == JsonValueKind.Object
+            && item.TryGetProperty("id", out var id))
+        {
+            return id.GetString() ?? string.Empty;
+        }
+        throw new InvalidOperationException("GitHub did not return the new board item id.");
+    }
+
     /// <summary>List the Projects v2 boards owned by <paramref name="owner"/> under the given scope.</summary>
     public static async Task<IReadOnlyList<BoardSummary>> ListBoardsAsync(
         string owner, string scope, string token, string? host, CancellationToken ct)
@@ -280,8 +303,8 @@ internal static class GitHubProjectsClient
         return new Uri($"{host.TrimEnd('/')}/api/graphql");
     }
 
-    /// <summary>POST a GraphQL query; returns a standalone clone of the <c>data</c> element. Throws on HTTP/GraphQL errors with a scope-aware message.</summary>
-    private static async Task<JsonElement> PostAsync(string query, object variables, string token, string? host, CancellationToken ct)
+    /// <summary>POST a GraphQL query/mutation; returns a standalone clone of the <c>data</c> element. Throws on HTTP/GraphQL errors with a scope-aware message (<paramref name="forbiddenHint"/> overrides the default read-scope hint for writes).</summary>
+    private static async Task<JsonElement> PostAsync(string query, object variables, string token, string? host, CancellationToken ct, string? forbiddenHint = null)
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, GraphQlEndpoint(host));
         req.Headers.UserAgent.ParseAdd(UserAgent);
@@ -308,7 +331,7 @@ internal static class GitHubProjectsClient
             throw type switch
             {
                 "FORBIDDEN" => new InvalidOperationException(
-                    "GitHub denied access to the board — the token needs the 'read:project' (Projects: Read) scope. " + message),
+                    (forbiddenHint ?? "GitHub denied access to the board — the token needs the 'read:project' (Projects: Read) scope.") + " " + message),
                 "NOT_FOUND" => new InvalidOperationException(
                     "Board not found, or the token can't see it. " + message),
                 _ => new InvalidOperationException(message ?? "GitHub GraphQL error."),

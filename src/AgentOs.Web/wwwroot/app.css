@@ -2553,3 +2553,22 @@ input[type=range] { accent-color: var(--accent); }
 }
 .spine-activity-row { display: flex; gap: var(--space-2); color: var(--txt-soft); }
 .spine-activity-time { color: var(--txt-dim); flex: 0 0 auto; }
+
+/* Spine — "Start from idea" wizard (bootstrap) */
+.spine-wizard-steps { display: flex; gap: var(--space-2); margin: var(--space-2) 0 var(--space-4); flex-wrap: wrap; }
+.spine-wizard-step {
+    font-size: var(--fs-xs); color: var(--text-tertiary);
+    padding: 4px var(--space-2); border-radius: var(--r-2, 8px);
+    border: 1px solid var(--line); background: var(--bg-sunk);
+}
+.spine-wizard-step.active { color: var(--text-primary); border-color: var(--accent, #3b82f6); }
+.spine-wizard-step.done { color: var(--text-primary); opacity: 0.7; }
+.spine-spec {
+    padding: var(--space-3); margin-bottom: var(--space-3);
+    border: 1px solid var(--line); border-radius: var(--r-2, 8px);
+    background: var(--bg-sunk);
+}
+.spine-spec h3 { margin: 0 0 var(--space-1); font-size: var(--fs-sm); }
+.spine-ticket-title { width: 100%; }
+.spine-runall { margin-bottom: var(--space-3); }
+.spine-ai-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-tertiary); white-space: nowrap; }

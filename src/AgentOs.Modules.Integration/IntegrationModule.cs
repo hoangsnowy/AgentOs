@@ -20,6 +20,7 @@ public sealed class IntegrationModule : IModule
         services.AddGitHubIntegration();
         services.AddBuildVerifier();
         services.AddTransient<IBoardTicketService, BoardTicketService>();
+        services.AddTransient<IBoardWriteService, BoardWriteService>();
         services.AddTransient<AgentOs.Domain.Workspaces.IPrCreationService, GitHubPrCreationService>();
         // Epic E2 — wrap IBuildVerifier as an ITool so agents can call it via FunctionInvokingChatClient.
         // ToolsModule.InitializeAsync pumps every ITool DI registration into the IToolRegistry at startup.

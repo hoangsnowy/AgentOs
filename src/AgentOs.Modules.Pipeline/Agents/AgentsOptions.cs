@@ -28,6 +28,9 @@ public sealed class AgentsOptions
 
     /// <summary>IssueWorkAgent configuration (M5 — agentic issue→PR pipeline).</summary>
     public AgentOptions IssueWork { get; set; } = new() { Model = "claude-sonnet-4-20250514", Temperature = 0.2, MaxTokens = 32768 };
+
+    /// <summary>TicketDecomposerAgent configuration (bootstrap — RequirementSpec → board tickets).</summary>
+    public AgentOptions Decomposer { get; set; } = new() { Model = "claude-sonnet-4", Temperature = 0.2, MaxTokens = 4000 };
 }
 
 /// <summary>Configuration for a single agent.</summary>
