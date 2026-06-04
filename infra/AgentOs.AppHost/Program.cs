@@ -68,8 +68,15 @@ builder.AddProject<Projects.AgentOs_Api>("api")
     .WithEnvironment("Email__FromName", "AgentOS")
     .WaitFor(mailhog);
 
-builder.AddProject<Projects.AgentOs_Web>("web")
+// launchProfileName: null — DROP the project's launchSettings "http" profile (applicationUrl
+// http://localhost:5180). Otherwise it overrides WithHttpsEndpoint and Kestrel binds plain HTTP on
+// 5180; the browser then gets ERR_SSL_PROTOCOL_ERROR on https://localhost:5180, and OIDC builds a
+// http:// redirect_uri that the realm (https-only redirectUris) rejects with 'Invalid parameter:
+// redirect_uri' → 500. With the profile gone, the only endpoint is the explicit https:5180, so set
+// the Development environment here (the profile used to).
+builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null)
     .WithHttpsEndpoint(port: 5180, name: "https")
+    .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     // Full stack uses real Keycloak OIDC — turn OFF the standalone dev-run auto-login.
     .WithEnvironment("Auth__DevAutoLogin", "false")
     .WithReference(db).WaitFor(db)
