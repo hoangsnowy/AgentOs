@@ -21,6 +21,10 @@ namespace AgentOs.Modules.Pipeline.Agents;
 /// <summary>Implements a ticket fix via an agentic tool-use loop on the paired runner, per target repo.</summary>
 public sealed class IssueWorkAgent : IIssueWorkAgent
 {
+    // A single agentic CLI run on the member's machine (clone → build → test → push) far outlasts the
+    // RemoteAgent default 120s dispatch cap, so CLI-mode runs get a generous deadline.
+    private static readonly TimeSpan CliRunTimeout = TimeSpan.FromMinutes(20);
+
     private readonly ILlmClientFactory _factory;
     private readonly AgentOptions _agentOpts;
     private readonly ILogger<IssueWorkAgent> _logger;
@@ -63,12 +67,20 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
             "IssueWorkAgent: starting session {SessionId} for ticket #{IssueNumber} across {RepoCount} repo(s)",
             request.SessionId, request.IssueNumber, request.Repos.Count);
 
-        Emit(request, SessionRunEventKind.Running, $"Dispatched to runner — {request.Repos.Count} repo(s).");
+        // RemoteAgent provider = route the WHOLE agentic loop to the member's paired dev-machine CLI
+        // (claude-code / codex). That CLI has its own native tools (no runner_shell), so we switch to
+        // the CLI-mode prompt + a long dispatch timeout, and the run costs zero server tokens.
+        var providerName = request.ProviderOverride ?? _agentOpts.Provider;
+        var cliMode = providerName.Trim().ToUpperInvariant() is "REMOTEAGENT" or "REMOTE" or "IDE";
+
+        Emit(request, SessionRunEventKind.Running, cliMode
+            ? $"Running on your machine's CLI — {request.Repos.Count} repo(s), 0 server tokens."
+            : $"Dispatched to runner — {request.Repos.Count} repo(s).");
 
         ILlmClient llm;
         try
         {
-            llm = _factory.Create(_agentOpts.Provider);
+            llm = _factory.Create(providerName);
         }
         catch (Exception ex)
         {
@@ -86,7 +98,7 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         {
             var repoLabel = $"{repo.Owner}/{repo.Repo}";
             Emit(request, SessionRunEventKind.RepoStarted, $"{repoLabel} — implementing…", repoLabel);
-            var outcome = await RunOneAsync(llm, request, repo, ct).ConfigureAwait(false);
+            var outcome = await RunOneAsync(llm, request, repo, cliMode, ct).ConfigureAwait(false);
             Emit(request, SessionRunEventKind.Step,
                 outcome.Ok
                     ? $"{repoLabel} — pushed branch {outcome.BranchName}"
@@ -99,15 +111,27 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         return new IssueWorkResult(ok, outcomes, ok ? null : "One or more repositories failed — see per-repo errors.");
     }
 
-    private async Task<RepoWorkOutcome> RunOneAsync(ILlmClient llm, IssueWorkRequest request, WorkRepo repo, CancellationToken ct)
+    private async Task<RepoWorkOutcome> RunOneAsync(ILlmClient llm, IssueWorkRequest request, WorkRepo repo, bool cliMode, CancellationToken ct)
     {
-        var req = new LlmRequest(
-            SystemPrompt: IssueWorkPrompt.System(request, repo),
-            UserPrompt: IssueWorkPrompt.User(request, repo),
-            Model: _agentOpts.Model,
-            Temperature: _agentOpts.Temperature,
-            MaxTokens: _agentOpts.MaxTokens,
-            Tools: ["runner_shell"]);
+        // Server-side (default): the LLM drives the paired runner via the runner_shell tool loop.
+        // CLI mode (RemoteAgent): the dev-machine CLI has its own tools — send the CLI-mode prompt,
+        // expose no server tools, and grant a long timeout for the full clone→build→test→push run.
+        var req = cliMode
+            ? new LlmRequest(
+                SystemPrompt: IssueWorkPrompt.SystemCli(request, repo),
+                UserPrompt: IssueWorkPrompt.User(request, repo),
+                Model: _agentOpts.Model,
+                Temperature: _agentOpts.Temperature,
+                MaxTokens: _agentOpts.MaxTokens,
+                Tools: [],
+                Timeout: CliRunTimeout)
+            : new LlmRequest(
+                SystemPrompt: IssueWorkPrompt.System(request, repo),
+                UserPrompt: IssueWorkPrompt.User(request, repo),
+                Model: _agentOpts.Model,
+                Temperature: _agentOpts.Temperature,
+                MaxTokens: _agentOpts.MaxTokens,
+                Tools: ["runner_shell"]);
 
         try
         {

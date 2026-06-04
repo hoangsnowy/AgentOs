@@ -51,15 +51,19 @@ public sealed class RemoteAgentLlmClient : ILlmClient
         var id = Guid.NewGuid().ToString("N");
         var execRequest = new RemoteExecRequest(id, request.SystemPrompt, request.UserPrompt, request.Model);
 
+        // A single full-prompt dispatch (M3) caps at 120s, but an agentic issue-work run on the local
+        // CLI (clone → build → test → push) needs minutes — the caller raises it via LlmRequest.Timeout.
+        var timeout = request.Timeout ?? DispatchTimeout;
+
         var stopwatch = Stopwatch.StartNew();
         RemoteExecResult result;
         try
         {
-            result = await _broker.DispatchAsync(execRequest, target, DispatchTimeout, cancellationToken).ConfigureAwait(false);
+            result = await _broker.DispatchAsync(execRequest, target, timeout, cancellationToken).ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {
-            throw new LlmException($"Remote agent timed out after {DispatchTimeout.TotalSeconds:0}s.", Provider, innerException: ex);
+            throw new LlmException($"Remote agent timed out after {timeout.TotalSeconds:0}s.", Provider, innerException: ex);
         }
         catch (InvalidOperationException ex)
         {

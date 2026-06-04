@@ -25,6 +25,12 @@ public sealed record WorkRepo(Guid SessionRepoId, string Owner, string Repo, str
 /// <param name="IssueTitle">Ticket title (short context for the LLM).</param>
 /// <param name="IssueBody">Ticket body / description (full context for the LLM).</param>
 /// <param name="TicketKind">Issue / PullRequest / DraftIssue (informational).</param>
+/// <param name="ProviderOverride">
+/// Optional LLM provider name that overrides the configured <c>Agents:IssueWork:Provider</c> for this
+/// run. Set to <c>"RemoteAgent"</c> to route the whole agentic loop to the member's paired dev-machine
+/// CLI (claude-code / codex) — it runs on their own machine + subscription, spending zero server tokens.
+/// Null = use the configured provider (server-side LLM + <c>runner_shell</c>).
+/// </param>
 public sealed record IssueWorkRequest(
     Guid SessionId,
     string TenantId,
@@ -33,7 +39,8 @@ public sealed record IssueWorkRequest(
     int IssueNumber,
     string IssueTitle,
     string IssueBody,
-    string TicketKind = "Issue");
+    string TicketKind = "Issue",
+    string? ProviderOverride = null);
 
 /// <summary>The agent's outcome for one repo.</summary>
 /// <param name="SessionRepoId">The session-repo row this outcome belongs to.</param>

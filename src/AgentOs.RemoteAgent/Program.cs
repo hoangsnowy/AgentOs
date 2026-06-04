@@ -13,6 +13,13 @@
 //   REMOTE_AGENT_TOKEN  pairing token (the plaintext returned ONCE by POST /runners)
 //   REMOTE_AGENT_CMD    command to run for M3 Execute (default "claude")
 //   REMOTE_AGENT_ARGS   command args  (default "-p")  — the prompt is piped to stdin
+//
+// "Run on my machine" (issue-work routed to the local CLI): the server sends a full agentic prompt
+// that expects the CLI to clone, edit, build, and `git push` on its own. For that the CLI must
+//   (a) be allowed to run tools non-interactively — set REMOTE_AGENT_ARGS to include a permission
+//       flag, e.g. "-p --dangerously-skip-permissions" (this lets the agent run arbitrary shell on
+//       THIS machine — your own box + an explicit per-session opt-in), and
+//   (b) already have git/gh authenticated to push the target repo — the clone URL carries no token.
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;

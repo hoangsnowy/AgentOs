@@ -42,4 +42,9 @@ public sealed class RemoteSessionEntity
     // Multi-repo — the board item this session came from (for traceability) + its kind.
     public string? BoardItemNodeId { get; set; }
     public string? TicketKind { get; set; }
+
+    // "Run on my machine" — when true, the issue-work loop is routed to the member's paired dev-machine
+    // CLI (claude-code / codex) via the RemoteAgent provider instead of the server LLM, spending zero
+    // server tokens. Chosen per session at create time; remembered so a re-run keeps the choice.
+    public bool RunOnMachine { get; set; }
 }

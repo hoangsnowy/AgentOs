@@ -21,6 +21,12 @@ namespace AgentOs.Domain.Llm;
 /// aren't registered are silently dropped — the orchestrator never sends an unresolved tool to the
 /// model.
 /// </param>
+/// <param name="Timeout">
+/// Optional per-request timeout hint. Provider-neutral: the HTTP-backed clients (Claude / Azure)
+/// rely on their own SDK timeouts and ignore this, but <c>RemoteAgentLlmClient</c> honours it as the
+/// dispatch deadline — a single agentic CLI run on a paired dev machine (clone → build → test → push)
+/// far outlasts the default 120s, so the caller raises it for that path. Null = provider default.
+/// </param>
 public sealed record LlmRequest(
     string SystemPrompt,
     string UserPrompt,
@@ -28,7 +34,8 @@ public sealed record LlmRequest(
     double Temperature = 0.0,
     int MaxTokens = 4096,
     string? JsonSchema = null,
-    System.Collections.Generic.IReadOnlyList<string>? Tools = null)
+    System.Collections.Generic.IReadOnlyList<string>? Tools = null,
+    System.TimeSpan? Timeout = null)
 {
     /// <summary>
     /// Validates required values. Throws <see cref="System.ArgumentException"/> if invalid.
