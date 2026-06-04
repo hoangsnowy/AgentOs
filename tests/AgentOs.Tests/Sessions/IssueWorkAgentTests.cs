@@ -174,7 +174,7 @@ public class IssueWorkAgentTests
     // ── Request shape ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task RunAsync_AlwaysIncludesRunnerShellTool()
+    public async Task RunAsync_DefaultProvider_IncludesRunnerShellToolNoTimeout()
     {
         LlmRequest? captured = null;
         var llm = Substitute.For<ILlmClient>();
@@ -187,6 +187,33 @@ public class IssueWorkAgentTests
         captured.ShouldNotBeNull();
         captured!.Tools.ShouldNotBeNull();
         captured.Tools!.ShouldContain("runner_shell");
+        captured.Timeout.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task RunAsync_RunOnMachine_UsesCliPromptWithNoServerToolsAndLongTimeout()
+    {
+        LlmRequest? captured = null;
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Do<LlmRequest>(r => captured = r), Arg.Any<CancellationToken>())
+           .Returns(AgentTestHelpers.StubResponse(
+               """{"branch":"issue-42-ai-fix","summary":"Done."}"""));
+
+        // ProviderOverride = "RemoteAgent" routes the whole loop to the member's local CLI.
+        var request = MakeRequest(42) with { ProviderOverride = "RemoteAgent" };
+        var result = await MakeAgent(llm).RunAsync(request);
+
+        result.Ok.ShouldBeTrue();
+        captured.ShouldNotBeNull();
+        // The dev-machine CLI uses its OWN tools, so no server runner_shell is exposed…
+        (captured!.Tools is null || captured.Tools.Count == 0).ShouldBeTrue();
+        // …a generous timeout covers the full clone→build→test→push run…
+        captured.Timeout.ShouldNotBeNull();
+        captured.Timeout!.Value.ShouldBeGreaterThan(TimeSpan.FromMinutes(5));
+        // …and the prompt tells the CLI to clone + push itself rather than call runner_shell.
+        captured.SystemPrompt.ShouldContain("clone");
+        captured.SystemPrompt.ShouldContain("git push");
+        captured.SystemPrompt.ShouldNotContain("runner_shell");
     }
 
     [Fact]

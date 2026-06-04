@@ -68,8 +68,21 @@ builder.AddProject<Projects.AgentOs_Api>("api")
     .WithEnvironment("Email__FromName", "AgentOS")
     .WaitFor(mailhog);
 
-builder.AddProject<Projects.AgentOs_Web>("web")
-    .WithHttpsEndpoint(port: 5180, name: "https")
+// The Web must be reachable at EXACTLY https://localhost:5180 — that string is hard-wired into the
+// Keycloak realm's redirectUris, so any other scheme/port/origin breaks OIDC login. Make that binding
+// the single source of truth, with no possibility of a port clash:
+//   • launchProfileName: null     — ignore launchSettings (its "http" profile pins http://localhost:5180,
+//                                    which otherwise wins and makes Kestrel serve plain HTTP → the
+//                                    browser gets ERR_SSL_PROTOCOL_ERROR and OIDC builds a http://
+//                                    redirect_uri the realm rejects ('Invalid parameter: redirect_uri').
+//   • isProxied: false + port==targetPort  — Kestrel binds https://localhost:5180 DIRECTLY (no Aspire
+//                                    reverse-proxy in front), so nothing else contends for 5180 and the
+//                                    request origin the app sees IS https://localhost:5180 → the OIDC
+//                                    redirect_uri matches the realm with no forwarded-header juggling.
+// (Standalone `dotnet run --project src/AgentOs.Web` is unaffected — it still uses its own launchSettings.)
+builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null)
+    .WithHttpsEndpoint(port: 5180, targetPort: 5180, name: "https", isProxied: false)
+    .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     // Full stack uses real Keycloak OIDC — turn OFF the standalone dev-run auto-login.
     .WithEnvironment("Auth__DevAutoLogin", "false")
     .WithReference(db).WaitFor(db)

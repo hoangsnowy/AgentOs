@@ -156,7 +156,7 @@ public sealed class PooledChatLlmClient : ILlmClient
             return resolved;
         }
 
-        var tenantId = _tenantContext?.TenantId ?? "anonymous";
+        var tenantId = AgentOs.SharedKernel.Identity.AmbientIdentity.Current?.TenantId ?? _tenantContext?.TenantId ?? "anonymous";
         foreach (var name in requested)
         {
             if (string.IsNullOrWhiteSpace(name))

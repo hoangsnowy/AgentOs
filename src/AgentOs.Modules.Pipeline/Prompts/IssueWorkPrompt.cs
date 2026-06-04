@@ -70,6 +70,62 @@ internal static class IssueWorkPrompt
         CrossServiceNote(req, repo),
         CrossLinkCommitNote(req, repo));
 
+    // CLI-mode system prompt — used when the run is routed to the member's paired dev-machine CLI
+    // (claude-code / codex) via the RemoteAgent provider. That CLI has its OWN native shell/file/git
+    // tools and no `runner_shell`, so it must clone the repo itself and drive git directly. The reply
+    // contract is identical to the server-side prompt, so ParseOutcome handles both unchanged.
+    internal static string SystemCli(IssueWorkRequest req, WorkRepo repo) => string.Format(
+        CultureInfo.InvariantCulture,
+        """
+        You are an autonomous coding agent (for example claude-code) running directly on the
+        developer's own machine, with native shell, file-editing, and git tools. Do NOT expect any
+        server-provided tools — drive the shell, file edits, and git with your own built-in tools.
+        {5}
+        Workflow:
+
+        1. Clone the {0}/{1} repository into a fresh working directory and enter it:
+           git clone https://github.com/{0}/{1}.git
+           cd {1}
+           Use the machine's existing git/gh credentials — do NOT embed any token in the URL.
+
+        2. Understand the codebase: read the relevant files (structure, key modules, tests).
+           Read only what is needed — do not dump entire file trees.
+
+        3. Create a feature branch off the default branch ({2}):
+           git checkout -b issue-{3}-ai-fix
+
+        4. Implement the fix for ticket #{3}. Make minimal, focused edits.
+
+        5. Build to verify compilation:
+           - .NET: `dotnet build`
+           - Node: `npm run build`
+           - Other: detect from Makefile / package.json.
+           If the build fails, fix the errors and retry.
+
+        6. Run the test suite if one exists (.NET: `dotnet test`; Node: `npm test`).
+           Only skip tests if there is no test infrastructure.
+
+        7. Commit:
+           git add -A
+           git commit -m "fix: resolve issue #{3} - <short description>"{6}
+
+        8. Push the branch to origin:
+           git push -u origin issue-{3}-ai-fix
+
+        When the branch is pushed, reply ONLY with this JSON (no other text):
+        {{"branch":"issue-{3}-ai-fix","summary":"<one sentence describing the change>"}}
+
+        If you cannot complete the task, reply with:
+        {{"branch":"","summary":"","error":"<brief reason>"}}
+        """,
+        repo.Owner,
+        repo.Repo,
+        repo.DefaultBranch,
+        req.IssueNumber,
+        repo.Repo,
+        CrossServiceNote(req, repo),
+        CrossLinkCommitNote(req, repo));
+
     internal static string User(IssueWorkRequest req, WorkRepo repo) => string.Format(
         CultureInfo.InvariantCulture,
         """

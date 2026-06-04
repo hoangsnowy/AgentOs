@@ -435,6 +435,14 @@ else if (_tab == Tab.Idea)
             </table>
 
             @if (_ideaError is not null) { <p class="login-error">@_ideaError</p> }
+            <label class="spine-ai-toggle" style="margin:10px 0">
+                <input type="checkbox" @bind="_runOnMachine" />
+                Run on my machine — your paired runner's CLI does the work (0 server tokens)
+            </label>
+            @if (_runOnMachine && !HasRunner())
+            {
+                <p class="muted spine-form-hint">No paired runner yet — register one in the <strong>Runners</strong> tab and start the AgentOS remote agent (claude-code) on your machine first.</p>
+            }
             <div class="form-actions">
                 <Btn OnClick="@(() => { _ideaStep = IdeaStep.Input; _ideaError = null; })" Disabled="_ideaBusy">Back</Btn>
                 <Btn Variant="Btn.ButtonVariant.Primary" OnClick="@(() => CreateTickets(true))" Disabled="@(_ideaBusy || _draftRows.Count == 0)">
@@ -652,6 +660,14 @@ else if (_tab == Tab.Sessions)
                 <p class="muted">No repositories available — add one under the board first.</p>
             }
         </div>
+        <label class="spine-ai-toggle" style="margin-top:10px">
+            <input type="checkbox" @bind="_runOnMachine" />
+            Run on my machine — your paired runner's CLI does the work (0 server tokens)
+        </label>
+        @if (_runOnMachine && !HasRunner())
+        {
+            <p class="muted">No paired runner yet — register one in the Runners tab first.</p>
+        }
     </ChildContent>
     <Footer>
         <Btn OnClick="CloseWorkDialog">Cancel</Btn>
@@ -730,6 +746,9 @@ else if (_tab == Tab.Sessions)
     private IReadOnlyList<WorkspaceRepoEntity>? _ideaRepos;
     private bool _ideaBusy;
     private string? _ideaError;
+    // "Run on my machine" — route the issue-work loop to the member's paired dev-machine CLI (claude-code
+    // / codex) instead of the server LLM. Shared by the idea-wizard auto-run + the Work-on-this dialog.
+    private bool _runOnMachine;
     private BootstrapPreview? _preview;
     private readonly List<DraftRow> _draftRows = new();
     private IReadOnlyList<CreatedTicket> _createdTickets = Array.Empty<CreatedTicket>();
@@ -1200,7 +1219,7 @@ else if (_tab == Tab.Sessions)
                     if (!drafts[i].AiReady) { continue; }
                     var t = _createdTickets[i];
                     sessions.Add(await PersistSessionAsync(
-                        board.Id, t.Number, $"#{t.Number} {t.Title}", t.ItemNodeId, "Issue", [repoOpt]));
+                        board.Id, t.Number, $"#{t.Number} {t.Title}", t.ItemNodeId, "Issue", [repoOpt], _runOnMachine));
                 }
                 if (sessions.Count > 0)
                 {
@@ -1237,6 +1256,7 @@ else if (_tab == Tab.Sessions)
         _draftRows.Clear();
         _createdTickets = Array.Empty<CreatedTicket>();
         _ideaError = null;
+        _runOnMachine = false;
     }
 
     // ── Tickets → session ────────────────────────────────────────────────────────────────────────
@@ -1270,6 +1290,7 @@ else if (_tab == Tab.Sessions)
                 Selected = true,
             });
         }
+        _runOnMachine = false;
         _showWorkDialog = true;
     }
 
@@ -1298,7 +1319,7 @@ else if (_tab == Tab.Sessions)
                 .ToList();
             await PersistSessionAsync(
                 _selectedBoard.Id, ticket.Number, $"#{ticket.Number} {ticket.Title}",
-                ticket.ItemNodeId, ticket.Kind.ToString(), ordered);
+                ticket.ItemNodeId, ticket.Kind.ToString(), ordered, _runOnMachine);
 
             Toasts.Show("Spine", $"Session created for #{ticket.Number} across {ordered.Count} repo(s). Switch to Sessions to run it.", ToastKind.Ok);
             CloseWorkDialog();
@@ -1316,12 +1337,16 @@ else if (_tab == Tab.Sessions)
         }
     }
 
+    // True when the member has at least one runner that isn't revoked — gates the "run on my machine"
+    // hint (the dispatch itself still fails clearly if no runner is actually live).
+    private bool HasRunner() => _runners?.Any(r => r.Status != "Revoked") == true;
+
     // Persist a session (+ its repo rows) for a ticket; returns the entity so the caller can run it.
     // The single source of truth for "ticket → session", shared by Work-on-this, Run-all-ready, and
     // the idea-wizard auto-run. repos[0] is the primary repo.
     private async Task<RemoteSessionEntity> PersistSessionAsync(
         Guid workspaceId, int? issueNumber, string title, string? itemNodeId, string ticketKind,
-        IReadOnlyList<RepoOption> repos)
+        IReadOnlyList<RepoOption> repos, bool runOnMachine = false)
     {
         var sessionId = Guid.NewGuid();
         var primary = repos[0];
@@ -1339,6 +1364,7 @@ else if (_tab == Tab.Sessions)
             RepoDefaultBranch = primary.DefaultBranch,
             BoardItemNodeId = itemNodeId,
             TicketKind = ticketKind,
+            RunOnMachine = runOnMachine,
             CreatedAtUtc = DateTimeOffset.UtcNow,
             CreatedByUserId = string.IsNullOrEmpty(_userId) ? null : _userId,
         };
@@ -1469,6 +1495,9 @@ else if (_tab == Tab.Sessions)
                 try
                 {
                     using var scope = ScopeFactory.CreateScope();
+                    // No HttpContext in this Task.Run, so seed the captured tenant + member as the ambient
+                    // identity — the LLM tool tenant + the runner dispatch read it to target the right runner.
+                    using var _identity = AgentOs.SharedKernel.Identity.AmbientIdentity.Push(capturedTenantId, capturedSession.MemberUserId);
                     var agent = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Sessions.IIssueWorkAgent>();
                     var prService = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Workspaces.IPrCreationService>();
                     var sessRepo = scope.ServiceProvider.GetRequiredService<AgentOs.Modules.Sessions.Persistence.ISessionRepository>();
@@ -1484,7 +1513,8 @@ else if (_tab == Tab.Sessions)
                         IssueNumber: capturedSession.IssueNumber ?? 0,
                         IssueTitle: capturedSession.Title,
                         IssueBody: "",
-                        TicketKind: capturedSession.TicketKind ?? "Issue");
+                        TicketKind: capturedSession.TicketKind ?? "Issue",
+                        ProviderOverride: capturedSession.RunOnMachine ? "RemoteAgent" : null);
 
                     var workResult = await agent.RunAsync(issueRequest).ConfigureAwait(false);
 

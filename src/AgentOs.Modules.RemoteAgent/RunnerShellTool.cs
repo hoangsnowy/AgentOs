@@ -122,6 +122,13 @@ public sealed class RunnerShellTool : ITool
 
     private RunnerTarget ResolveTarget(string tenantIdFallback)
     {
+        // Background work (a Blazor circuit's Task.Run) has no HttpContext; the session seeds
+        // AmbientIdentity so the dispatch still targets the right member's runner.
+        if (AgentOs.SharedKernel.Identity.AmbientIdentity.Current is { } amb)
+        {
+            return new RunnerTarget(amb.TenantId, amb.UserId ?? string.Empty);
+        }
+
         var ctx = _httpContextAccessor.HttpContext;
         if (ctx is null)
         {

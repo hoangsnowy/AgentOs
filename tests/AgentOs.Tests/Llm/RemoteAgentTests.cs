@@ -6,6 +6,7 @@
 // identity; a RunnerTarget resolves to exactly one connection within its tenant.
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
 using AgentOs.Modules.RemoteAgent;
@@ -169,5 +170,67 @@ public class RemoteAgentTests
         var ex = await Should.ThrowAsync<LlmException>(
             () => client.SendAsync(new LlmRequest("sys", "build X", "model")));
         ex.Message.ShouldContain("compile failed");
+    }
+
+    // ── Background identity (AmbientIdentity overrides the blank background ITenantContext) ──────────
+
+    private static IRemoteAgentBroker BrokerCapturing(out Func<RunnerTarget?> target, out Func<TimeSpan?> timeout)
+    {
+        RunnerTarget? capturedTarget = null;
+        TimeSpan? capturedTimeout = null;
+        var broker = Substitute.For<IRemoteAgentBroker>();
+        broker.HasRunnerFor(Arg.Do<RunnerTarget>(t => capturedTarget = t)).Returns(true);
+        broker.DispatchAsync(
+                Arg.Any<RemoteExecRequest>(),
+                Arg.Any<RunnerTarget>(),
+                Arg.Do<TimeSpan>(t => capturedTimeout = t),
+                Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(new RemoteExecResult(((RemoteExecRequest)ci[0]).Id, true, "ok", null)));
+        target = () => capturedTarget;
+        timeout = () => capturedTimeout;
+        return broker;
+    }
+
+    [Fact]
+    public async Task Client_AmbientIdentity_OverridesBlankTenantContext()
+    {
+        var broker = BrokerCapturing(out var target, out _);
+        // ITenantContext is the blank background value (would target the wrong/"default" tenant)…
+        var client = new RemoteAgentLlmClient(broker, Tenant("default", null), NullLogger<RemoteAgentLlmClient>.Instance);
+
+        using (AmbientIdentity.Push("real-tenant", "real-member"))
+        {
+            await client.SendAsync(new LlmRequest("s", "u", "m"));
+        }
+
+        // …so the dispatch must target the seeded ambient tenant + member, not the blank context.
+        target().ShouldNotBeNull();
+        target()!.TenantId.ShouldBe("real-tenant");
+        target()!.MemberUserId.ShouldBe("real-member");
+    }
+
+    [Fact]
+    public async Task Client_NoAmbient_FallsBackToTenantContext()
+    {
+        var broker = BrokerCapturing(out var target, out _);
+        var client = new RemoteAgentLlmClient(broker, Tenant("ctx-tenant", "ctx-user"), NullLogger<RemoteAgentLlmClient>.Instance);
+
+        await client.SendAsync(new LlmRequest("s", "u", "m"));
+
+        target()!.TenantId.ShouldBe("ctx-tenant");
+        target()!.MemberUserId.ShouldBe("ctx-user");
+    }
+
+    [Fact]
+    public async Task Client_ForwardsRequestTimeout_ElseDefault()
+    {
+        var broker = BrokerCapturing(out _, out var timeout);
+        var client = new RemoteAgentLlmClient(broker, Tenant(), NullLogger<RemoteAgentLlmClient>.Instance);
+
+        await client.SendAsync(new LlmRequest("s", "u", "m"));
+        timeout().ShouldBe(RemoteAgentLlmClient.DispatchTimeout);
+
+        await client.SendAsync(new LlmRequest("s", "u", "m", Timeout: TimeSpan.FromMinutes(20)));
+        timeout().ShouldBe(TimeSpan.FromMinutes(20));
     }
 }
