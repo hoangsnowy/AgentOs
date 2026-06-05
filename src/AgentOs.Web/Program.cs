@@ -68,6 +68,10 @@ if (devAutoLogin && !builder.Environment.IsDevelopment())
         "Auth:DevAutoLogin must never be enabled outside Development — it authenticates every request as a fixed user.");
 }
 
+// Surface dev-mode to the UI so dev-only affordances (the "View as" role-preview menu) render only
+// when auto-login is active, never under real Keycloak auth.
+builder.Services.AddSingleton(new AgentOs.Web.Services.DevModeState(devAutoLogin));
+
 if (devAutoLogin)
 {
     builder.Services
@@ -192,15 +196,63 @@ app.UseAntiforgery();
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", utc = DateTime.UtcNow }));
 
 // Serve the self-contained AgentOs.RemoteAgent exe so the VS Code extension (and the Runners tab) can
-// fetch the runner with no .NET SDK and no source checkout. Built into runner-dist by
-// scripts/build-runner.ps1; returns 404 with guidance until the server has built it. Anonymous — this
-// is the public open-source runner binary and carries no secrets (pairing happens via a separate token).
-app.MapGet("/runner/download", (IHostEnvironment env) =>
+// fetch the runner with no .NET SDK and no source checkout. scripts/build-runner.ps1 publishes one
+// single-file binary per RID into runner-dist/<rid>/; the extension sends ?rid= for its OS. win-x64 is
+// the default and also falls back to the legacy flat path. Anonymous — the runner is the public
+// open-source binary and carries no secrets (pairing happens via a separate token).
+//
+// Resolve the published binary path for a RID, or null if that platform isn't built / RID is unknown.
+static string? ResolveRunnerPath(string contentRoot, string rid)
 {
-    var path = System.IO.Path.Combine(env.ContentRootPath, "runner-dist", "AgentOs.RemoteAgent.exe");
-    return System.IO.File.Exists(path)
-        ? Results.File(path, "application/octet-stream", "agentos-runner.exe")
-        : Results.NotFound("Runner binary not built. Run scripts/build-runner.ps1 on the server.");
+    string[] known = ["win-x64", "linux-x64", "osx-x64", "osx-arm64"];
+    if (!known.Contains(rid))
+    {
+        return null;
+    }
+    var file = rid.StartsWith("win", StringComparison.Ordinal) ? "AgentOs.RemoteAgent.exe" : "AgentOs.RemoteAgent";
+    var path = System.IO.Path.Combine(contentRoot, "runner-dist", rid, file);
+    if (System.IO.File.Exists(path))
+    {
+        return path;
+    }
+    // Legacy flat layout (pre multi-RID builds) — Windows only.
+    if (rid == "win-x64")
+    {
+        var legacy = System.IO.Path.Combine(contentRoot, "runner-dist", "AgentOs.RemoteAgent.exe");
+        if (System.IO.File.Exists(legacy))
+        {
+            return legacy;
+        }
+    }
+    return null;
+}
+
+app.MapGet("/runner/download", (IHostEnvironment env, string? rid) =>
+{
+    var resolved = ResolveRunnerPath(env.ContentRootPath, string.IsNullOrWhiteSpace(rid) ? "win-x64" : rid);
+    if (resolved is null)
+    {
+        return Results.NotFound(
+            $"No runner binary for '{rid ?? "win-x64"}'. Run scripts/build-runner.ps1 on the server to publish it.");
+    }
+    var downloadName = resolved.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? "agentos-runner.exe" : "agentos-runner";
+    return Results.File(resolved, "application/octet-stream", downloadName);
+});
+
+// Version probe for the extension's auto-update: a cheap build token (size + mtime) of the published
+// binary for a RID. The extension stores it and re-downloads when it changes. No assembly-version
+// plumbing needed; the token only has to differ when the bytes do.
+app.MapGet("/runner/version", (IHostEnvironment env, string? rid) =>
+{
+    var resolved = ResolveRunnerPath(env.ContentRootPath, string.IsNullOrWhiteSpace(rid) ? "win-x64" : rid);
+    if (resolved is null)
+    {
+        return Results.NotFound($"No runner binary for '{rid ?? "win-x64"}'.");
+    }
+    var info = new System.IO.FileInfo(resolved);
+    var token = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+        $"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}");
+    return Results.Text(token);
 });
 
 // VS Code browser-pairing: the approve page (/pair/vscode, OIDC-cookie authed) + the one-time code
@@ -216,6 +268,28 @@ if (devAutoLogin)
     app.MapGet("/account/login", (string? returnUrl) =>
         Results.Redirect(string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl));
     app.MapGet("/account/logout", () => Results.Redirect("/"));
+
+    // Dev-only "View as": narrow the auto-login principal's roles to preview the member (or admin)
+    // desktop without standing up a second Keycloak user. Writes the cookie DevAutoAuthHandler reads,
+    // then reloads so the new principal takes effect. Available only because devAutoLogin is on.
+    app.MapGet("/dev/view-as", (HttpContext ctx, string? role) =>
+    {
+        if (role is "admin" or "member")
+        {
+            ctx.Response.Cookies.Append(DevAutoAuthHandler.ViewAsCookie, role,
+                new Microsoft.AspNetCore.Http.CookieOptions
+                {
+                    HttpOnly = true,
+                    SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
+                    Path = "/",
+                });
+        }
+        else
+        {
+            ctx.Response.Cookies.Delete(DevAutoAuthHandler.ViewAsCookie);
+        }
+        return Results.Redirect("/");
+    });
 }
 else
 {

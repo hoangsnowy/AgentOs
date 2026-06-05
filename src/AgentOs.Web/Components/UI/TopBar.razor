@@ -8,6 +8,7 @@
 @inject AgentOs.Web.Services.AuthSession Auth
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
 @inject IHttpClientFactory HttpFactory
+@inject AgentOs.Web.Services.DevModeState Dev
 @implements IDisposable
 
 <div class="topbar">
@@ -69,6 +70,13 @@
     <div class="dd-sep"></div>
     <button class="dd-item" @onclick="OpenSystem"><span class="dd-ic"><Icon Name="wrench" Size="14" /></span> System settings</button>
     <button class="dd-item" @onclick="OpenSettings"><span class="dd-ic"><Icon Name="gear" Size="14" /></span> App settings</button>
+    @if (Dev.DevAutoLogin)
+    {
+        <div class="dd-sep"></div>
+        <button class="dd-item" @onclick="@(() => ViewAs("admin"))"><span class="dd-ic"><Icon Name="user" Size="14" /></span> View as: Admin (dev)</button>
+        <button class="dd-item" @onclick="@(() => ViewAs("member"))"><span class="dd-ic"><Icon Name="user" Size="14" /></span> View as: Member (dev)</button>
+        <button class="dd-item" @onclick="@(() => ViewAs("both"))"><span class="dd-ic"><Icon Name="user" Size="14" /></span> View as: Both (dev)</button>
+    }
     <div class="dd-sep"></div>
     <button class="dd-item" @onclick="Lock"><span class="dd-ic"><Icon Name="lock" Size="14" /></span> Lock screen</button>
     <button class="dd-item dd-danger" @onclick="SignOut"><span class="dd-ic"><Icon Name="power" Size="14" /></span> Sign out</button>
@@ -232,6 +240,14 @@
     {
         WM.OpenApp("settings", "Settings", "gear", 760, 600);
         _userOpen = false;
+    }
+
+    // Dev-only role preview: set the view-as cookie server-side, then full-reload so the auto-login
+    // handler re-issues the principal with the narrowed role set.
+    private void ViewAs(string role)
+    {
+        _userOpen = false;
+        Nav.NavigateTo($"/dev/view-as?role={role}", forceLoad: true);
     }
 
     private void Lock() => Nav.NavigateTo("/account/logout", forceLoad: true);
