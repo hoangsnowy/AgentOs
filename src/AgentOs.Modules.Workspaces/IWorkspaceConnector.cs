@@ -6,6 +6,7 @@
 // persists a child row. Repo validation stays server-side so the UI never has to.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -53,6 +54,12 @@ public interface IWorkspaceConnector
     /// <summary>Validate a repo with the board's stored token and connect it under the board.</summary>
     Task<RepoAddResult> AddRepoAsync(
         string tenantId, Guid workspaceId, string owner, string repo, string? defaultBranch, CancellationToken ct = default);
+
+    /// <summary>List the Projects-v2 / ADO boards the supplied token can see — drives the "Find boards"
+    /// picker so the user selects a board instead of typing its number. In-proc seam for the desktop
+    /// Spine app (the equivalent REST endpoint lives on the API host, which the Web circuit can't call).</summary>
+    Task<IReadOnlyList<BoardSummary>> ListBoardsAsync(
+        SourceProviderKind kind, string owner, string token, string? host = null, CancellationToken ct = default);
 }
 
 internal sealed class WorkspaceConnector : IWorkspaceConnector
@@ -133,6 +140,21 @@ internal sealed class WorkspaceConnector : IWorkspaceConnector
         };
         await _repo.AddForTenantAsync(entity, ct).ConfigureAwait(false);
         return WorkspaceConnectResult.Success(entity);
+    }
+
+    public async Task<IReadOnlyList<BoardSummary>> ListBoardsAsync(
+        SourceProviderKind kind, string owner, string token, string? host = null, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(owner))
+        {
+            return [];
+        }
+        if (!_providers.TryResolve(kind, out var provider) || provider is null)
+        {
+            return [];
+        }
+        var creds = new ConnectionCredentials(kind, token, owner, host);
+        return await provider.ListBoardsAsync(creds, ct).ConfigureAwait(false);
     }
 
     public async Task<RepoAddResult> AddRepoAsync(

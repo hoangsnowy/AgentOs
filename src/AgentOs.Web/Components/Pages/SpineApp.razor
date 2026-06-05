@@ -97,12 +97,30 @@ else if (_tab == Tab.Boards)
                 }
                 <Field Label="Board number">
                     <input @bind="_wsNumberText" placeholder="5 (optional — leave blank for repos-only)" />
+                    @if (_foundBoards is { Count: > 0 })
+                    {
+                        <select class="prefs-select" @onchange="OnBoardPicked">
+                            <option value="">— pick from @_foundBoards.Count found —</option>
+                            @foreach (var b in _foundBoards)
+                            {
+                                <option value="@b.Number">#@b.Number — @b.Title</option>
+                            }
+                        </select>
+                    }
+                    else if (_foundBoards is { Count: 0 })
+                    {
+                        <p class="muted spine-form-hint">No boards found for that owner + token.</p>
+                    }
                 </Field>
                 <Field Label="Access token (PAT)">
                     <input type="password" @bind="_wsToken" placeholder="ghp_… (needs repo + read:project)" autocomplete="off" />
                 </Field>
             </div>
             <div class="form-actions">
+                <Btn Variant="Btn.ButtonVariant.Ghost" OnClick="FindBoards"
+                     Disabled="_busy || _findingBoards || _wsKind != SourceProviderKind.GitHub">
+                    @(_findingBoards ? "Finding…" : "Find boards")
+                </Btn>
                 <Btn Variant="Btn.ButtonVariant.Primary" OnClick="ConnectBoard" Disabled="_busy">
                     @(_busy ? "Connecting…" : "Connect")
                 </Btn>
@@ -769,6 +787,9 @@ else if (_tab == Tab.Sessions)
     private string _wsNumberText = "";
     private string _wsProject = "";
     private string _wsToken = "";
+    // "Find boards" picker: null = not searched yet; empty = searched, none found.
+    private IReadOnlyList<BoardSummary>? _foundBoards;
+    private bool _findingBoards;
 
     // ── Polling timer (runs while any session is in "Running" state) ─────────────────────────
     private System.Threading.Timer? _pollTimer;
@@ -1496,8 +1517,9 @@ else if (_tab == Tab.Sessions)
                 {
                     using var scope = ScopeFactory.CreateScope();
                     // No HttpContext in this Task.Run, so seed the captured tenant + member as the ambient
-                    // identity — the LLM tool tenant + the runner dispatch read it to target the right runner.
-                    using var _identity = AgentOs.SharedKernel.Identity.AmbientIdentity.Push(capturedTenantId, capturedSession.MemberUserId);
+                    // identity — the LLM tool tenant + the runner dispatch read it to target the right runner,
+                    // and runner_shell tags its per-command progress to the session id carried here.
+                    using var _identity = AgentOs.SharedKernel.Identity.AmbientIdentity.Push(capturedTenantId, capturedSession.MemberUserId, capturedSession.Id);
                     var agent = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Sessions.IIssueWorkAgent>();
                     var prService = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Workspaces.IPrCreationService>();
                     var sessRepo = scope.ServiceProvider.GetRequiredService<AgentOs.Modules.Sessions.Persistence.ISessionRepository>();
@@ -1682,6 +1704,45 @@ else if (_tab == Tab.Sessions)
 
     // ── Connect board ────────────────────────────────────────────────────────────────────────────
 
+    private async Task FindBoards()
+    {
+        if (_findingBoards) { return; }
+        if (string.IsNullOrWhiteSpace(_wsProjectOwner) || string.IsNullOrWhiteSpace(_wsToken))
+        {
+            Toasts.Show("Spine", "Owner and token are required to find boards.", ToastKind.Err);
+            return;
+        }
+        _findingBoards = true;
+        try
+        {
+            _foundBoards = await Connector.ListBoardsAsync(_wsKind, _wsProjectOwner.Trim(), _wsToken);
+            if (_foundBoards.Count == 0)
+            {
+                Toasts.Show("Spine", "No boards visible to that token.", ToastKind.Info);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Spine", $"Find boards failed: {ex.Message}", ToastKind.Err);
+            _foundBoards = null;
+        }
+        finally
+        {
+            _findingBoards = false;
+        }
+    }
+
+    private void OnBoardPicked(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(value) || _foundBoards is null) { return; }
+        if (!int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var number)) { return; }
+        var board = _foundBoards.FirstOrDefault(b => b.Number == number);
+        if (board is null) { return; }
+        _wsNumberText = board.Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(_wsName)) { _wsName = board.Title; }
+    }
+
     private async Task ConnectBoard()
     {
         if (_busy) { return; }
@@ -1715,6 +1776,7 @@ else if (_tab == Tab.Sessions)
             {
                 Toasts.Show("Spine", $"Connected '{_wsName.Trim()}'.", ToastKind.Ok);
                 _wsName = _wsProjectOwner = _wsNumberText = _wsProject = _wsToken = "";
+                _foundBoards = null;
                 _boards = await Workspaces.ListForTenantAsync(_tenantId);
             }
             else

@@ -165,4 +165,38 @@ public sealed class WorkspaceConnectorTests
         result.Ok.ShouldBeFalse();
         result.Error.ShouldNotBeNullOrWhiteSpace();
     }
+
+    // ── Find-boards picker ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListBoardsAsync_DelegatesToProvider_WithCredentials()
+    {
+        var sut = Sut();
+        _provider.ListBoardsAsync(Arg.Any<ConnectionCredentials>(), Arg.Any<CancellationToken>())
+            .Returns(new[]
+            {
+                new BoardSummary(5, "PVT_a", "Roadmap", "org", "octo-org"),
+                new BoardSummary(6, "PVT_b", "Bugs", "org", "octo-org"),
+            });
+
+        var boards = await sut.ListBoardsAsync(SourceProviderKind.GitHub, "octo-org", "ghp_x");
+
+        boards.Count.ShouldBe(2);
+        boards[0].Number.ShouldBe(5);
+        boards[0].Title.ShouldBe("Roadmap");
+        await _provider.Received(1).ListBoardsAsync(
+            Arg.Is<ConnectionCredentials>(c => c.Owner == "octo-org" && c.AccessToken == "ghp_x"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ListBoardsAsync_MissingOwnerOrToken_ReturnsEmpty_WithoutCallingProvider()
+    {
+        var sut = Sut();
+
+        (await sut.ListBoardsAsync(SourceProviderKind.GitHub, "", "ghp_x")).ShouldBeEmpty();
+        (await sut.ListBoardsAsync(SourceProviderKind.GitHub, "octo-org", "")).ShouldBeEmpty();
+
+        await _provider.DidNotReceive().ListBoardsAsync(Arg.Any<ConnectionCredentials>(), Arg.Any<CancellationToken>());
+    }
 }
