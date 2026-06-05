@@ -7,6 +7,8 @@
 **/obj/
 **/out/
 **/publish/
+# Self-contained runner exe served by the Web for the VS Code extension (built by scripts/build-runner.ps1)
+src/AgentOs.Web/runner-dist/
 **/*.binlog
 **/*.tlog
 
