@@ -13,6 +13,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using AgentOs.Domain.Sessions;
 using AgentOs.Domain.Tools;
 using Microsoft.AspNetCore.Http;
 
@@ -49,11 +50,15 @@ public sealed class RunnerShellTool : ITool
 
     private readonly IRemoteAgentBroker _broker;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ISessionRunFeed? _feed;
 
-    public RunnerShellTool(IRemoteAgentBroker broker, IHttpContextAccessor httpContextAccessor)
+    public RunnerShellTool(IRemoteAgentBroker broker, IHttpContextAccessor httpContextAccessor, ISessionRunFeed? feed = null)
     {
         _broker = broker ?? throw new ArgumentNullException(nameof(broker));
         _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+        // Optional: live session-run feed. When the work runs under a session (AmbientIdentity carries
+        // a SessionId), each shell command is published as a Step so the Spine activity feed shows it.
+        _feed = feed;
     }
 
     /// <inheritdoc />
@@ -100,6 +105,8 @@ public sealed class RunnerShellTool : ITool
             ToolName: "shell",
             JsonInput: payload);
 
+        EmitCommand($"$ {Truncate(command, 160)}");
+
         RunnerToolResult result;
         try
         {
@@ -108,6 +115,7 @@ public sealed class RunnerShellTool : ITool
         }
         catch (TimeoutException ex)
         {
+            EmitCommand($"⏱ command timed out after {ToolTimeout.TotalSeconds:0}s");
             throw new ToolException($"runner_shell: runner timed out after {ToolTimeout.TotalSeconds:0}s.", ex);
         }
         catch (InvalidOperationException ex)
@@ -115,10 +123,39 @@ public sealed class RunnerShellTool : ITool
             throw new ToolException($"runner_shell: {ex.Message}", ex);
         }
 
+        EmitCommand(result.Ok ? "✓ command ok" : $"✗ command failed: {Truncate(result.Error, 160)}");
+
         return result.Ok
             ? ToolInvocationResult.Success(request.CallId, result.JsonOutput)
             : ToolInvocationResult.Error(request.CallId, result.Error ?? "Runner reported failure.");
     }
+
+    // Publish a per-command line to the session's live feed. No-op unless a feed is registered AND the
+    // ambient identity carries a session id (i.e. the work runs under a tracked session). Never throws.
+    private void EmitCommand(string message)
+    {
+        if (_feed is null)
+        {
+            return;
+        }
+        var amb = AgentOs.SharedKernel.Identity.AmbientIdentity.Current;
+        if (amb?.SessionId is not { } sessionId)
+        {
+            return;
+        }
+        try
+        {
+            _feed.Publish(new SessionRunEvent(
+                amb.TenantId, sessionId, SessionRunEventKind.Step, message, DateTimeOffset.UtcNow));
+        }
+        catch
+        {
+            // Best-effort telemetry — a feed hiccup must never break the tool call.
+        }
+    }
+
+    private static string Truncate(string? s, int max) =>
+        string.IsNullOrEmpty(s) ? "" : (s.Length <= max ? s : s[..max] + "…");
 
     private RunnerTarget ResolveTarget(string tenantIdFallback)
     {

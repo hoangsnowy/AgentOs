@@ -1,6 +1,7 @@
 // EF Core impl: saves PipelineResult (jsonb) + RunMetric rows, reads back + lists summaries.
 // Writes stamp TenantId from ITenantContext; reads are filtered by the DbContext's global query
 // filter so a request only ever sees its own tenant's runs.
+using System.Globalization;
 using System.Text.Json;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.Modules.Pipeline.Metrics;
@@ -133,53 +134,84 @@ internal sealed class PipelineRunRepository(PipelineDbContext db, ITenantContext
             q = q.Where(m => m.TimestampUtc >= cutoff);
         }
 
-        var rows = await q
-            .Select(m => new CostRow(
-                m.RunId, m.AgentName, m.Provider, m.Model,
-                m.TokensIn, m.TokensOut, m.CostUsd, m.TimestampUtc))
-            .ToListAsync(ct);
+        // Stream the (tenant-, since-) filtered rows once and fold them into small per-key
+        // accumulators, instead of materializing every row into a List and then grouping it four ways
+        // in memory. Memory is O(distinct keys), not O(rows); the (TenantId, TimestampUtc) index serves
+        // the filter. We project to the cost columns only (not the row entity / its JSON blob), and
+        // bucket by agent / provider / model / day in a single pass. (Pushing the GROUP BY fully into
+        // SQL would also cut transfer, but EF's GROUP BY translation isn't portable to the in-memory
+        // test provider — this keeps the logic provider-agnostic.)
+        var byAgent = new Dictionary<string, Acc>(StringComparer.Ordinal);
+        var byProvider = new Dictionary<string, Acc>(StringComparer.Ordinal);
+        var byModel = new Dictionary<string, Acc>(StringComparer.Ordinal);
+        var byDay = new Dictionary<string, Acc>(StringComparer.Ordinal);
+        var runIds = new HashSet<Guid>();
+        var total = default(Acc);
 
-        if (rows.Count == 0)
+        var stream = q
+            .Select(m => new
+            {
+                m.RunId,
+                m.AgentName,
+                m.Provider,
+                m.Model,
+                m.TokensIn,
+                m.TokensOut,
+                m.CostUsd,
+                m.TimestampUtc,
+            })
+            .AsAsyncEnumerable();
+
+        await foreach (var m in stream.WithCancellation(ct).ConfigureAwait(false))
+        {
+            total.Add(m.CostUsd, m.TokensIn, m.TokensOut);
+            runIds.Add(m.RunId);
+            Bump(byAgent, m.AgentName, m.CostUsd, m.TokensIn, m.TokensOut);
+            Bump(byProvider, m.Provider, m.CostUsd, m.TokensIn, m.TokensOut);
+            Bump(byModel, m.Model, m.CostUsd, m.TokensIn, m.TokensOut);
+            var day = m.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            Bump(byDay, day, m.CostUsd, m.TokensIn, m.TokensOut);
+        }
+
+        if (total.Calls == 0)
         {
             return CostSummary.Empty;
         }
 
-        List<CostBucket> By(Func<CostRow, string> key) =>
-            [.. rows
-                .GroupBy(key)
-                .Select(g => new CostBucket(
-                    g.Key,
-                    g.Sum(r => r.CostUsd),
-                    g.Sum(r => r.TokensIn),
-                    g.Sum(r => r.TokensOut),
-                    g.Count()))
-                .OrderByDescending(b => b.CostUsd)];
-
-        var byDay = rows
-            .GroupBy(r => r.TimestampUtc.UtcDateTime.Date)
-            .Select(g => new CostBucket(
-                g.Key.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
-                g.Sum(r => r.CostUsd),
-                g.Sum(r => r.TokensIn),
-                g.Sum(r => r.TokensOut),
-                g.Count()))
-            .OrderBy(b => b.Key, StringComparer.Ordinal)
-            .ToList();
-
         return new CostSummary(
-            rows.Sum(r => r.CostUsd),
-            rows.Sum(r => r.TokensIn),
-            rows.Sum(r => r.TokensOut),
-            rows.Count,
-            rows.Select(r => r.RunId).Distinct().Count(),
-            By(r => r.Agent),
-            By(r => r.Provider),
-            By(r => r.Model),
-            byDay);
+            total.CostUsd, total.TokensIn, total.TokensOut, total.Calls, runIds.Count,
+            ByCostDesc(byAgent), ByCostDesc(byProvider), ByCostDesc(byModel),
+            [.. byDay.Select(kv => kv.Value.ToBucket(kv.Key)).OrderBy(b => b.Key, StringComparer.Ordinal)]);
     }
 
-    // Flattened metric row for in-memory grouping (one materialize, then group 4 ways).
-    private readonly record struct CostRow(
-        Guid RunId, string Agent, string Provider, string Model,
-        int TokensIn, int TokensOut, decimal CostUsd, DateTimeOffset TimestampUtc);
+    private static void Bump(Dictionary<string, Acc> map, string key, decimal cost, int tokensIn, int tokensOut)
+    {
+        // CollectionsMarshal would avoid the double lookup, but a plain get/set keeps it simple; the
+        // map is keyed by a bounded set (agent / provider / model names, or days).
+        map.TryGetValue(key, out var acc);
+        acc.Add(cost, tokensIn, tokensOut);
+        map[key] = acc;
+    }
+
+    private static List<CostBucket> ByCostDesc(Dictionary<string, Acc> map) =>
+        [.. map.Select(kv => kv.Value.ToBucket(kv.Key)).OrderByDescending(b => b.CostUsd)];
+
+    // Mutable fold accumulator for one bucket (or the grand total).
+    private struct Acc
+    {
+        public decimal CostUsd;
+        public int TokensIn;
+        public int TokensOut;
+        public int Calls;
+
+        public void Add(decimal cost, int tokensIn, int tokensOut)
+        {
+            CostUsd += cost;
+            TokensIn += tokensIn;
+            TokensOut += tokensOut;
+            Calls++;
+        }
+
+        public readonly CostBucket ToBucket(string key) => new(key, CostUsd, TokensIn, TokensOut, Calls);
+    }
 }

@@ -25,18 +25,26 @@ public static class AmbientIdentity
     /// Set the ambient identity for the current async flow. Dispose the returned handle to restore the
     /// previous value — wrap the unit of work in <c>using var _ = AmbientIdentity.Push(tenant, user);</c>.
     /// </summary>
-    public static IDisposable Push(string tenantId, string? userId)
+    public static IDisposable Push(string tenantId, string? userId) => Push(tenantId, userId, null);
+
+    /// <summary>
+    /// Set the ambient identity including the running session, so off-box tools (runner_shell) can tag
+    /// their per-command progress events back to the originating session without threading a session id
+    /// through the LLM request → tool-gateway hot path.
+    /// </summary>
+    public static IDisposable Push(string tenantId, string? userId, Guid? sessionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
         var previous = _current.Value;
-        _current.Value = new Identity(tenantId, userId);
+        _current.Value = new Identity(tenantId, userId, sessionId);
         return new Scope(previous);
     }
 
-    /// <summary>An ambient (tenant, user) pair.</summary>
+    /// <summary>An ambient (tenant, user, session) tuple.</summary>
     /// <param name="TenantId">The tenant the work runs under. Never empty.</param>
     /// <param name="UserId">The member the work belongs to (token <c>sub</c>), or null.</param>
-    public sealed record Identity(string TenantId, string? UserId);
+    /// <param name="SessionId">The running session, when the work belongs to one; else null.</param>
+    public sealed record Identity(string TenantId, string? UserId, Guid? SessionId = null);
 
     private sealed class Scope : IDisposable
     {
