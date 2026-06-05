@@ -191,6 +191,23 @@ app.UseAntiforgery();
 
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", utc = DateTime.UtcNow }));
 
+// Serve the self-contained AgentOs.RemoteAgent exe so the VS Code extension (and the Runners tab) can
+// fetch the runner with no .NET SDK and no source checkout. Built into runner-dist by
+// scripts/build-runner.ps1; returns 404 with guidance until the server has built it. Anonymous — this
+// is the public open-source runner binary and carries no secrets (pairing happens via a separate token).
+app.MapGet("/runner/download", (IHostEnvironment env) =>
+{
+    var path = System.IO.Path.Combine(env.ContentRootPath, "runner-dist", "AgentOs.RemoteAgent.exe");
+    return System.IO.File.Exists(path)
+        ? Results.File(path, "application/octet-stream", "agentos-runner.exe")
+        : Results.NotFound("Runner binary not built. Run scripts/build-runner.ps1 on the server.");
+});
+
+// VS Code browser-pairing: the approve page (/pair/vscode, OIDC-cookie authed) + the one-time code
+// exchange (/runner/pair/exchange). Mapped here on the Web — the extension and browser both target the
+// Web origin, and the approve step uses the browser session, not a Bearer token.
+AgentOs.Modules.Sessions.Endpoints.PairingEndpoints.MapPairingEndpoints(app);
+
 // OIDC challenge / sign-out — buttons in the UI hit these endpoints. /signin-oidc and
 // /signout-callback-oidc are owned by the OIDC middleware. In dev-auto-login mode there are no
 // Cookie/OIDC schemes, so these become simple redirects (the dev user is always signed in).

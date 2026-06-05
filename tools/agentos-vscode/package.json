@@ -1,0 +1,47 @@
+{
+  "name": "agentos-runner",
+  "displayName": "AgentOS Runner",
+  "description": "Pair this machine as an AgentOS runner — run AI coding sessions locally, with a one-click sign-in.",
+  "version": "0.1.0",
+  "publisher": "agentos",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/hoangsnowy/AgentOs.git" },
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onUri", "onStartupFinished"],
+  "contributes": {
+    "commands": [
+      { "command": "agentos.connect", "title": "AgentOS: Connect this machine" },
+      { "command": "agentos.disconnect", "title": "AgentOS: Disconnect" },
+      { "command": "agentos.showLogs", "title": "AgentOS: Show runner logs" }
+    ],
+    "configuration": {
+      "title": "AgentOS",
+      "properties": {
+        "agentos.serverUrl": {
+          "type": "string",
+          "default": "https://localhost:5180",
+          "description": "AgentOS server base URL (the Web host)."
+        },
+        "agentos.runOnMyMachine": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run AI coding sessions with the local claude CLI (adds --dangerously-skip-permissions). Requires the claude CLI installed and logged in."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "node esbuild.mjs && vsce package --no-dependencies -o agentos-runner.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.23.1",
+    "typescript": "^5.5.4"
+  }
+}

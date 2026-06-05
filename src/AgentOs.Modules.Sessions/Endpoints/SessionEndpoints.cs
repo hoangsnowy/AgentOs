@@ -12,6 +12,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Sessions;
+using AgentOs.Modules.Sessions.Pairing;
 using AgentOs.Modules.Sessions.Persistence;
 using AgentOs.Modules.Sessions.Persistence.Entities;
 using AgentOs.SharedKernel.Identity;
@@ -98,10 +99,8 @@ internal static class SessionEndpoints
 
     private static async Task<IResult> RegisterRunnerAsync(
         RegisterRunnerRequest request,
-        IRunnerRepository repo,
-        IRunnerPairingService pairing,
+        IRunnerProvisioningService provisioning,
         ITenantContext tenant,
-        TimeProvider clock,
         CancellationToken ct)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.Label))
@@ -109,24 +108,13 @@ internal static class SessionEndpoints
             return Results.BadRequest("label is required.");
         }
 
-        var secret = pairing.Issue();
-        var entity = new RunnerEntity
-        {
-            Id = Guid.NewGuid(),
-            TenantId = tenant.TenantId,
-            OwnerUserId = tenant.UserId ?? string.Empty,
-            Label = request.Label,
-            TokenHash = secret.TokenHash,
-            Status = "Pending",
-            CreatedAtUtc = clock.GetUtcNow(),
-            CreatedByUserId = tenant.UserId,
-        };
-        await repo.AddAsync(entity, ct).ConfigureAwait(false);
+        // Same provisioning path the VS Code browser-pairing flow uses. The plaintext token is
+        // returned ONCE here and never again.
+        var r = await provisioning
+            .ProvisionAsync(tenant.TenantId, tenant.UserId ?? string.Empty, request.Label, ct)
+            .ConfigureAwait(false);
 
-        // The plaintext token is returned ONCE here and never again.
-        return Results.Created(
-            $"/runners/{entity.Id}",
-            new RunnerCreatedDto(entity.Id, entity.Label, secret.Token, entity.Status));
+        return Results.Created($"/runners/{r.RunnerId}", new RunnerCreatedDto(r.RunnerId, r.Label, r.Token, r.Status));
     }
 
     private static async Task<IResult> RevokeRunnerAsync(Guid id, IRunnerRepository repo, CancellationToken ct)

@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Sessions;
 using AgentOs.Modules.Sessions.Endpoints;
+using AgentOs.Modules.Sessions.Pairing;
 using AgentOs.Modules.Sessions.Persistence;
 using AgentOs.Modules.Sessions.Persistence.Repositories;
 using AgentOs.SharedKernel.Modularity;
@@ -31,6 +32,11 @@ public sealed class SessionsModule : IModule, IEndpointModule, IInitializableMod
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IRunnerPairingService, RunnerPairingService>();
+
+        // Runner provisioning (shared by the /runners endpoint + the VS Code browser-pairing flow) and
+        // the one-time exchange-code store for that flow. Stateless / in-memory, so always registered.
+        services.TryAddScoped<IRunnerProvisioningService, RunnerProvisioningService>();
+        services.TryAddSingleton<IPairingCodeStore, PairingCodeStore>();
 
         // M6 — live session-run event feed (singleton, in-memory): the issue-work agent + the run
         // worker publish progress to it and the desktop subscribes for live updates. Always registered
@@ -67,6 +73,8 @@ public sealed class SessionsModule : IModule, IEndpointModule, IInitializableMod
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         endpoints.MapSessionEndpoints();
+        // NOTE: the VS Code browser-pairing endpoints (PairingEndpoints) are mapped on the Web host, not
+        // here — they rely on the browser's OIDC cookie session, which only the Web has.
     }
 
     public async Task InitializeAsync(IServiceProvider services, CancellationToken ct)
