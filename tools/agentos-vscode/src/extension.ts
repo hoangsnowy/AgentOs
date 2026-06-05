@@ -154,18 +154,68 @@ async function disconnect(context: vscode.ExtensionContext): Promise<void> {
   );
 }
 
-// Download + cache the self-contained runner exe under the extension's global storage.
+// Map this machine to a runner RID the server publishes (scripts/build-runner.ps1 builds these).
+function runnerRid(): string {
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  if (process.platform === 'win32') {
+    return 'win-x64';
+  }
+  if (process.platform === 'darwin') {
+    return `osx-${arch}`;
+  }
+  return 'linux-x64';
+}
+
+// Build token for a RID's published binary, or null when offline / not built (then keep what we have).
+async function fetchRunnerToken(rid: string): Promise<string | null> {
+  try {
+    const t = await requestJson('GET', `${serverUrl()}/runner/version?rid=${rid}`);
+    return typeof t === 'string' ? t.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+// Download + cache the self-contained runner exe under the extension's global storage, picking the
+// binary for this OS/arch. Auto-updates: a side-car .runner-meta.json records the RID + server build
+// token; on (re)start we re-download when the binary is missing, the RID changed, or the server
+// reports a newer token. The check runs before spawn (no child is running), so replacing the file is
+// safe; if the version probe fails (offline), the existing binary is kept.
 async function ensureRunnerBinary(context: vscode.ExtensionContext): Promise<string> {
   const dir = context.globalStorageUri.fsPath;
   fs.mkdirSync(dir, { recursive: true });
   const isWin = process.platform === 'win32';
   const exe = path.join(dir, isWin ? 'agentos-runner.exe' : 'agentos-runner');
-  if (!fs.existsSync(exe)) {
-    output.appendLine('[agentos] downloading runner binary…');
-    await download(`${serverUrl()}/runner/download`, exe);
+  const metaPath = path.join(dir, '.runner-meta.json');
+  const rid = runnerRid();
+
+  const have = fs.existsSync(exe);
+  let stored: { rid?: string; token?: string } | undefined;
+  if (have && fs.existsSync(metaPath)) {
+    try {
+      stored = JSON.parse(fs.readFileSync(metaPath, 'utf8')) as { rid?: string; token?: string };
+    } catch {
+      stored = undefined;
+    }
+  }
+
+  let needsDownload = !have;
+  if (have) {
+    const serverToken = await fetchRunnerToken(rid);
+    if (serverToken && (stored?.rid !== rid || stored?.token !== serverToken)) {
+      output.appendLine('[agentos] runner update available — refreshing binary…');
+      needsDownload = true;
+    }
+  }
+
+  if (needsDownload) {
+    output.appendLine(`[agentos] downloading runner binary (${rid})…`);
+    await download(`${serverUrl()}/runner/download?rid=${rid}`, exe);
     if (!isWin) {
       fs.chmodSync(exe, 0o755);
     }
+    const token = await fetchRunnerToken(rid);
+    fs.writeFileSync(metaPath, JSON.stringify({ rid, token }));
   }
   return exe;
 }
