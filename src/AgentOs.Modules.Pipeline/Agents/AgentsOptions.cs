@@ -47,4 +47,9 @@ public sealed class AgentOptions
 
     /// <summary>Output max tokens.</summary>
     public int MaxTokens { get; set; } = 2000;
+
+    /// <summary>Max repos run concurrently by the multi-repo IssueWorkAgent. Bounds fan-out so a
+    /// many-repo session doesn't overwhelm the paired dev machine. Only the IssueWork agent reads it.
+    /// Clamped to ≥1 at use; 1 = the old sequential behaviour.</summary>
+    public int MaxParallelRepos { get; set; } = 3;
 }

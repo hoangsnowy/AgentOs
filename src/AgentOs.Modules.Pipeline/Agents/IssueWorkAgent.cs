@@ -1,8 +1,9 @@
 // M5 / multi-repo — issue-work agent. Runs the agentic LLM loop (using runner_shell) for a ticket,
 // once PER target repo: explore the repo, implement the fix, build, test, commit, push a branch.
 // "Server thinks, runner does" — the LLM loop runs server-side; every shell command is dispatched to
-// the paired dev-machine runner via IToolGateway → runner_shell. Repos are handled sequentially
-// (smallest-viable: one bounded LLM run each, reusing the proven single-repo prompt + parser).
+// the paired dev-machine runner via IToolGateway → runner_shell. Repos run with bounded concurrency
+// (Agents:IssueWork:MaxParallelRepos, default 3) — one LLM run each, reusing the proven single-repo
+// prompt + parser; each repo has its own working_dir so concurrent runs don't collide.
 
 using System;
 using System.Collections.Generic;
@@ -93,19 +94,38 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
             return new IssueWorkResult(false, failed, $"LLM client init failed: {ex.Message}");
         }
 
-        var outcomes = new List<RepoWorkOutcome>(request.Repos.Count);
-        foreach (var repo in request.Repos)
+        // Run repos with bounded concurrency. Each repo is an independent LLM run with its own
+        // working_dir on the runner, so they don't collide; the broker dispatches per-call (GUID
+        // ToolCallId) so concurrent runner_shell calls are safe. A semaphore caps fan-out to keep the
+        // dev machine sane; each task writes only its own slot in the outcomes array (order-stable,
+        // no shared-state contention). MaxParallelRepos=1 reproduces the old sequential behaviour.
+        var maxParallel = Math.Max(1, _agentOpts.MaxParallelRepos);
+        var outcomes = new RepoWorkOutcome[request.Repos.Count];
+        using var gate = new SemaphoreSlim(maxParallel, maxParallel);
+
+        async Task RunRepoSlotAsync(int index)
         {
+            var repo = request.Repos[index];
             var repoLabel = $"{repo.Owner}/{repo.Repo}";
-            Emit(request, SessionRunEventKind.RepoStarted, $"{repoLabel} — implementing…", repoLabel);
-            var outcome = await RunOneAsync(llm, request, repo, cliMode, ct).ConfigureAwait(false);
-            Emit(request, SessionRunEventKind.Step,
-                outcome.Ok
-                    ? $"{repoLabel} — pushed branch {outcome.BranchName}"
-                    : $"{repoLabel} — agent failed: {outcome.Error}",
-                repoLabel);
-            outcomes.Add(outcome);
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                Emit(request, SessionRunEventKind.RepoStarted, $"{repoLabel} — implementing…", repoLabel);
+                var outcome = await RunOneAsync(llm, request, repo, cliMode, ct).ConfigureAwait(false);
+                Emit(request, SessionRunEventKind.Step,
+                    outcome.Ok
+                        ? $"{repoLabel} — pushed branch {outcome.BranchName}"
+                        : $"{repoLabel} — agent failed: {outcome.Error}",
+                    repoLabel);
+                outcomes[index] = outcome;
+            }
+            finally
+            {
+                gate.Release();
+            }
         }
+
+        await Task.WhenAll(Enumerable.Range(0, request.Repos.Count).Select(RunRepoSlotAsync)).ConfigureAwait(false);
 
         var ok = outcomes.All(o => o.Ok);
         return new IssueWorkResult(ok, outcomes, ok ? null : "One or more repositories failed — see per-repo errors.");

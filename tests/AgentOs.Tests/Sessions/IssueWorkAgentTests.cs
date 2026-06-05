@@ -98,19 +98,48 @@ public class IssueWorkAgentTests
     [Fact]
     public async Task RunAsync_OneRepoFails_AggregateFails_OthersStillReported()
     {
+        // Repos run concurrently now, so call order is non-deterministic — match the stub to the repo
+        // in the prompt rather than to call sequence.
         var llm = Substitute.For<ILlmClient>();
         llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
-           .Returns(
-               AgentTestHelpers.StubResponse("""{"branch":"issue-9-ai-fix","summary":"Fixed api."}"""),
-               AgentTestHelpers.StubResponse("""{"branch":"","summary":"","error":"Build failed in web."}"""));
+           .Returns(ci => ci.Arg<LlmRequest>().UserPrompt.Contains("acme/web", StringComparison.Ordinal)
+               ? AgentTestHelpers.StubResponse("""{"branch":"","summary":"","error":"Build failed in web."}""")
+               : AgentTestHelpers.StubResponse("""{"branch":"issue-9-ai-fix","summary":"Fixed api."}"""));
 
         var result = await MakeAgent(llm).RunAsync(MakeMultiRepoRequest(9, "api", "web"));
 
         result.Ok.ShouldBeFalse();
         result.Repos.Count.ShouldBe(2);
+        // Outcomes stay in input order regardless of completion order.
+        result.Repos[0].Repo.ShouldBe("api");
         result.Repos[0].Ok.ShouldBeTrue();
+        result.Repos[1].Repo.ShouldBe("web");
         result.Repos[1].Ok.ShouldBeFalse();
         result.Repos[1].Error!.ShouldContain("Build failed");
+    }
+
+    private static readonly string[] _orderRepos = ["api", "web", "worker", "infra", "docs"];
+
+    [Fact]
+    public async Task RunAsync_ManyRepos_PreservesInputOrderUnderConcurrency()
+    {
+        // Per-repo stub echoes the repo name into the branch; assert outcomes line up with input order
+        // even though the agent runs them in parallel (MaxParallelRepos default > 1).
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
+           .Returns(ci =>
+           {
+               var prompt = ci.Arg<LlmRequest>().UserPrompt;
+               var repo = _orderRepos.First(r => prompt.Contains($"acme/{r}", StringComparison.Ordinal));
+               return AgentTestHelpers.StubResponse($$"""{"branch":"{{repo}}-fix","summary":"ok"}""");
+           });
+
+        var result = await MakeAgent(llm).RunAsync(MakeMultiRepoRequest(3, _orderRepos));
+
+        result.Ok.ShouldBeTrue();
+        result.Repos.Select(r => r.Repo).ShouldBe(_orderRepos);
+        result.Repos.Select(r => r.BranchName).ShouldBe(
+            ["api-fix", "web-fix", "worker-fix", "infra-fix", "docs-fix"]);
     }
 
     [Fact]
