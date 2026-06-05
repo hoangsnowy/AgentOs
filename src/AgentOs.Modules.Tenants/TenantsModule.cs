@@ -29,7 +29,20 @@ public sealed class TenantsModule : IModule, IEndpointModule, IInitializableModu
 
         services.AddOptions<KeycloakAdminOptions>()
             .Bind(configuration.GetSection(KeycloakAdminOptions.SectionName));
-        services.AddHttpClient<IKeycloakAdminClient, KeycloakAdminClient>();
+
+        // Real admin client only when a Keycloak server is configured. Without a BaseUrl (standalone
+        // Web / CI) the typed HttpClient has no BaseAddress and the real client throws on first call,
+        // crashing the Users app's circuit — fall back to a no-op client that degrades gracefully.
+        var keycloakBaseUrl = configuration.GetSection(KeycloakAdminOptions.SectionName)["BaseUrl"];
+        if (!string.IsNullOrWhiteSpace(keycloakBaseUrl))
+        {
+            services.AddHttpClient<IKeycloakAdminClient, KeycloakAdminClient>();
+        }
+        else
+        {
+            services.AddSingleton<IKeycloakAdminClient, NullKeycloakAdminClient>();
+        }
+
         services.AddScoped<ITenantSignupService, TenantSignupService>();
 
         // App-sent email (invitation links). Real MailKit sender when an SMTP host is configured
