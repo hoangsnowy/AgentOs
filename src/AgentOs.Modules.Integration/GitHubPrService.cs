@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Pipeline;
+using AgentOs.Domain.Workspaces;
 using AgentOs.Modules.Llm;
 using Microsoft.Extensions.Logging;
 using Octokit;
@@ -31,7 +32,7 @@ public sealed class GitHubPrService : IGitHubPrService
     }
 
     /// <inheritdoc />
-    public async Task<GitHubPrResult> OpenPrAsync(PipelineResult result, string title, string body, CancellationToken ct)
+    public Task<GitHubPrResult> OpenPrAsync(PipelineResult result, string title, string body, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
 
@@ -49,12 +50,38 @@ public sealed class GitHubPrService : IGitHubPrService
         {
             throw new InvalidOperationException(
                 $"GitHub integration is not configured for this tenant. Missing: {string.Join(", ", missing)}. " +
-                "Set these on the /admin or Settings page first; the values are stored per tenant.");
+                "Set these on the Settings page, or pick a connected workspace repo.");
         }
 
         ArgumentNullException.ThrowIfNull(result);
+        return OpenPrCoreAsync(owner!, name!, baseBranch, pat!, baseUrl, result, title, body, ct);
+    }
 
-        var client = GitHubClientFactory.Create(pat, baseUrl);
+    /// <inheritdoc />
+    public Task<GitHubPrResult> OpenPrAsync(PipelineResult result, WorkspaceDescriptor workspace, string title, string body, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(workspace);
+        workspace.Validate();
+        if (workspace.Kind != SourceProviderKind.GitHub)
+        {
+            throw new InvalidOperationException(
+                $"Opening a PR from a pipeline result is GitHub-only; the selected workspace is '{workspace.Kind}'.");
+        }
+
+        var baseBranch = string.IsNullOrWhiteSpace(workspace.DefaultBranch) ? "main" : workspace.DefaultBranch;
+        return OpenPrCoreAsync(workspace.Owner, workspace.Repo, baseBranch, workspace.AccessToken, workspace.Host, result, title, body, ct);
+    }
+
+    // Shared core: branch off base, commit the generated files, open the PR. Both overloads funnel here so
+    // the Settings-token path and the workspace path differ ONLY in where (owner, repo, branch, token, host)
+    // come from.
+    private async Task<GitHubPrResult> OpenPrCoreAsync(
+        string owner, string name, string baseBranch, string token, string? host,
+        PipelineResult result, string title, string body, CancellationToken ct)
+    {
+        var client = GitHubClientFactory.Create(token, host);
 
         // 1. Locate base branch SHA.
         ct.ThrowIfCancellationRequested();

@@ -4,6 +4,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Pipeline;
+using AgentOs.Domain.Workspaces;
 
 namespace AgentOs.Modules.Integration;
 
@@ -13,9 +14,16 @@ public interface IGitHubPrService
     /// <summary>
     /// Create a new branch (timestamped) from the base branch, commit every file in
     /// <see cref="PipelineResult.Code"/> and <see cref="PipelineResult.Tests"/>, and open a PR.
-    /// PAT and target repo are read from <c>IRuntimeOverrides</c> (set via the Settings page).
+    /// PAT and target repo are read from <c>IRuntimeOverrides</c> (the Settings page) — the FALLBACK
+    /// used only when no connected workspace is selected. Prefer the workspace overload.
     /// </summary>
     Task<GitHubPrResult> OpenPrAsync(PipelineResult result, string title, string body, CancellationToken ct);
+
+    /// <summary>
+    /// Same as above, but targets a connected <see cref="WorkspaceDescriptor"/> (a Spine-managed board's
+    /// repo) using the per-workspace PAT — the unified repo/token source. GitHub-only.
+    /// </summary>
+    Task<GitHubPrResult> OpenPrAsync(PipelineResult result, WorkspaceDescriptor workspace, string title, string body, CancellationToken ct);
 }
 
 /// <summary>Result of <see cref="IGitHubPrService.OpenPrAsync"/>.</summary>

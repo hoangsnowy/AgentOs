@@ -29,7 +29,7 @@ public sealed class GitHubPrServiceTests
         var ex = await Should.ThrowAsync<InvalidOperationException>(async () =>
             await svc.OpenPrAsync(null!, "title", "body", CancellationToken.None));
         ex.Message.ShouldContain("GitHubPat");
-        ex.Message.ShouldContain("per tenant");
+        ex.Message.ShouldContain("workspace");
     }
 
     [Fact]
