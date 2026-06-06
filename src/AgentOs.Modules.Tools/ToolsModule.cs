@@ -26,7 +26,12 @@ public sealed class ToolsModule : IModule, IInitializableModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<IToolRegistry, InMemoryToolRegistry>();
-        services.TryAddSingleton<IToolPolicy, PermissiveToolPolicy>();
+        // Per-tenant tool allowlist read from AppConfig — default-permissive until an admin turns on
+        // enforcement in the Policy app. IAppConfigStore is optional so this degrades to permissive when
+        // no config store is wired (unit tests / no-DB standalone).
+        services.TryAddSingleton<IToolPolicy>(sp => new Policy.AppConfigToolPolicy(
+            sp.GetService<AgentOs.Modules.AppConfig.IAppConfigStore>()));
+        services.TryAddSingleton<IToolPolicyService, Policy.ToolPolicyService>();
 
         // Evidence sink: durable EF-backed when a DB is configured, else the in-memory ring buffer
         // (dev / CI). The schema `tools` keeps tool-invocation evidence as a first-class audit trail.

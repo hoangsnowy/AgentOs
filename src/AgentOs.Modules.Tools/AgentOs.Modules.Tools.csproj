@@ -8,6 +8,8 @@
   <ItemGroup>
     <ProjectReference Include="..\AgentOs.Domain\AgentOs.Domain.csproj" />
     <ProjectReference Include="..\AgentOs.SharedKernel\AgentOs.SharedKernel.csproj" />
+    <!-- The per-tenant tool allowlist is stored in the encrypted AppConfig KV store. -->
+    <ProjectReference Include="..\AgentOs.Modules.AppConfig\AgentOs.Modules.AppConfig.csproj" />
   </ItemGroup>
 
   <ItemGroup>
