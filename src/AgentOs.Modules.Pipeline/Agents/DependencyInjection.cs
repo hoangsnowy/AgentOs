@@ -60,6 +60,7 @@ public static class AgentsServiceCollectionExtensions
                 inner,
                 sp.GetRequiredService<IPipelineRunRepository>(),
                 sp.GetRequiredService<IMetricsCollector>(),
+                sp.GetRequiredService<AgentOs.Domain.Cost.IBudgetGuard>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<PersistingOrchestratorAgent>>());
         });
