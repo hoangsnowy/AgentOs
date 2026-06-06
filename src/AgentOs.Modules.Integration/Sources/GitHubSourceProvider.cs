@@ -17,7 +17,6 @@ namespace AgentOs.Modules.Integration.Sources;
 /// <summary><see cref="ISourceProvider"/> backed by GitHub via Octokit.</summary>
 public sealed class GitHubSourceProvider : ISourceProvider
 {
-    private const string UserAgent = "agentos";
 
     public SourceProviderKind Kind => SourceProviderKind.GitHub;
 
@@ -233,13 +232,5 @@ public sealed class GitHubSourceProvider : ISourceProvider
         return validation.NodeId;
     }
 
-    private static GitHubClient CreateClient(string token, string? host)
-    {
-        var header = new ProductHeaderValue(UserAgent);
-        var client = string.IsNullOrWhiteSpace(host)
-            ? new GitHubClient(header)
-            : new GitHubClient(header, new Uri(host));
-        client.Credentials = new Credentials(token);
-        return client;
-    }
+    private static GitHubClient CreateClient(string token, string? host) => GitHubClientFactory.Create(token, host);
 }
