@@ -18,6 +18,7 @@ using AgentOs.Modules.Tools;
 using AgentOs.Modules.Workspaces;
 using AgentOs.ServiceDefaults;
 using AgentOs.SharedKernel.Modularity;
+using AgentOs.SharedKernel.Plugins;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -70,6 +71,11 @@ builder.Services.AddModulesFromAssemblies(builder.Configuration,
     typeof(SessionsModule).Assembly,
     typeof(McpModule).Assembly,
     typeof(RemoteAgentModule).Assembly);
+
+// Runtime plugins: discover IAgentOsPlugin assemblies dropped in the plugins folder (Plugins:Path,
+// default "plugins" under the content root). A missing folder is a no-op.
+builder.Services.AddPlugins(builder.Configuration,
+    System.IO.Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Plugins:Path"] ?? "plugins"));
 
 // Epic E4 — expose AgentOs pipeline as MCP server. WithToolsFromAssembly discovers every
 // [McpServerToolType]-attributed class in the Api assembly (PipelineMcpTools today, more later).

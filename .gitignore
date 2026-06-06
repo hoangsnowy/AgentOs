@@ -9,6 +9,9 @@
 **/publish/
 # Self-contained runner exe served by the Web for the VS Code extension (built by scripts/build-runner.ps1)
 src/AgentOs.Web/runner-dist/
+# Runtime plugin drop folders (built by scripts/build-plugins.ps1; plugin SOURCE lives in samples/)
+src/AgentOs.Api/plugins/
+src/AgentOs.Web/plugins/
 **/*.binlog
 **/*.tlog
 

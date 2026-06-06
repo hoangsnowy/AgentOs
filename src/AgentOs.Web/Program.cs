@@ -18,6 +18,7 @@ using AgentOs.Modules.Workspaces;
 using AgentOs.ServiceDefaults;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Modularity;
+using AgentOs.SharedKernel.Plugins;
 using AgentOs.Web.Components;
 using AgentOs.Web.Services;
 using Microsoft.AspNetCore.Authentication;
@@ -163,6 +164,11 @@ builder.Services.AddModulesFromAssemblies(builder.Configuration,
     typeof(WorkspacesModule).Assembly,
     typeof(SessionsModule).Assembly,
     typeof(ToolsModule).Assembly);
+
+// Runtime plugins: discover IAgentOsPlugin assemblies dropped in the plugins folder (Plugins:Path,
+// default "plugins" under the content root). A missing folder is a no-op.
+builder.Services.AddPlugins(builder.Configuration,
+    System.IO.Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Plugins:Path"] ?? "plugins"));
 
 builder.Services.AddSingleton<AgentOs.Web.Orchestrations.OrchestrationStore>();
 // Per-circuit UI state: each user's desktop has its own open windows. Singleton would bleed windows
