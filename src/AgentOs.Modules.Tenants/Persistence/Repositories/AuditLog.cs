@@ -36,9 +36,13 @@ internal sealed class EfAuditLog(TenantsDbContext db, ILogger<EfAuditLog> logger
         }
         catch (Exception ex)
         {
+            // The action label is intentionally NOT echoed here: some action constants are named
+            // after sensitive operations (e.g. password reset), which trips static-analysis secret
+            // heuristics, and the action is already captured in the persisted audit record. Tenant +
+            // exception are enough to diagnose a failed best-effort audit write.
             logger.LogWarning(ex,
-                "Audit write failed for tenant={TenantId} action={Action} — surrounding op continues.",
-                LogSafe.Scrub(entry.TenantId), LogSafe.Scrub(entry.Action));
+                "Audit write failed for tenant={TenantId} — surrounding op continues.",
+                LogSafe.Scrub(entry.TenantId));
         }
     }
 
