@@ -27,7 +27,13 @@
         "agentos.runOnMyMachine": {
           "type": "boolean",
           "default": false,
-          "description": "Run AI coding sessions with the local claude CLI (adds --dangerously-skip-permissions). Requires the claude CLI installed and logged in."
+          "description": "Run AI coding sessions autonomously on this machine (appends the CLI's auto flags: claude --dangerously-skip-permissions / codex --full-auto). Requires the chosen CLI installed and logged in."
+        },
+        "agentos.cliAgent": {
+          "type": "string",
+          "enum": ["claude", "codex"],
+          "default": "claude",
+          "description": "Default CLI agent the runner invokes (uses your flat monthly subscription, not metered API). The server can override this per session."
         }
       }
     }

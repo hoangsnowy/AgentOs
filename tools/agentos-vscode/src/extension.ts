@@ -106,13 +106,18 @@ async function startRunner(context: vscode.ExtensionContext, creds: Creds): Prom
     return;
   }
 
-  const onMyMachine = vscode.workspace.getConfiguration('agentos').get<boolean>('runOnMyMachine') ?? false;
+  const cfg = vscode.workspace.getConfiguration('agentos');
+  const onMyMachine = cfg.get<boolean>('runOnMyMachine') ?? false;
+  const cliAgent = cfg.get<string>('cliAgent') ?? 'claude';
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     REMOTE_AGENT_HUB: creds.hubUrl,
     REMOTE_AGENT_ID: creds.runnerId,
     REMOTE_AGENT_TOKEN: creds.token,
-    REMOTE_AGENT_ARGS: onMyMachine ? '-p --dangerously-skip-permissions' : '-p',
+    // Default CLI profile; the server can still override it per session. The runner builds the right
+    // flags per profile and appends the autonomous flags only when YOLO is set (the run-on-my-machine opt-in).
+    REMOTE_AGENT_CLI: cliAgent,
+    REMOTE_AGENT_YOLO: onMyMachine ? '1' : '',
   };
 
   output.appendLine(`[agentos] starting runner: ${exe}`);
