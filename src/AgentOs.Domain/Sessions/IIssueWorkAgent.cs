@@ -31,6 +31,10 @@ public sealed record WorkRepo(Guid SessionRepoId, string Owner, string Repo, str
 /// CLI (claude-code / codex) — it runs on their own machine + subscription, spending zero server tokens.
 /// Null = use the configured provider (server-side LLM + <c>runner_shell</c>).
 /// </param>
+/// <param name="CliProfile">
+/// Optional CLI-agent profile for the <c>RemoteAgent</c> path (e.g. <c>"claude"</c>, <c>"codex"</c>) —
+/// which subscription CLI the paired runner should invoke. Null = the runner's configured default.
+/// </param>
 public sealed record IssueWorkRequest(
     Guid SessionId,
     string TenantId,
@@ -40,7 +44,8 @@ public sealed record IssueWorkRequest(
     string IssueTitle,
     string IssueBody,
     string TicketKind = "Issue",
-    string? ProviderOverride = null);
+    string? ProviderOverride = null,
+    string? CliProfile = null);
 
 /// <summary>The agent's outcome for one repo.</summary>
 /// <param name="SessionRepoId">The session-repo row this outcome belongs to.</param>

@@ -144,7 +144,8 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
                 Temperature: _agentOpts.Temperature,
                 MaxTokens: _agentOpts.MaxTokens,
                 Tools: [],
-                Timeout: CliRunTimeout)
+                Timeout: CliRunTimeout,
+                Cli: request.CliProfile)
             : new LlmRequest(
                 SystemPrompt: IssueWorkPrompt.System(request, repo),
                 UserPrompt: IssueWorkPrompt.User(request, repo),

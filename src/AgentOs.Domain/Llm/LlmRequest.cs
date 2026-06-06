@@ -27,6 +27,12 @@ namespace AgentOs.Domain.Llm;
 /// dispatch deadline — a single agentic CLI run on a paired dev machine (clone → build → test → push)
 /// far outlasts the default 120s, so the caller raises it for that path. Null = provider default.
 /// </param>
+/// <param name="Cli">
+/// Optional CLI-agent profile hint (e.g. <c>"claude"</c>, <c>"codex"</c>). Only <c>RemoteAgentLlmClient</c>
+/// honours it — it tells the paired runner which subscription CLI to invoke (Claude Code vs OpenAI Codex),
+/// so the run uses the member's flat monthly subscription instead of metered API tokens. Null = the
+/// runner's configured default. Ignored by the HTTP-backed providers.
+/// </param>
 public sealed record LlmRequest(
     string SystemPrompt,
     string UserPrompt,
@@ -35,7 +41,8 @@ public sealed record LlmRequest(
     int MaxTokens = 4096,
     string? JsonSchema = null,
     System.Collections.Generic.IReadOnlyList<string>? Tools = null,
-    System.TimeSpan? Timeout = null)
+    System.TimeSpan? Timeout = null,
+    string? Cli = null)
 {
     /// <summary>
     /// Validates required values. Throws <see cref="System.ArgumentException"/> if invalid.
