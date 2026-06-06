@@ -19,6 +19,7 @@ using AgentOs.Modules.Workspaces;
 using AgentOs.ServiceDefaults;
 using AgentOs.SharedKernel.Modularity;
 using AgentOs.SharedKernel.Plugins;
+using System.Threading.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -36,6 +37,36 @@ builder.Logging.AddSimpleConsole(options =>
 
 builder.Services.AddOpenApi();
 builder.Services.AddDataProtection();
+
+// S2 — per-tenant request rate limiting. An in-flight throttle on the request pipeline, INDEPENDENT
+// of the month-to-date BudgetGuard (which is post-hoc and cannot bound a burst). Partitioned by the
+// tenant claim so one tenant's spike can't starve another; a token bucket smooths bursts. Health +
+// service-identity routes are exempt so liveness/readiness probes are never throttled.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        var path = httpContext.Request.Path;
+        if (path.StartsWithSegments("/health") || path.StartsWithSegments("/alive") || path.Value == "/")
+        {
+            return RateLimitPartition.GetNoLimiter("exempt");
+        }
+
+        var tenant = httpContext.User.FindFirst("tenant")?.Value
+            ?? httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous";
+
+        return RateLimitPartition.GetTokenBucketLimiter(tenant, _ => new TokenBucketRateLimiterOptions
+        {
+            TokenLimit = 120,
+            TokensPerPeriod = 120,
+            ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true,
+        });
+    });
+});
 
 // Response compression — Brotli + Gzip for REST/JSON + Scalar responses. The default compressible
 // MIME set excludes text/event-stream, so the streaming MCP endpoint (/mcp) is left uncompressed
@@ -91,6 +122,9 @@ app.UseResponseCompression();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// After auth so the per-tenant partition can read the tenant claim (S2).
+app.UseRateLimiter();
 
 if (!app.Environment.IsProduction())
 {

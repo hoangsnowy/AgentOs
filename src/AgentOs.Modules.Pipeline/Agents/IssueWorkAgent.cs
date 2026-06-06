@@ -11,6 +11,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using AgentOs.Domain.Cost;
 using AgentOs.Domain.Llm;
 using AgentOs.Domain.Sessions;
 using AgentOs.Modules.Pipeline.Prompts;
@@ -30,12 +31,14 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
     private readonly AgentOptions _agentOpts;
     private readonly ILogger<IssueWorkAgent> _logger;
     private readonly ISessionRunFeed? _feed;
+    private readonly IBudgetGuard? _budgetGuard;
 
     public IssueWorkAgent(
         ILlmClientFactory factory,
         IOptions<AgentsOptions> options,
         ILogger<IssueWorkAgent> logger,
-        ISessionRunFeed? feed = null)
+        ISessionRunFeed? feed = null,
+        IBudgetGuard? budgetGuard = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(options);
@@ -48,11 +51,54 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         // Optional: the live progress feed (null in unit tests / hosts that don't register it).
         _feed = feed;
+        // S1 — optional per-tenant budget gate. Null on the no-DB standalone path / unit tests, where
+        // spend is always 0 and the gate would be a no-op anyway. Storing the ref is side-effect-free.
+        _budgetGuard = budgetGuard;
     }
 
     // Best-effort publish to the live session-run feed — never throws, no-op when unsubscribed.
     private void Emit(IssueWorkRequest req, SessionRunEventKind kind, string message, string? repo = null) =>
         _feed?.Publish(new SessionRunEvent(req.TenantId, req.SessionId, kind, message, DateTimeOffset.UtcNow, repo));
+
+    // S1 — returns a fully-failed IssueWorkResult when the tenant is over its ENFORCED monthly LLM
+    // budget, else null (the run proceeds). Fail-open on a transient store error: a budget-store hiccup
+    // must never block a run — the cap re-applies on the next run once the store recovers.
+    private async Task<IssueWorkResult?> BudgetBlockedAsync(IssueWorkRequest request, CancellationToken ct)
+    {
+        BudgetStatus budget;
+        try
+        {
+            budget = await _budgetGuard!.EvaluateAsync(request.TenantId, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031 // fail-open: a transient budget-store error must not block a run.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            _logger.LogWarning(ex, "IssueWorkAgent: budget evaluation failed for tenant {Tenant}; proceeding.", request.TenantId);
+            return null;
+        }
+
+        if (budget is not { State: BudgetState.Exceeded, EnforceOn: true })
+        {
+            return null;
+        }
+
+        _logger.LogWarning(
+            "IssueWorkAgent: blocking session {SessionId} — tenant {Tenant} over monthly LLM budget (${Spent} of ${Cap}).",
+            request.SessionId, request.TenantId, budget.SpentUsd, budget.CapUsd);
+        Emit(request, SessionRunEventKind.Step,
+            $"Blocked — monthly LLM budget exceeded (${budget.SpentUsd:0.##} of ${budget.CapUsd:0.##}). " +
+            "Raise the cap in Settings, or use Run-on-machine (0 server tokens).");
+
+        var failed = request.Repos
+            .Select(r => new RepoWorkOutcome(r.SessionRepoId, false, r.Owner, r.Repo, "", "", "Monthly LLM budget exceeded."))
+            .ToList();
+        return new IssueWorkResult(false, failed, "Monthly LLM budget exceeded — run blocked by the budget gate.");
+    }
 
     /// <inheritdoc />
     public async Task<IssueWorkResult> RunAsync(IssueWorkRequest request, CancellationToken ct = default)
@@ -73,6 +119,19 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         // the CLI-mode prompt + a long dispatch timeout, and the run costs zero server tokens.
         var providerName = request.ProviderOverride ?? _agentOpts.Provider;
         var cliMode = providerName.Trim().ToUpperInvariant() is "REMOTEAGENT" or "REMOTE" or "IDE";
+
+        // S1 — server-token budget gate. Server-side runs spend AgentOS's OWN LLM tokens, so they pass
+        // the per-tenant budget gate before the expensive agentic loop (the gap the run-level pipeline
+        // gate in PersistingOrchestratorAgent never covered for this path). CLI/RemoteAgent runs execute
+        // on the member's paired machine and cost ZERO server tokens, so they are exempt.
+        if (!cliMode && _budgetGuard is not null)
+        {
+            var blocked = await BudgetBlockedAsync(request, ct).ConfigureAwait(false);
+            if (blocked is not null)
+            {
+                return blocked;
+            }
+        }
 
         Emit(request, SessionRunEventKind.Running, cliMode
             ? $"Running on your machine's CLI — {request.Repos.Count} repo(s), 0 server tokens."

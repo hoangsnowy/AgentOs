@@ -9,6 +9,7 @@
 // per-request identity.
 
 using System;
+using System.Collections.Concurrent;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
@@ -24,6 +25,12 @@ namespace AgentOs.Modules.RemoteAgent;
 public sealed class RunnerShellTool : ITool
 {
     public static readonly TimeSpan ToolTimeout = TimeSpan.FromSeconds(120);
+
+    // S3 — bound concurrent runner_shell dispatches PER TENANT so a single tenant (or a runaway agent
+    // loop) cannot saturate the dispatch path or hammer a paired dev machine. In-process only; a
+    // multi-instance deploy needs a distributed gate (deferred — coherence plan Phase 5/F).
+    internal const int MaxConcurrentPerTenant = 4;
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _tenantGates = new(StringComparer.Ordinal);
 
     public ToolDefinition Definition { get; } = new(
         Name: "runner_shell",
@@ -105,29 +112,39 @@ public sealed class RunnerShellTool : ITool
             ToolName: "shell",
             JsonInput: payload);
 
-        EmitCommand($"$ {Truncate(command, 160)}");
-
-        RunnerToolResult result;
+        // S3 — per-tenant concurrency gate around the dispatch.
+        var gate = _tenantGates.GetOrAdd(target.TenantId, _ => new SemaphoreSlim(MaxConcurrentPerTenant, MaxConcurrentPerTenant));
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            result = await _broker.DispatchToolCallAsync(call, target, ToolTimeout, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (TimeoutException ex)
-        {
-            EmitCommand($"⏱ command timed out after {ToolTimeout.TotalSeconds:0}s");
-            throw new ToolException($"runner_shell: runner timed out after {ToolTimeout.TotalSeconds:0}s.", ex);
-        }
-        catch (InvalidOperationException ex)
-        {
-            throw new ToolException($"runner_shell: {ex.Message}", ex);
-        }
+            EmitCommand($"$ {Truncate(command, 160)}");
 
-        EmitCommand(result.Ok ? "✓ command ok" : $"✗ command failed: {Truncate(result.Error, 160)}");
+            RunnerToolResult result;
+            try
+            {
+                result = await _broker.DispatchToolCallAsync(call, target, ToolTimeout, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException ex)
+            {
+                EmitCommand($"⏱ command timed out after {ToolTimeout.TotalSeconds:0}s");
+                throw new ToolException($"runner_shell: runner timed out after {ToolTimeout.TotalSeconds:0}s.", ex);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new ToolException($"runner_shell: {ex.Message}", ex);
+            }
 
-        return result.Ok
-            ? ToolInvocationResult.Success(request.CallId, result.JsonOutput)
-            : ToolInvocationResult.Error(request.CallId, result.Error ?? "Runner reported failure.");
+            EmitCommand(result.Ok ? "✓ command ok" : $"✗ command failed: {Truncate(result.Error, 160)}");
+
+            return result.Ok
+                ? ToolInvocationResult.Success(request.CallId, result.JsonOutput)
+                : ToolInvocationResult.Error(request.CallId, result.Error ?? "Runner reported failure.");
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     // Publish a per-command line to the session's live feed. No-op unless a feed is registered AND the

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AgentOs.Domain.Cost;
 using AgentOs.Domain.Llm;
 using AgentOs.Domain.Sessions;
 using AgentOs.Modules.Pipeline.Agents;
@@ -258,6 +259,80 @@ public class IssueWorkAgentTests
         captured.SystemPrompt.ShouldContain("clone");
         captured.SystemPrompt.ShouldContain("git push");
         captured.SystemPrompt.ShouldNotContain("runner_shell");
+    }
+
+    // ── S1 budget gate ──────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RunAsync_ServerMode_OverEnforcedBudget_BlocksWithoutCallingLlm()
+    {
+        var llm = Substitute.For<ILlmClient>();
+        var guard = Substitute.For<IBudgetGuard>();
+        // cap 10, spent 25 → Exceeded, enforcement ON.
+        guard.EvaluateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(new BudgetStatus(10m, 25m, -15m, 2.5, BudgetState.Exceeded, true));
+
+        var agent = new IssueWorkAgent(
+            AgentTestHelpers.FactoryReturning(llm),
+            AgentTestHelpers.OptionsWith(new AgentsOptions()),
+            NullLogger<IssueWorkAgent>.Instance,
+            feed: null,
+            budgetGuard: guard);
+
+        var result = await agent.RunAsync(MakeRequest());
+
+        result.Ok.ShouldBeFalse();
+        result.Error!.ShouldContain("budget");
+        result.Repos.ShouldAllBe(r => !r.Ok);
+        // Blocked BEFORE any server tokens are spent.
+        await llm.DidNotReceive().SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_OverBudgetButEnforceOff_StillRuns()
+    {
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
+           .Returns(AgentTestHelpers.StubResponse("""{"branch":"issue-42-ai-fix","summary":"Done."}"""));
+        var guard = Substitute.For<IBudgetGuard>();
+        // Over cap but enforcement OFF → warn-only, never blocks.
+        guard.EvaluateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(new BudgetStatus(10m, 25m, -15m, 2.5, BudgetState.Exceeded, false));
+
+        var agent = new IssueWorkAgent(
+            AgentTestHelpers.FactoryReturning(llm),
+            AgentTestHelpers.OptionsWith(new AgentsOptions()),
+            NullLogger<IssueWorkAgent>.Instance,
+            feed: null,
+            budgetGuard: guard);
+
+        var result = await agent.RunAsync(MakeRequest());
+
+        result.Ok.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task RunAsync_CliMode_OverEnforcedBudget_IsExemptAndNeverChecksBudget()
+    {
+        // CLI / RemoteAgent runs execute on the member's paired machine → ZERO server tokens → exempt.
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
+           .Returns(AgentTestHelpers.StubResponse("""{"branch":"issue-42-ai-fix","summary":"Done."}"""));
+        var guard = Substitute.For<IBudgetGuard>();
+        guard.EvaluateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(new BudgetStatus(10m, 25m, -15m, 2.5, BudgetState.Exceeded, true));
+
+        var agent = new IssueWorkAgent(
+            AgentTestHelpers.FactoryReturning(llm),
+            AgentTestHelpers.OptionsWith(new AgentsOptions()),
+            NullLogger<IssueWorkAgent>.Instance,
+            feed: null,
+            budgetGuard: guard);
+
+        var result = await agent.RunAsync(MakeRequest() with { ProviderOverride = "RemoteAgent" });
+
+        result.Ok.ShouldBeTrue();
+        await guard.DidNotReceive().EvaluateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
