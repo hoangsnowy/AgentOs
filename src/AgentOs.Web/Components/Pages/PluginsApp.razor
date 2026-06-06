@@ -1,0 +1,62 @@
+@* PluginsApp — lists the runtime plugins discovered at startup (from the host's plugins/ folder).
+   Reads the IPluginCatalog the PluginLoader populated. Failed loads are shown too, so a broken plugin
+   is visible rather than silently missing. Read-only; enable/disable is a future slice. *@
+
+@using AgentOs.SharedKernel.Plugins
+@inject IPluginCatalog Catalog
+
+<header class="page-head">
+    <div>
+        <h1 class="page-title">Plugins</h1>
+        <p class="page-sub">Extensions discovered in the host's <code>plugins/</code> folder at startup.</p>
+    </div>
+</header>
+
+@if (Catalog.Plugins.Count == 0)
+{
+    <div class="muted spine-empty">
+        No plugins installed. Drop a plugin assembly in the host's <code>plugins/</code> folder and restart.
+        Build the bundled sample with <code>scripts/build-plugins.ps1</code>, then reload.
+    </div>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Plugin</th>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Contributes</th>
+                <th>Author</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in Catalog.Plugins)
+            {
+                <tr>
+                    <td>
+                        <div>@p.Manifest.Name</div>
+                        <div class="muted"><code>@p.Manifest.Id</code></div>
+                        @if (p.Status == PluginStatus.Failed && !string.IsNullOrEmpty(p.Error))
+                        {
+                            <div class="login-error">@p.Error</div>
+                        }
+                        else if (!string.IsNullOrEmpty(p.Manifest.Description))
+                        {
+                            <div class="muted">@p.Manifest.Description</div>
+                        }
+                    </td>
+                    <td><code>@p.Manifest.Version</code></td>
+                    <td>
+                        <Badge Variant="@(p.Status == PluginStatus.Loaded ? Badge.BadgeVariant.Ok : Badge.BadgeVariant.Err)">
+                            @(p.Status == PluginStatus.Loaded ? "Loaded" : "Failed")
+                        </Badge>
+                    </td>
+                    <td>@(p.Capabilities.Count == 0 ? "—" : string.Join(", ", p.Capabilities))</td>
+                    <td>@(string.IsNullOrEmpty(p.Manifest.Author) ? "—" : p.Manifest.Author)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
