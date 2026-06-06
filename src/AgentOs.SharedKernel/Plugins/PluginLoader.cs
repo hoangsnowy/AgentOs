@@ -143,6 +143,7 @@ public static class PluginLoader
     private static List<string> SummarizeCapabilities(IServiceCollection services, int startIndex)
     {
         var tools = 0;
+        var apps = 0;
         var others = 0;
         var providers = new List<string>();
 
@@ -152,6 +153,10 @@ public static class PluginLoader
             if (descriptor.ServiceType == typeof(ITool))
             {
                 tools++;
+            }
+            else if (descriptor.ServiceType == typeof(PluginAppDescriptor))
+            {
+                apps++;
             }
             else if (descriptor.ServiceType == typeof(ILlmClient) && descriptor.IsKeyedService)
             {
@@ -167,6 +172,10 @@ public static class PluginLoader
         if (tools > 0)
         {
             caps.Add(tools == 1 ? "1 tool" : $"{tools} tools");
+        }
+        if (apps > 0)
+        {
+            caps.Add(apps == 1 ? "1 app" : $"{apps} apps");
         }
         caps.AddRange(providers.Select(p => $"provider: {p}"));
         if (others > 0)

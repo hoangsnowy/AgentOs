@@ -186,6 +186,12 @@ var app = builder.Build();
 
 await app.Services.InitializeModulesAsync();
 
+// Surface plugin-contributed desktop windows: collect every PluginAppDescriptor a plugin registered and
+// add it to the shell catalog (the WindowHost renders these via DynamicComponent).
+AppCatalog.RegisterPluginApps(app.Services.GetServices<PluginAppDescriptor>().Select(d =>
+    new DesktopApp(d.Key, d.Title, d.Icon, d.Caption, "Plugins", d.Width, d.Height, Pinned: true,
+        AdminOnly: d.AdminOnly, ComponentType: d.ComponentType)));
+
 // Early in the pipeline so it wraps every downstream response. Skips assets MapStaticAssets already
 // served pre-compressed (their Content-Encoding is set), so there is no double-compression.
 app.UseResponseCompression();
