@@ -335,7 +335,9 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
                 using var resp = await client.PostAsync("llm/test", null);
                 var body = await resp.Content.ReadFromJsonAsync<LlmTestResult>();
                 _testOk = body?.Ok ?? false;
-                _testResult = _testOk ? $"{body!.Provider} · {body.Model}" : (body?.Error ?? $"HTTP {(int)resp.StatusCode}");
+                _testResult = body is { Ok: true }
+                    ? $"{body.Provider} · {body.Model}"
+                    : (body?.Error ?? $"HTTP {(int)resp.StatusCode}");
             }
             else
             {
