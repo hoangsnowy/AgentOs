@@ -5,8 +5,10 @@ Custom skills shipped with the repo. Loaded automatically by every Claude Code s
 | Skill | Trigger | When |
 |---|---|---|
 | **agent-scaffold** | `/agent-scaffold X`, "scaffold agent X" | Add a new pipeline agent (`AgentOs.Modules.Pipeline.Agents.{Name}Agent`). Generates contract + impl + DI registration + xUnit test stub. |
+| **plugin-scaffold** | `/plugin-scaffold X`, "scaffold a plugin" | Scaffold a runtime-discovered `IAgentOsPlugin` (dropped in `plugins/`, no host reference). Generates the project + manifest + a contributed tool / provider / window. |
 | **prompt-tune** | `/prompt-tune {Name}Agent`, "tune prompt for X" | A/B-test prompt variants over an eval fixture set. Reports pass-rate / JSON-valid / token diff. |
 | **cost-report** | `/cost-report week`, "weekly cost" | Aggregate structured logs → xlsx + markdown cost report grouped by agent / provider / model / date. |
+| **design-review** | `/design-review`, "design check" | Enforce the design system on Blazor UI; phantom-CSS detector + vocabulary mapping. |
 
 ## Format
 
