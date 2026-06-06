@@ -1,0 +1,59 @@
+name: CodeQL
+
+# Static security + quality analysis (SAST) for the C# codebase.
+# Enterprise baseline: scan on every push/PR to main and on a weekly cron so newly
+# disclosed query-pack rules catch regressions even when the code is quiet.
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Mondays 03:17 UTC — odd minute to dodge the top-of-hour Actions congestion.
+    - cron: '17 3 * * 1'
+
+# Cancel a superseded in-flight scan when new commits land on the same ref.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (csharp)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      security-events: write   # required to upload SARIF to the Security tab
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Manual build-mode: autobuild does not understand the .NET 10 .slnx solution
+      # format, so we drive the build ourselves between init and analyze.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          build-mode: manual
+          # security-and-quality = the full pack (security + maintainability), the
+          # enterprise default. Drop to security-extended if scan time becomes a problem.
+          queries: security-and-quality
+
+      - name: Restore
+        run: dotnet restore AgentOs.slnx
+
+      - name: Build (Release)
+        run: dotnet build AgentOs.slnx --configuration Release --no-restore
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:csharp"
