@@ -70,18 +70,18 @@ public static class JwtAuthExtensions
             using var doc = JsonDocument.Parse(realmAccess);
             if (doc.RootElement.TryGetProperty("roles", out var roles) && roles.ValueKind == JsonValueKind.Array)
             {
-                foreach (var role in roles.EnumerateArray())
+                foreach (var name in roles.EnumerateArray()
+                    .Select(r => r.GetString())
+                    .Where(name => !string.IsNullOrEmpty(name)))
                 {
-                    var name = role.GetString();
-                    if (!string.IsNullOrEmpty(name))
-                    {
-                        identity.AddClaim(new Claim(ClaimTypes.Role, name));
-                    }
+                    identity.AddClaim(new Claim(ClaimTypes.Role, name!));
                 }
             }
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
+            // Malformed realm_access claim — the user simply gets no role claims.
+            _ = ex.Message;
         }
     }
 }

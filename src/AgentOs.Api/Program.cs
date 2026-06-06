@@ -105,8 +105,11 @@ builder.Services.AddModulesFromAssemblies(builder.Configuration,
 
 // Runtime plugins: discover IAgentOsPlugin assemblies dropped in the plugins folder (Plugins:Path,
 // default "plugins" under the content root). A missing folder is a no-op.
+var pluginsPath = builder.Configuration["Plugins:Path"] ?? "plugins";
 builder.Services.AddPlugins(builder.Configuration,
-    System.IO.Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Plugins:Path"] ?? "plugins"));
+    System.IO.Path.IsPathRooted(pluginsPath)
+        ? pluginsPath
+        : System.IO.Path.Join(builder.Environment.ContentRootPath, pluginsPath));
 
 // Epic E4 — expose AgentOs pipeline as MCP server. WithToolsFromAssembly discovers every
 // [McpServerToolType]-attributed class in the Api assembly (PipelineMcpTools today, more later).

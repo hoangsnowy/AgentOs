@@ -167,8 +167,11 @@ builder.Services.AddModulesFromAssemblies(builder.Configuration,
 
 // Runtime plugins: discover IAgentOsPlugin assemblies dropped in the plugins folder (Plugins:Path,
 // default "plugins" under the content root). A missing folder is a no-op.
+var pluginsPath = builder.Configuration["Plugins:Path"] ?? "plugins";
 builder.Services.AddPlugins(builder.Configuration,
-    System.IO.Path.Combine(builder.Environment.ContentRootPath, builder.Configuration["Plugins:Path"] ?? "plugins"));
+    System.IO.Path.IsPathRooted(pluginsPath)
+        ? pluginsPath
+        : System.IO.Path.Join(builder.Environment.ContentRootPath, pluginsPath));
 
 builder.Services.AddSingleton<AgentOs.Web.Orchestrations.OrchestrationStore>();
 // Per-circuit UI state: each user's desktop has its own open windows. Singleton would bleed windows
@@ -229,7 +232,7 @@ static string? ResolveRunnerPath(string contentRoot, string rid)
         return null;
     }
     var file = rid.StartsWith("win", StringComparison.Ordinal) ? "AgentOs.RemoteAgent.exe" : "AgentOs.RemoteAgent";
-    var path = System.IO.Path.Combine(contentRoot, "runner-dist", rid, file);
+    var path = System.IO.Path.Join(contentRoot, "runner-dist", rid, file);
     if (System.IO.File.Exists(path))
     {
         return path;
@@ -237,7 +240,7 @@ static string? ResolveRunnerPath(string contentRoot, string rid)
     // Legacy flat layout (pre multi-RID builds) — Windows only.
     if (rid == "win-x64")
     {
-        var legacy = System.IO.Path.Combine(contentRoot, "runner-dist", "AgentOs.RemoteAgent.exe");
+        var legacy = System.IO.Path.Join(contentRoot, "runner-dist", "AgentOs.RemoteAgent.exe");
         if (System.IO.File.Exists(legacy))
         {
             return legacy;

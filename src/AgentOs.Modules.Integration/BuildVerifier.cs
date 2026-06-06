@@ -55,8 +55,9 @@ public sealed class BuildVerifier : IBuildVerifier
     {
         ArgumentNullException.ThrowIfNull(files);
 
-        var workDir = Path.Combine(Path.GetTempPath(), "agentic-sdlc-build-" + Guid.NewGuid().ToString("N")[..8]);
+        var workDir = Path.Join(Path.GetTempPath(), "agentic-sdlc-build-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(workDir);
+        var workDirFull = Path.GetFullPath(workDir);
         _logger.LogInformation("Build verifier scratch dir: {Dir}", workDir);
 
         var stopwatch = Stopwatch.StartNew();
@@ -70,7 +71,14 @@ public sealed class BuildVerifier : IBuildVerifier
                 {
                     continue;
                 }
-                var dest = Path.Combine(workDir, path);
+                // Generated file paths come from the LLM — normalise and confine them to the scratch
+                // dir so a rooted or ../-laden path cannot write outside the sandbox (path traversal).
+                var dest = Path.GetFullPath(Path.Join(workDir, path));
+                if (!dest.StartsWith(workDirFull + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning("Skipping a generated file whose path escapes the build sandbox.");
+                    continue;
+                }
                 var destDir = Path.GetDirectoryName(dest);
                 if (!string.IsNullOrEmpty(destDir))
                 {
@@ -82,7 +90,7 @@ public sealed class BuildVerifier : IBuildVerifier
             // 2. Ensure a project file exists (the Coding agent often emits scattered .cs files only).
             if (Directory.GetFiles(workDir, "*.csproj", SearchOption.AllDirectories).Length == 0)
             {
-                var csproj = Path.Combine(workDir, "AgentOsGenerated.csproj");
+                var csproj = Path.Join(workDir, "AgentOsGenerated.csproj");
                 await File.WriteAllTextAsync(csproj,
                     """
                     <Project Sdk="Microsoft.NET.Sdk">
