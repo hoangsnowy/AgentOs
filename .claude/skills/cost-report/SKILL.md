@@ -18,56 +18,61 @@ Aggregate LLM gateway cost from logs into a table + chart.
 
 1. **Range**: `today` | `week` | `month` | `YYYY-MM-DD..YYYY-MM-DD`.
 2. **Group by**: `agent` | `provider` | `model` | `date` | `endpoint` (default `agent + provider`).
-3. **Source**: file log (`logs/llm-{date}.jsonl`) or Application Insights query in Azure-deployed envs.
+3. **Source** (in preference order):
+   1. **In-app CSV export** (canonical, DB-backed) — `GET /cost/export?days={N}` on the Web (admin-gated,
+      tenant-scoped, no log parsing). The Cost desktop app's "Export CSV" button hits the same endpoint.
+      This reads the persisted `pipeline.run_metrics`, so it is exact and needs no regex.
+   2. **Structured `LlmCallCompleted` event** — every provider client now logs one per call:
+      `LlmCallCompleted {Provider} {Model} {InTok} {OutTok} {CostUsd} {Ms} {Tenant}`. Scrape this from a
+      JSON sink / OTel log export when you need raw per-call rows the CSV summary doesn't carry.
+   3. Application Insights query in Azure-deployed envs.
+
+> Telemetry note: each LLM call also emits an OpenTelemetry span (`AgentOs.Llm` source) + the
+> `agentos.llm.cost.usd` / `gen_ai.client.token.usage` metrics. For dashboards, prefer querying those in
+> the OTLP backend over scraping logs.
 
 ## Steps
 
-### 1. Verify log has cost
+### 1. Pull the data (prefer the CSV export — no parsing)
 
-Pipeline agents (per `agent-scaffold` skill) log:
-```csharp
-_logger.LogInformation(
-    "{Agent} done: {InTok}->{OutTok} tokens, ${Cost}, {Ms}ms",
-    nameof(XxxAgent), response.InputTokens, response.OutputTokens, response.CostUsd, response.Latency.TotalMilliseconds);
+```bash
+# Admin cookie session against the running Web. days=0 → all time.
+curl -fsS "https://localhost:5180/cost/export?days=30" -o tools/cost/cost.csv
 ```
+The CSV columns are `section,key,cost_usd,tokens_in,tokens_out,calls` with a `total` row plus
+`agent` / `provider` / `model` / `day` breakdown rows. Load it straight into pandas — skip steps 2's regex.
 
-Need a JSON sink. Verify `src/AgentOs.Api/Program.cs`:
-```csharp
-builder.Logging.AddJsonConsole(opts => opts.IncludeScopes = true);
-// or Serilog with File sink → logs/llm-{date}.jsonl
-```
+If you need per-call granularity (not just the summary), fall back to scraping the structured
+`LlmCallCompleted` event from a JSON log sink. Verify a sink exists in `src/AgentOs.Web/Program.cs` /
+`src/AgentOs.Api/Program.cs` (`builder.Logging.AddJsonConsole(...)` or Serilog File → `logs/llm-{date}.jsonl`);
+missing → suggest one.
 
-Missing → suggest Serilog.Sinks.File.
+### 2. Parse (only for the per-call fallback)
 
-### 2. Parse log
-
-`tools/cost/parse_logs.py` (commit, reusable):
+`tools/cost/parse_logs.py` (commit, reusable) — parses the structured `LlmCallCompleted` event:
 
 ```python
-import json, glob, re, pandas as pd
+import json, glob, pandas as pd
 
 rows = []
 for f in glob.glob("logs/llm-*.jsonl"):
     for line in open(f, encoding="utf-8"):
         e = json.loads(line)
-        msg = e.get("Message") or e.get("message", "")
-        m = re.match(r"(\w+Agent) done: (\d+)->(\d+) tokens, \$([0-9.]+), ([0-9.]+)ms", msg)
-        if not m: continue
-        rows.append({
-            "ts": e["@t"],
-            "agent": m.group(1),
-            "in_tok": int(m.group(2)),
-            "out_tok": int(m.group(3)),
-            "cost_usd": float(m.group(4)),
-            "latency_ms": float(m.group(5)),
-            "provider": e.get("Properties", {}).get("Provider", "?"),
-            "model": e.get("Properties", {}).get("Model", "?"),
-        })
+        p = e.get("Properties") or e
+        if (e.get("MessageTemplate") or e.get("Message", "")).startswith("LlmCallCompleted"):
+            rows.append({
+                "ts": e.get("@t") or e.get("Timestamp"),
+                "provider": p.get("Provider", "?"),
+                "model": p.get("Model", "?"),
+                "in_tok": int(p.get("InTok", 0)),
+                "out_tok": int(p.get("OutTok", 0)),
+                "cost_usd": float(p.get("CostUsd", 0)),
+                "latency_ms": float(p.get("Ms", 0)),
+                "tenant": p.get("Tenant", ""),
+            })
 
 pd.DataFrame(rows).to_parquet("tools/cost/raw.parquet")
 ```
-
-Cleaner long-term: emit a structured `LlmCallCompleted` event instead of regex-parsing the message.
 
 ### 3. Aggregate + xlsx
 
