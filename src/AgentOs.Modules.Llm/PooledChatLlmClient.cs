@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
 using AgentOs.Domain.Tools;
 using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Telemetry;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -96,6 +97,9 @@ public sealed class PooledChatLlmClient : ILlmClient
         var maxAttempts = Math.Max(1, keys.Count);
         Exception? last = null;
 
+        var tenantId = AmbientIdentity.Current?.TenantId ?? _tenantContext?.TenantId;
+        var genAiSystem = LlmTelemetry.SystemFor(Provider);
+
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -109,6 +113,9 @@ public sealed class PooledChatLlmClient : ILlmClient
                 chat = _wrappedClients.GetOrAdd(clientCacheKey, _ => chat.AsBuilder().UseFunctionInvocation().Build());
             }
 
+            // One span per attempt; usage/metrics fire only on the success return below, so a 429
+            // failover attempt (handled in the catch) never double-counts tokens or cost.
+            using var activity = LlmTelemetry.StartChat(genAiSystem, request.Model, tenantId);
             var stopwatch = Stopwatch.StartNew();
             try
             {
@@ -117,11 +124,17 @@ public sealed class PooledChatLlmClient : ILlmClient
 
                 var inputTokens = (int)(response.Usage?.InputTokenCount ?? 0);
                 var outputTokens = (int)(response.Usage?.OutputTokenCount ?? 0);
+                var cost = CostCalculator.Calculate(request.Model, inputTokens, outputTokens);
+                LlmTelemetry.RecordSuccess(activity, genAiSystem, request.Model, response.ModelId ?? request.Model,
+                    inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalSeconds);
+                _logger.LogInformation(
+                    "LlmCallCompleted {Provider} {Model} {InTok} {OutTok} {CostUsd} {Ms} {Tenant}",
+                    Provider, request.Model, inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalMilliseconds, tenantId ?? "");
                 return new LlmResponse(
                     Content: response.Text ?? string.Empty,
                     InputTokens: inputTokens,
                     OutputTokens: outputTokens,
-                    CostUsd: CostCalculator.Calculate(request.Model, inputTokens, outputTokens),
+                    CostUsd: cost,
                     Latency: stopwatch.Elapsed,
                     Model: request.Model,
                     Provider: Provider);
@@ -132,6 +145,7 @@ public sealed class PooledChatLlmClient : ILlmClient
             }
             catch (Exception ex) when (_isRateLimited(ex))
             {
+                LlmTelemetry.RecordError(activity, ex.Message);
                 last = ex;
                 _router.Penalize(Provider, key, _retryAfter(ex));
                 _logger.LogWarning("[{Provider}] key rate-limited; {Available}/{Total} keys available — failing over.",

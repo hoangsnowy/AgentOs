@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
 using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Telemetry;
 using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Modules.RemoteAgent;
@@ -43,8 +44,13 @@ public sealed class RemoteAgentLlmClient : ILlmClient
         // blank there; the session seeds AmbientIdentity so the dispatch targets the member's own runner.
         var amb = AmbientIdentity.Current;
         var target = new RunnerTarget(amb?.TenantId ?? _tenant.TenantId, amb?.UserId ?? _tenant.UserId ?? string.Empty);
+
+        var genAiSystem = LlmTelemetry.SystemFor(Provider);
+        using var activity = LlmTelemetry.StartChat(genAiSystem, request.Model, target.TenantId);
+
         if (!_broker.HasRunnerFor(target))
         {
+            LlmTelemetry.RecordError(activity, "no remote runner connected");
             throw new LlmException(
                 "No remote dev runner connected for you. Register a runner (POST /runners), start the AgentOS "
                 + "remote agent on your dev machine with that runner id + token, or pick a different provider.",
@@ -66,19 +72,25 @@ public sealed class RemoteAgentLlmClient : ILlmClient
         }
         catch (TimeoutException ex)
         {
+            LlmTelemetry.RecordError(activity, ex.Message);
             throw new LlmException($"Remote agent timed out after {timeout.TotalSeconds:0}s.", Provider, innerException: ex);
         }
         catch (InvalidOperationException ex)
         {
+            LlmTelemetry.RecordError(activity, ex.Message);
             throw new LlmException(ex.Message, Provider, innerException: ex);
         }
         stopwatch.Stop();
 
         if (!result.Ok)
         {
+            LlmTelemetry.RecordError(activity, result.Error ?? "remote agent failure");
             throw new LlmException(result.Error ?? "Remote agent reported a failure.", Provider);
         }
 
+        // Zero token usage / cost (the runner spends the member's own quota); still emit a span + the
+        // call/duration metrics so remote latency is observable alongside the cloud providers.
+        LlmTelemetry.RecordSuccess(activity, genAiSystem, request.Model, request.Model, 0, 0, 0m, stopwatch.Elapsed.TotalSeconds);
         _logger.LogInformation("[RemoteAgent] request {Id} handled by a remote agent ({Count} connected); 0 API tokens spent.",
             id, _broker.AgentCount);
 
