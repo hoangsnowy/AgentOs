@@ -44,17 +44,23 @@ public sealed class LlmClientFactory : ILlmClientFactory
         var client = _services.GetKeyedService<ILlmClient>(key)
             ?? throw new LlmException(
                 $"LLM provider '{providerName}' (resolved to '{key}') is not registered. "
-                + "Expected: Claude | AzureOpenAI | MAF | RemoteAgent. "
-                + "Check that the corresponding module is loaded.");
+                + "Built-in: Claude | AzureOpenAI | MAF | RemoteAgent. "
+                + "A plugin provider must register a keyed ILlmClient under this exact name.");
         return client;
     }
 
-    private static string NormalizeKey(string providerName) => providerName.Trim().ToUpperInvariant() switch
+    // Maps known aliases to their canonical built-in key. An UNKNOWN name falls through to the trimmed
+    // original (case preserved) so a plugin-registered keyed ILlmClient resolves under its own name.
+    private static string NormalizeKey(string providerName)
     {
-        "CLAUDE" or "ANTHROPIC" => "Claude",
-        "AZUREOPENAI" or "AZURE" or "OPENAI" => "AzureOpenAI",
-        "MAF" or "MAF-AZURE" or "AGENTFRAMEWORK" => "MAF",
-        "REMOTEAGENT" or "REMOTE" or "IDE" => "RemoteAgent",
-        _ => throw new LlmException($"Unknown LLM provider: '{providerName}'. Expected Claude | AzureOpenAI | MAF | RemoteAgent."),
-    };
+        var trimmed = providerName.Trim();
+        return trimmed.ToUpperInvariant() switch
+        {
+            "CLAUDE" or "ANTHROPIC" => "Claude",
+            "AZUREOPENAI" or "AZURE" or "OPENAI" => "AzureOpenAI",
+            "MAF" or "MAF-AZURE" or "AGENTFRAMEWORK" => "MAF",
+            "REMOTEAGENT" or "REMOTE" or "IDE" => "RemoteAgent",
+            _ => trimmed,
+        };
+    }
 }

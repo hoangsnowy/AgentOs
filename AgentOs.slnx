@@ -26,6 +26,9 @@
   <Folder Name="/infra/">
     <Project Path="infra/AgentOs.AppHost/AgentOs.AppHost.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/AgentOs.Plugins.Sample/AgentOs.Plugins.Sample.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AgentOs.E2E.Tests/AgentOs.E2E.Tests.csproj" />
     <Project Path="tests/AgentOs.Tests/AgentOs.Tests.csproj" />

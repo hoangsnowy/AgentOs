@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AgentOs.Plugins.Sample</RootNamespace>
+    <AssemblyName>AgentOs.Plugins.Sample</AssemblyName>
+    <!-- A runtime PLUGIN, not a host dependency. No host references this project; it is built separately
+         (scripts/build-plugins.ps1) and its single DLL is dropped into the host's plugins/ folder. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Private=false: the host already loads these — the plugin binds to the host's copies at runtime,
+         so they are reference-only here and never copied alongside the plugin DLL. -->
+    <ProjectReference Include="..\..\src\AgentOs.SharedKernel\AgentOs.SharedKernel.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\AgentOs.Domain\AgentOs.Domain.csproj" Private="false" />
+  </ItemGroup>
+
+</Project>
