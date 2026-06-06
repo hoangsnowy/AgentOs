@@ -43,7 +43,7 @@ public static class AppCatalog
         new("evidence", "Evidence", "lock",  "Tool-invocation audit trail",   "Admin", 960, 620, Pinned: true, AdminOnly: true),
         new("cost",     "Cost",     "graph", "LLM spend by agent, provider, model", "Admin", 1000, 660, Pinned: true, AdminOnly: true),
         new("policy",   "Policy",   "lock",  "Per-tenant tool allowlist",     "Admin", 900, 620, Pinned: true, AdminOnly: true),
-        new("prompts",  "Prompts",  "lightning", "Tune agent system prompts", "Admin", 1000, 680, Pinned: true, AdminOnly: true),
+        new("prompts",  "Prompts",  "lightning", "Tune the agents' prompts",   "Admin", 1000, 680, Pinned: true, AdminOnly: true),
         new("plugins",  "Plugins",  "squares-stack", "Installed extensions",  "System", 860, 600),
         new("settings", "Settings", "gear",  "LLM keys, providers, GitHub",   "System", 760, 600),
         new("system",   "System",   "wrench","OS appearance, themes, about",  "System", 760, 600),
