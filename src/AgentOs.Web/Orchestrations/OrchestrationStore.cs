@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Pipeline.Persistence;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,18 +26,21 @@ public sealed class OrchestrationStore
     private readonly object _gate = new();
     private readonly Dictionary<string, OrchestrationGraph> _graphs = new(StringComparer.Ordinal);
     private readonly IServiceScopeFactory _scopeFactory;
+    private bool _initialized;
 
-    /// <summary>Initialize: load from the DB if present, otherwise seed the defaults + save.</summary>
+    /// <summary>Construct. The DB load is LAZY (first access), NOT in the ctor — this store is a
+    /// singleton resolved during host build / circuit open, so a blocking DB load here would stall
+    /// startup and risk crashing the Blazor circuit (eager-DI). See <see cref="EnsureLoaded"/>.</summary>
     public OrchestrationStore(IServiceScopeFactory scopeFactory)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);
         _scopeFactory = scopeFactory;
-        LoadOrSeed();
     }
 
     /// <summary>All orchestrations, sorted by name.</summary>
     public IReadOnlyList<OrchestrationGraph> All()
     {
+        EnsureLoaded();
         lock (_gate)
         {
             return _graphs.Values.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
@@ -46,6 +50,7 @@ public sealed class OrchestrationStore
     /// <summary>Get by id, null if not found.</summary>
     public OrchestrationGraph? Get(string id)
     {
+        EnsureLoaded();
         lock (_gate)
         {
             return _graphs.GetValueOrDefault(id);
@@ -56,6 +61,7 @@ public sealed class OrchestrationStore
     public void Save(OrchestrationGraph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
+        EnsureLoaded();
         lock (_gate)
         {
             _graphs[graph.Id] = graph;
@@ -83,6 +89,7 @@ public sealed class OrchestrationStore
     /// <summary>Duplicate an orchestration (name + " (copy)").</summary>
     public OrchestrationGraph Duplicate(string id)
     {
+        EnsureLoaded();
         OrchestrationGraph clone;
         lock (_gate)
         {
@@ -99,6 +106,7 @@ public sealed class OrchestrationStore
     /// <summary>Delete by id (cache + DB).</summary>
     public void Delete(string id)
     {
+        EnsureLoaded();
         bool removed;
         lock (_gate)
         {
@@ -114,6 +122,25 @@ public sealed class OrchestrationStore
     public static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
     // ---------------- persistence (repo/DB) ----------------
+
+    // Lazily load from the DB on first access (NOT in the ctor — see the ctor remark). One-time, guarded
+    // by _gate; the blocking DB call runs on a Task.Run threadpool thread (see RunOnRepo), never deadlocks.
+    private void EnsureLoaded()
+    {
+        if (Volatile.Read(ref _initialized))
+        {
+            return;
+        }
+        lock (_gate)
+        {
+            if (_initialized)
+            {
+                return;
+            }
+            LoadOrSeed();
+            _initialized = true;
+        }
+    }
 
     private void LoadOrSeed()
     {
