@@ -11,8 +11,13 @@
 //   REMOTE_AGENT_HUB    hub URL      (default https://localhost:5080/hubs/remote-agent)
 //   REMOTE_AGENT_ID     runner id    (the Guid returned by POST /runners)
 //   REMOTE_AGENT_TOKEN  pairing token (the plaintext returned ONCE by POST /runners)
-//   REMOTE_AGENT_CMD    command to run for M3 Execute (default "claude")
-//   REMOTE_AGENT_ARGS   command args  (default "-p")  — the prompt is piped to stdin
+//   REMOTE_AGENT_CLI    default CLI-agent profile: "claude" | "codex" (default "claude"). The server can
+//                       override this per session; Claude reads the prompt on stdin (`claude -p`), Codex
+//                       takes it as an arg (`codex exec "<prompt>"`) — both leverage a flat subscription.
+//   REMOTE_AGENT_YOLO   "1" to append the profile's autonomous flags (claude --dangerously-skip-permissions,
+//                       codex --full-auto) — the "Run on my machine" opt-in for non-interactive tool use.
+//   REMOTE_AGENT_CMD    override the profile's command (advanced)
+//   REMOTE_AGENT_ARGS   override the profile's args entirely (advanced; wins over the profile + YOLO)
 //
 // "Run on my machine" (issue-work routed to the local CLI): the server sends a full agentic prompt
 // that expects the CLI to clone, edit, build, and `git push` on its own. For that the CLI must
@@ -63,30 +68,51 @@ await Task.Delay(Timeout.Infinite).ConfigureAwait(false);
 
 static async Task<RemoteExecResult> RunLlmAsync(RemoteExecRequest request)
 {
-    var cmd = Environment.GetEnvironmentVariable("REMOTE_AGENT_CMD") ?? "claude";
-    var cmdArgs = Environment.GetEnvironmentVariable("REMOTE_AGENT_ARGS") ?? "-p";
+    // Pick the CLI-agent profile: per-request hint (server-chosen), else REMOTE_AGENT_CLI, else claude.
+    var cli = (request.Cli ?? Environment.GetEnvironmentVariable("REMOTE_AGENT_CLI") ?? "claude").Trim();
+    var profile = ResolveProfile(cli);
+
+    var cmd = Environment.GetEnvironmentVariable("REMOTE_AGENT_CMD") ?? profile.Command;
+    var argsEnv = Environment.GetEnvironmentVariable("REMOTE_AGENT_ARGS");
+    var yolo = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("REMOTE_AGENT_YOLO"));
+    // REMOTE_AGENT_ARGS overrides everything; otherwise the profile's flags + (when opted in) its auto flags.
+    var args = argsEnv is not null
+        ? argsEnv.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        : yolo ? [.. profile.DefaultArgs, .. profile.AutoArgs] : profile.DefaultArgs;
+
+    var prompt = string.IsNullOrEmpty(request.SystemPrompt)
+        ? request.UserPrompt
+        : request.SystemPrompt + "\n\n" + request.UserPrompt;
+
     try
     {
         var psi = new ProcessStartInfo(cmd)
         {
-            RedirectStandardInput = true,
+            RedirectStandardInput = profile.PromptViaStdin,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        foreach (var a in cmdArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var a in args)
         {
             psi.ArgumentList.Add(a);
         }
+        // Claude reads the prompt from stdin (`claude -p`); Codex takes it as a positional arg (`codex exec "<prompt>"`).
+        if (!profile.PromptViaStdin)
+        {
+            psi.ArgumentList.Add(prompt);
+        }
+
+        Console.WriteLine($"[agent] cli={cli} cmd={cmd} prompt={(profile.PromptViaStdin ? "stdin" : "arg")}");
 
         using var process = Process.Start(psi)
-            ?? throw new InvalidOperationException($"Failed to start '{cmd}'.");
+            ?? throw new InvalidOperationException($"Failed to start '{cmd}'. Is the {cli} CLI installed and on PATH?");
 
-        var prompt = string.IsNullOrEmpty(request.SystemPrompt)
-            ? request.UserPrompt
-            : request.SystemPrompt + "\n\n" + request.UserPrompt;
-        await process.StandardInput.WriteAsync(prompt).ConfigureAwait(false);
-        process.StandardInput.Close();
+        if (profile.PromptViaStdin)
+        {
+            await process.StandardInput.WriteAsync(prompt).ConfigureAwait(false);
+            process.StandardInput.Close();
+        }
 
         var stdout = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
         var stderr = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
@@ -101,6 +127,15 @@ static async Task<RemoteExecResult> RunLlmAsync(RemoteExecRequest request)
         return new RemoteExecResult(request.Id, false, string.Empty, ex.Message);
     }
 }
+
+// Built-in CLI-agent profiles. REMOTE_AGENT_CMD / REMOTE_AGENT_ARGS still override command + flags.
+static CliProfile ResolveProfile(string cli) => cli.ToUpperInvariant() switch
+{
+    "CODEX" => new CliProfile("codex", PromptViaStdin: false, DefaultArgs: ["exec"], AutoArgs: ["--full-auto"]),
+    "CLAUDE" or "CLAUDE-CODE" or "" => new CliProfile("claude", PromptViaStdin: true, DefaultArgs: ["-p"], AutoArgs: ["--dangerously-skip-permissions"]),
+    // Unknown name: treat it as the command, claude-style (prompt on stdin).
+    _ => new CliProfile(cli, PromptViaStdin: true, DefaultArgs: ["-p"], AutoArgs: ["--dangerously-skip-permissions"]),
+};
 
 // ── M4: execute a single tool call (shell command) ──────────────────────────────────────────────
 
@@ -180,7 +215,12 @@ static async Task<RunnerToolResult> ExecuteToolAsync(RunnerToolCall call)
 
 // ── DTOs — must match the server's shapes ───────────────────────────────────────────────────────
 
-internal sealed record RemoteExecRequest(string Id, string SystemPrompt, string UserPrompt, string Model);
+internal sealed record RemoteExecRequest(string Id, string SystemPrompt, string UserPrompt, string Model, string? Cli = null);
 internal sealed record RemoteExecResult(string Id, bool Ok, string Content, string? Error);
 internal sealed record RunnerToolCall(string RequestId, string ToolCallId, string ToolName, string JsonInput);
 internal sealed record RunnerToolResult(string RequestId, string ToolCallId, bool Ok, string JsonOutput, string? Error);
+
+// How to invoke one subscription CLI agent: the command, whether the prompt goes to stdin or as a
+// positional arg, the default flags, and the extra "autonomous" flags appended when REMOTE_AGENT_YOLO
+// is set (the "Run on my machine" opt-in that lets the CLI run tools non-interactively on this box).
+internal sealed record CliProfile(string Command, bool PromptViaStdin, string[] DefaultArgs, string[] AutoArgs);

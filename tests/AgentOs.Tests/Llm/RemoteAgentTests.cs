@@ -222,6 +222,24 @@ public class RemoteAgentTests
     }
 
     [Fact]
+    public async Task Client_ForwardsCliProfile_ToDispatch()
+    {
+        RemoteExecRequest? captured = null;
+        var broker = Substitute.For<IRemoteAgentBroker>();
+        broker.HasRunnerFor(Arg.Any<RunnerTarget>()).Returns(true);
+        broker.DispatchAsync(
+                Arg.Do<RemoteExecRequest>(r => captured = r),
+                Arg.Any<RunnerTarget>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(new RemoteExecResult(((RemoteExecRequest)ci[0]).Id, true, "ok", null)));
+        var client = new RemoteAgentLlmClient(broker, Tenant(), NullLogger<RemoteAgentLlmClient>.Instance);
+
+        await client.SendAsync(new LlmRequest("s", "u", "m", Cli: "codex"));
+
+        captured.ShouldNotBeNull();
+        captured!.Cli.ShouldBe("codex");
+    }
+
+    [Fact]
     public async Task Client_ForwardsRequestTimeout_ElseDefault()
     {
         var broker = BrokerCapturing(out _, out var timeout);

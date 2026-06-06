@@ -22,8 +22,9 @@ using System.Threading.Tasks;
 
 namespace AgentOs.Modules.RemoteAgent;
 
-/// <summary>A codegen task sent to a remote runner.</summary>
-public sealed record RemoteExecRequest(string Id, string SystemPrompt, string UserPrompt, string Model);
+/// <summary>A codegen task sent to a remote runner. <paramref name="Cli"/> selects which subscription
+/// CLI the runner invokes (e.g. "claude", "codex"); null = the runner's configured default.</summary>
+public sealed record RemoteExecRequest(string Id, string SystemPrompt, string UserPrompt, string Model, string? Cli = null);
 
 /// <summary>A remote runner's reply for a <see cref="RemoteExecRequest"/>.</summary>
 public sealed record RemoteExecResult(string Id, bool Ok, string Content, string? Error);
