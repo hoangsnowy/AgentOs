@@ -50,11 +50,13 @@ internal sealed class EfToolInvocationLog : IToolInvocationLog
             });
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            // Evidence is best-effort — never break the tool call on a persistence failure.
-            _logger.LogWarning(ex, "Failed to persist tool-invocation evidence for {ToolName}", entry.ToolName);
-        }
+        catch (DbUpdateException ex) { Handle(ex); }
+        catch (System.Data.Common.DbException ex) { Handle(ex); }
+        catch (InvalidOperationException ex) { Handle(ex); }
+
+        // Evidence is best-effort — never break the tool call on a persistence failure.
+        void Handle(Exception e) =>
+            _logger.LogWarning(e, "Failed to persist tool-invocation evidence for {ToolName}", entry.ToolName);
     }
 
     public async Task<IReadOnlyList<ToolInvocationEvidence>> ListRecentAsync(

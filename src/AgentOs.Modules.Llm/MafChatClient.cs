@@ -75,11 +75,11 @@ public sealed class MafChatClient : ILlmClient
         {
             response = await chat.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            LlmTelemetry.RecordError(activity, ex.Message);
-            throw;
-        }
+        catch (System.Net.Http.HttpRequestException ex) { LlmTelemetry.RecordError(activity, ex.Message); throw; }
+        catch (ClientResultException ex) { LlmTelemetry.RecordError(activity, ex.Message); throw; }
+        catch (System.Text.Json.JsonException ex) { LlmTelemetry.RecordError(activity, ex.Message); throw; }
+        catch (TimeoutException ex) { LlmTelemetry.RecordError(activity, ex.Message); throw; }
+        catch (InvalidOperationException ex) { LlmTelemetry.RecordError(activity, ex.Message); throw; }
         stopwatch.Stop();
 
         var inputTokens = (int)(response.Usage?.InputTokenCount ?? 0);

@@ -142,13 +142,18 @@ public sealed class BuildVerifier : IBuildVerifier
         {
             // Best-effort cleanup; don't surface errors here.
             try { Directory.Delete(workDir, recursive: true); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete scratch dir {Dir}", workDir); }
+            catch (IOException ex) { _logger.LogWarning(ex, "Failed to delete scratch dir {Dir}", workDir); }
+            catch (UnauthorizedAccessException ex) { _logger.LogWarning(ex, "Failed to delete scratch dir {Dir}", workDir); }
         }
     }
 
     private static void TryKill(Process proc)
     {
         try { if (!proc.HasExited) { proc.Kill(entireProcessTree: true); } }
-        catch { /* best-effort */ }
+        // Best-effort kill: the process may have already exited (InvalidOperationException) or the OS
+        // refused the kill (Win32Exception). Nothing we can do — swallow and let cleanup proceed.
+        catch (InvalidOperationException ex) { _ = ex.Message; }
+        catch (System.ComponentModel.Win32Exception ex) { _ = ex.Message; }
+        catch (NotSupportedException ex) { _ = ex.Message; }
     }
 }

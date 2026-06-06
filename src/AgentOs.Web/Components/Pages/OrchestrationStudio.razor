@@ -481,9 +481,19 @@
         {
             Log("⏹ Run cancelled.");
         }
-#pragma warning disable CA1031 // A run handler must never crash the Blazor circuit — surface the failure in the log.
-        catch (Exception ex)
-#pragma warning restore CA1031
+        catch (System.InvalidOperationException ex)
+        {
+            Log($"✖ Run failed: {ex.Message}");
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            Log($"✖ Run failed: {ex.Message}");
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Log($"✖ Run failed: {ex.Message}");
+        }
+        catch (System.TimeoutException ex)
         {
             Log($"✖ Run failed: {ex.Message}");
         }

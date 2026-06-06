@@ -87,7 +87,19 @@ else
         {
             _rows = await Evidence.ListRecentAsync(_tenantId, 100);
         }
-        catch (Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            Toasts.Show("Evidence", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            Toasts.Show("Evidence", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Toasts.Show("Evidence", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.TimeoutException ex)
         {
             Toasts.Show("Evidence", $"Load failed: {ex.Message}", ToastKind.Err);
         }

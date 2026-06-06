@@ -437,9 +437,17 @@
         {
             _boards = (await Workspaces.ListForTenantAsync(_tenantId)).ToList();
         }
-        catch (Exception)
+        catch (System.InvalidOperationException)
         {
             // No DB (standalone) or repo unavailable — fall back silently to the Settings token.
+            _boards = [];
+        }
+        catch (System.Net.Http.HttpRequestException)
+        {
+            _boards = [];
+        }
+        catch (System.TimeoutException)
+        {
             _boards = [];
         }
     }
@@ -452,7 +460,9 @@
         if (Guid.TryParse(_selBoardId, out var boardId))
         {
             try { _repos = (await Workspaces.ListReposForTenantAsync(_tenantId, boardId)).ToList(); }
-            catch (Exception) { _repos = []; }
+            catch (System.InvalidOperationException) { _repos = []; }
+            catch (System.Net.Http.HttpRequestException) { _repos = []; }
+            catch (System.TimeoutException) { _repos = []; }
         }
     }
 
@@ -471,7 +481,19 @@
         {
             _buildResult = await BuildVerifier.VerifyAsync(_result, CancellationToken.None);
         }
-        catch (Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            _buildError = ex.Message;
+        }
+        catch (System.IO.IOException ex)
+        {
+            _buildError = ex.Message;
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            _buildError = ex.Message;
+        }
+        catch (System.TimeoutException ex)
         {
             _buildError = ex.Message;
         }
@@ -510,7 +532,19 @@
             }
             _prUrl = pr.HtmlUrl;
         }
-        catch (Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            _prError = ex.Message;
+        }
+        catch (Octokit.ApiException ex)
+        {
+            _prError = ex.Message;
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            _prError = ex.Message;
+        }
+        catch (System.TimeoutException ex)
         {
             _prError = ex.Message;
         }
@@ -567,7 +601,19 @@
         {
             _error = "Run cancelled.";
         }
-        catch (Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (System.TimeoutException ex)
         {
             _error = ex.Message;
         }

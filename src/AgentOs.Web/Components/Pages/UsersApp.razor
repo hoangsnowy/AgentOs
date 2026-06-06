@@ -297,7 +297,31 @@ else
                     await Email.SendAsync(email, subject, htmlBody, textBody);
                     Toasts.Show("Users", $"Invitation emailed to {email}.", ToastKind.Ok);
                 }
-                catch (Exception ex)
+                catch (MailKit.CommandException ex)
+                {
+                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+                }
+                catch (MailKit.ProtocolException ex)
+                {
+                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+                }
+                catch (MailKit.ServiceNotConnectedException ex)
+                {
+                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+                }
+                catch (MailKit.Security.AuthenticationException ex)
+                {
+                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+                }
+                catch (System.Net.Sockets.SocketException ex)
+                {
+                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+                }
+                catch (System.IO.IOException ex)
+                {
+                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+                }
+                catch (System.InvalidOperationException ex)
                 {
                     Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
                 }

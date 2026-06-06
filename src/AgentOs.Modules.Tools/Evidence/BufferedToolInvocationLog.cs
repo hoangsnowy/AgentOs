@@ -92,7 +92,12 @@ internal sealed class BufferedToolInvocationLog : IToolInvocationLog, IAsyncDisp
         if (_drainLoop is not null)
         {
             try { await _drainLoop.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
-            catch { /* best-effort flush on shutdown */ }
+            // Best-effort flush on shutdown — a timeout or a final persistence failure must not block dispose.
+            catch (TimeoutException ex) { _ = ex.Message; }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) { _ = ex.Message; }
+            catch (System.Data.Common.DbException ex) { _ = ex.Message; }
+            catch (ObjectDisposedException ex) { _ = ex.Message; }
+            catch (InvalidOperationException ex) { _ = ex.Message; }
         }
         _cts?.Dispose();
     }

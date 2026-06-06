@@ -69,10 +69,10 @@ public sealed class RemoteAgentTransport : IHostedService
             }
             await _hub.Clients.Client(dispatch.ConnectionId).SendAsync("Execute", request).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            _broker.Complete(new RemoteExecResult(request.Id, false, string.Empty, $"Transport error: {ex.Message}"));
-        }
+        catch (HubException ex) { _broker.Complete(new RemoteExecResult(request.Id, false, string.Empty, $"Transport error: {ex.Message}")); }
+        catch (System.IO.IOException ex) { _broker.Complete(new RemoteExecResult(request.Id, false, string.Empty, $"Transport error: {ex.Message}")); }
+        catch (InvalidOperationException ex) { _broker.Complete(new RemoteExecResult(request.Id, false, string.Empty, $"Transport error: {ex.Message}")); }
+        catch (TimeoutException ex) { _broker.Complete(new RemoteExecResult(request.Id, false, string.Empty, $"Transport error: {ex.Message}")); }
     }
 
     // ── M4: bidirectional tool-call dispatch ──
@@ -81,20 +81,23 @@ public sealed class RemoteAgentTransport : IHostedService
 
     private async Task PushToolCallAsync(RunnerToolDispatch dispatch)
     {
+        void Handle(Exception e) =>
+            _broker.CompleteToolCall(new RunnerToolResult(
+                dispatch.Call.RequestId,
+                dispatch.Call.ToolCallId,
+                false,
+                string.Empty,
+                $"Transport error: {e.Message}"));
+
         try
         {
             await _hub.Clients.Client(dispatch.ConnectionId)
                 .SendAsync("ExecuteToolCall", dispatch.Call)
                 .ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            _broker.CompleteToolCall(new RunnerToolResult(
-                dispatch.Call.RequestId,
-                dispatch.Call.ToolCallId,
-                false,
-                string.Empty,
-                $"Transport error: {ex.Message}"));
-        }
+        catch (HubException ex) { Handle(ex); }
+        catch (System.IO.IOException ex) { Handle(ex); }
+        catch (InvalidOperationException ex) { Handle(ex); }
+        catch (TimeoutException ex) { Handle(ex); }
     }
 }

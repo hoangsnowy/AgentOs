@@ -81,7 +81,10 @@ public sealed class TicketDecomposerAgent : ITicketDecomposerAgent
             }
             return tickets;
         }
-        catch (Exception ex) when (ex is LlmException or JsonException)
+        catch (LlmException ex) { return OnDecomposeFailed(ex); }
+        catch (JsonException ex) { return OnDecomposeFailed(ex); }
+
+        IReadOnlyList<TicketDraft> OnDecomposeFailed(Exception ex)
         {
             _logger.LogWarning(ex, "{Agent}: decomposition failed; using the deterministic seed.", AgentName);
             return seed;

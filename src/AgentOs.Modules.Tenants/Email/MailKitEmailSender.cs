@@ -52,6 +52,10 @@ public sealed class MailKitEmailSender : IEmailSender
                 ? SecureSocketOptions.SslOnConnect
                 : SecureSocketOptions.None;
 
+        void Handle(Exception e) =>
+            _logger.LogError(e, "Failed to send email '{Subject}' via {Host}:{Port}",
+                LogSafe.Scrub(subject), _options.SmtpHost, _options.SmtpPort);
+
         using var client = new SmtpClient();
         try
         {
@@ -66,11 +70,15 @@ public sealed class MailKitEmailSender : IEmailSender
             _logger.LogInformation("Email '{Subject}' sent via {Host}:{Port}",
                 LogSafe.Scrub(subject), _options.SmtpHost, _options.SmtpPort);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send email '{Subject}' via {Host}:{Port}",
-                LogSafe.Scrub(subject), _options.SmtpHost, _options.SmtpPort);
-            throw;
-        }
+        // ServiceNotConnectedException derives from InvalidOperationException; SmtpCommandException →
+        // CommandException → ProtocolException — derived clauses precede their bases (CS0160).
+        catch (MailKit.ServiceNotConnectedException ex) { Handle(ex); throw; }
+        catch (SmtpCommandException ex) { Handle(ex); throw; }
+        catch (MailKit.CommandException ex) { Handle(ex); throw; }
+        catch (MailKit.ProtocolException ex) { Handle(ex); throw; }
+        catch (AuthenticationException ex) { Handle(ex); throw; }
+        catch (System.Net.Sockets.SocketException ex) { Handle(ex); throw; }
+        catch (System.IO.IOException ex) { Handle(ex); throw; }
+        catch (InvalidOperationException ex) { Handle(ex); throw; }
     }
 }

@@ -168,7 +168,19 @@ else
             _cap = _budget.CapUsd;
             _enforce = _budget.EnforceOn;
         }
-        catch (Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            Toasts.Show("Budget", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            Toasts.Show("Budget", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Toasts.Show("Budget", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.TimeoutException ex)
         {
             Toasts.Show("Budget", $"Load failed: {ex.Message}", ToastKind.Err);
         }
@@ -184,7 +196,19 @@ else
             await LoadBudgetAsync();
             Toasts.Show("Budget", _cap > 0 ? $"Cap set to {Money(_cap)}/month." : "Cap cleared.", ToastKind.Ok);
         }
-        catch (Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            Toasts.Show("Budget", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            Toasts.Show("Budget", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Toasts.Show("Budget", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.TimeoutException ex)
         {
             Toasts.Show("Budget", $"Save failed: {ex.Message}", ToastKind.Err);
         }
@@ -218,7 +242,19 @@ else
             DateTimeOffset? since = _days > 0 ? DateTimeOffset.UtcNow.AddDays(-_days) : null;
             _summary = await Runs.GetCostSummaryForTenantAsync(_tenantId, since);
         }
-        catch (Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            Toasts.Show("Cost", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            Toasts.Show("Cost", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Toasts.Show("Cost", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.TimeoutException ex)
         {
             Toasts.Show("Cost", $"Load failed: {ex.Message}", ToastKind.Err);
         }

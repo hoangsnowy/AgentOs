@@ -104,7 +104,19 @@ else
             await Policy.SetAsync(_tenantId, _enforce, _allowed.ToList());
             Toasts.Show("Policy", _enforce ? $"Enforcing {_allowed.Count} allowed tool(s)." : "Enforcement off — all tools allowed.", ToastKind.Ok);
         }
-        catch (System.Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            Toasts.Show("Policy", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            Toasts.Show("Policy", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Toasts.Show("Policy", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.TimeoutException ex)
         {
             Toasts.Show("Policy", $"Save failed: {ex.Message}", ToastKind.Err);
         }

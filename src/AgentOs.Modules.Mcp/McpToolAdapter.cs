@@ -66,12 +66,17 @@ internal sealed class McpToolAdapter : ITool
         {
             throw;
         }
-        catch (Exception ex)
-        {
-            return ToolInvocationResult.Error(
+        catch (ModelContextProtocol.McpException ex) { return OnInvokeFailed(ex); }
+        catch (System.Net.Http.HttpRequestException ex) { return OnInvokeFailed(ex); }
+        catch (System.Text.Json.JsonException ex) { return OnInvokeFailed(ex); }
+        catch (System.IO.IOException ex) { return OnInvokeFailed(ex); }
+        catch (TimeoutException ex) { return OnInvokeFailed(ex); }
+        catch (InvalidOperationException ex) { return OnInvokeFailed(ex); }
+
+        ToolInvocationResult OnInvokeFailed(Exception ex) =>
+            ToolInvocationResult.Error(
                 request.CallId,
                 $"MCP tool '{Definition.Name}' invocation failed: {ex.Message}");
-        }
     }
 
     private static Dictionary<string, object?> ParseArguments(string json)

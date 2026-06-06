@@ -122,10 +122,10 @@ static async Task<RemoteExecResult> RunLlmAsync(RemoteExecRequest request)
             ? new RemoteExecResult(request.Id, true, stdout.Trim(), null)
             : new RemoteExecResult(request.Id, false, string.Empty, $"exit {process.ExitCode}: {stderr.Trim()}");
     }
-    catch (Exception ex)
-    {
-        return new RemoteExecResult(request.Id, false, string.Empty, ex.Message);
-    }
+    catch (System.ComponentModel.Win32Exception ex) { return new RemoteExecResult(request.Id, false, string.Empty, ex.Message); }
+    catch (System.IO.IOException ex) { return new RemoteExecResult(request.Id, false, string.Empty, ex.Message); }
+    catch (InvalidOperationException ex) { return new RemoteExecResult(request.Id, false, string.Empty, ex.Message); }
+    catch (TimeoutException ex) { return new RemoteExecResult(request.Id, false, string.Empty, ex.Message); }
 }
 
 // Built-in CLI-agent profiles. REMOTE_AGENT_CMD / REMOTE_AGENT_ARGS still override command + flags.
@@ -207,10 +207,11 @@ static async Task<RunnerToolResult> ExecuteToolAsync(RunnerToolCall call)
             combined.Trim(),
             ok ? null : $"exit {process.ExitCode}");
     }
-    catch (Exception ex)
-    {
-        return new RunnerToolResult(call.RequestId, call.ToolCallId, false, string.Empty, ex.Message);
-    }
+    catch (System.ComponentModel.Win32Exception ex) { return new RunnerToolResult(call.RequestId, call.ToolCallId, false, string.Empty, ex.Message); }
+    catch (System.IO.IOException ex) { return new RunnerToolResult(call.RequestId, call.ToolCallId, false, string.Empty, ex.Message); }
+    catch (InvalidOperationException ex) { return new RunnerToolResult(call.RequestId, call.ToolCallId, false, string.Empty, ex.Message); }
+    catch (TimeoutException ex) { return new RunnerToolResult(call.RequestId, call.ToolCallId, false, string.Empty, ex.Message); }
+    catch (JsonException ex) { return new RunnerToolResult(call.RequestId, call.ToolCallId, false, string.Empty, ex.Message); }
 }
 
 // ── DTOs — must match the server's shapes ───────────────────────────────────────────────────────

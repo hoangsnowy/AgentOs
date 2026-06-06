@@ -200,7 +200,9 @@
         if (_focusOnRender)
         {
             _focusOnRender = false;
-            try { await _searchRef.FocusAsync(); } catch { /* element gone */ }
+            try { await _searchRef.FocusAsync(); }
+            catch (Microsoft.JSInterop.JSException ex) { _ = ex.Message; } // element gone
+            catch (System.InvalidOperationException ex) { _ = ex.Message; } // prerender / no JS
         }
     }
 
@@ -217,7 +219,15 @@
             Toasts.FocusMode = focus == "1";                // default off
             WM.AutoMinimizeOnBlur = autoMin == "1";         // default off
         }
-        catch { /* prerender / JS unavailable */ }
+        catch (Microsoft.JSInterop.JSException ex)
+        {
+            // Prerender / JS unavailable — keep the in-memory preference defaults.
+            _ = ex.Message;
+        }
+        catch (System.InvalidOperationException ex)
+        {
+            _ = ex.Message;
+        }
     }
 
     private void RefreshRecents()

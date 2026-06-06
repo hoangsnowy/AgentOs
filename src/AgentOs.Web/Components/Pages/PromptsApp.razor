@@ -96,7 +96,19 @@ else
             await LoadAllAsync();
             Toasts.Show("Prompts", $"{entry.DisplayName} saved.", ToastKind.Ok);
         }
-        catch (System.Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            Toasts.Show("Prompts", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            Toasts.Show("Prompts", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Toasts.Show("Prompts", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.TimeoutException ex)
         {
             Toasts.Show("Prompts", $"Save failed: {ex.Message}", ToastKind.Err);
         }
@@ -116,7 +128,19 @@ else
             await LoadAllAsync();
             Toasts.Show("Prompts", $"{entry.DisplayName} reset to default.", ToastKind.Ok);
         }
-        catch (System.Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            Toasts.Show("Prompts", $"Reset failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            Toasts.Show("Prompts", $"Reset failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Toasts.Show("Prompts", $"Reset failed: {ex.Message}", ToastKind.Err);
+        }
+        catch (System.TimeoutException ex)
         {
             Toasts.Show("Prompts", $"Reset failed: {ex.Message}", ToastKind.Err);
         }

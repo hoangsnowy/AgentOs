@@ -141,7 +141,15 @@
             _clock24 = (await JS.InvokeAsync<string?>("localStorage.getItem", "pref-clock-24h")) != "0";
             _clockSeconds = (await JS.InvokeAsync<string?>("localStorage.getItem", "pref-clock-seconds")) != "0";
         }
-        catch { /* prerender / JS unavailable — keep defaults */ }
+        catch (Microsoft.JSInterop.JSException ex)
+        {
+            // Prerender / JS unavailable — keep the defaults already assigned.
+            _ = ex.Message;
+        }
+        catch (System.InvalidOperationException ex)
+        {
+            _ = ex.Message;
+        }
     }
 
     private async Task OnTick()
@@ -171,7 +179,28 @@
             _online = resp.IsSuccessStatusCode;
             _healthTitle = _online ? $"API healthy — {_apiBase}" : $"API returned {(int)resp.StatusCode} — {_apiBase}";
         }
-        catch (Exception ex)
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            _online = false;
+            _healthTitle = $"API unreachable — {ex.Message}";
+        }
+        catch (System.Threading.Tasks.TaskCanceledException ex)
+        {
+            // HttpClient.Timeout (3s) elapsed → surfaced as a cancellation; treat the API as down.
+            _online = false;
+            _healthTitle = $"API unreachable — {ex.Message}";
+        }
+        catch (System.TimeoutException ex)
+        {
+            _online = false;
+            _healthTitle = $"API unreachable — {ex.Message}";
+        }
+        catch (System.UriFormatException ex)
+        {
+            _online = false;
+            _healthTitle = $"API unreachable — {ex.Message}";
+        }
+        catch (System.InvalidOperationException ex)
         {
             _online = false;
             _healthTitle = $"API unreachable — {ex.Message}";
@@ -191,7 +220,15 @@
             {
                 _theme = await JS.InvokeAsync<string>("agenticTheme.getTheme");
             }
-            catch { }
+            catch (Microsoft.JSInterop.JSException ex)
+            {
+                // Prerender / JS unavailable — keep the current theme.
+                _ = ex.Message;
+            }
+            catch (System.InvalidOperationException ex)
+            {
+                _ = ex.Message;
+            }
             StateHasChanged();
         }
     }
@@ -202,7 +239,15 @@
         {
             _theme = await JS.InvokeAsync<string>("agenticTheme.toggleAppearance");
         }
-        catch { /* JS unavailable (prerender) */ }
+        catch (Microsoft.JSInterop.JSException ex)
+        {
+            // JS unavailable (prerender) — leave the theme unchanged.
+            _ = ex.Message;
+        }
+        catch (System.InvalidOperationException ex)
+        {
+            _ = ex.Message;
+        }
     }
 
     private void UpdateClock()
