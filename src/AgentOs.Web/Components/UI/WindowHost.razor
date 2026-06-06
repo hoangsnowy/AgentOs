@@ -5,10 +5,8 @@
 @implements IDisposable
 @inject WindowManagerService WM
 
-@foreach (var w in WM.Open)
+@foreach (var w in WM.Open.Where(w => !w.Minimized))
 {
-    if (!w.Minimized)
-    {
         <AppFrame W="@w" @key="w.Id">
             @switch (w.AppKey)
             {
@@ -35,7 +33,6 @@
                     break;
             }
         </AppFrame>
-    }
 }
 
 @code {

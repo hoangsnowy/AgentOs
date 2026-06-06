@@ -90,11 +90,7 @@
     {
         get
         {
-            int maxZ = int.MinValue;
-            foreach (var o in WM.Open)
-            {
-                if (o.Z > maxZ) { maxZ = o.Z; }
-            }
+            int maxZ = WM.Open.Select(o => o.Z).DefaultIfEmpty(int.MinValue).Max();
             return W.Z == maxZ;
         }
     }

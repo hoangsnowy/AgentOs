@@ -90,10 +90,7 @@ public sealed class LlmModule : IModule
     {
         var keys = new List<string>();
         if (!string.IsNullOrWhiteSpace(overrideKey)) { keys.Add(overrideKey!); }
-        foreach (var k in pool)
-        {
-            if (!string.IsNullOrWhiteSpace(k)) { keys.Add(k); }
-        }
+        keys.AddRange(pool.Where(k => !string.IsNullOrWhiteSpace(k)));
         if (!string.IsNullOrWhiteSpace(singleKey)) { keys.Add(singleKey); }
         return keys.Distinct(StringComparer.Ordinal).ToList();
     }

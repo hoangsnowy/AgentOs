@@ -1,0 +1,14 @@
+name: AgentOs CodeQL config
+
+# Keep the full enterprise pack — security AND maintainability queries. We fix findings, we don't
+# narrow the scan to hide them.
+queries:
+  - uses: security-and-quality
+
+# Exclude generated build output. CodeQL's manual build mode extracts the source-generator output
+# under obj/ (RegexGenerator.g.cs, OpenAPI XML-comment support, etc.); those files are regenerated
+# on every build and cannot be hand-fixed, so scanning them only produces unactionable noise. This
+# is build-artifact hygiene, not suppression of real source findings.
+paths-ignore:
+  - '**/obj/**'
+  - '**/bin/**'

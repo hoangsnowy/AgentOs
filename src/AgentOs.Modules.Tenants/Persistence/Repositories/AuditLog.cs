@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Tenants.Persistence.Entities;
+using AgentOs.SharedKernel.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -35,9 +36,13 @@ internal sealed class EfAuditLog(TenantsDbContext db, ILogger<EfAuditLog> logger
         }
         catch (Exception ex)
         {
+            // The action label is intentionally NOT echoed here: some action constants are named
+            // after sensitive operations (e.g. password reset), which trips static-analysis secret
+            // heuristics, and the action is already captured in the persisted audit record. Tenant +
+            // exception are enough to diagnose a failed best-effort audit write.
             logger.LogWarning(ex,
-                "Audit write failed for tenant={TenantId} action={Action} — surrounding op continues.",
-                entry.TenantId, entry.Action);
+                "Audit write failed for tenant={TenantId} — surrounding op continues.",
+                LogSafe.Scrub(entry.TenantId));
         }
     }
 

@@ -55,8 +55,7 @@ builder.AddProject<Projects.AgentOs_Api>("api")
         ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}/realms/agentic"))
     .WithEnvironment("Auth__Keycloak__Audience", "agentic-api")
     // Admin REST — /tenants and member-invite endpoints provision realm users via this.
-    .WithEnvironment("Auth__Keycloak__Admin__BaseUrl",
-        ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}"))
+    .WithEnvironment("Auth__Keycloak__Admin__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("Auth__Keycloak__Admin__Realm", "agentic")
     .WithEnvironment("Auth__Keycloak__Admin__Username", kcAdminUsername)
     .WithEnvironment("Auth__Keycloak__Admin__Password", kcAdminPassword)
@@ -93,8 +92,7 @@ builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null)
     .WithEnvironment("Auth__Keycloak__ClientId", "agentic-web")
     .WithEnvironment("Auth__Keycloak__ClientSecret", kcWebClientSecret)
     // Web provisions Keycloak users for the public sign-up form, so it also needs admin creds.
-    .WithEnvironment("Auth__Keycloak__Admin__BaseUrl",
-        ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}"))
+    .WithEnvironment("Auth__Keycloak__Admin__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("Auth__Keycloak__Admin__Realm", "agentic")
     .WithEnvironment("Auth__Keycloak__Admin__Username", kcAdminUsername)
     .WithEnvironment("Auth__Keycloak__Admin__Password", kcAdminPassword)

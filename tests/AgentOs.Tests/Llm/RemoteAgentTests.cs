@@ -78,7 +78,7 @@ public class RemoteAgentTests
     public void Broker_RunnerDisposed_NoLongerConnected()
     {
         var broker = new InProcessRemoteAgentBroker();
-        var reg = broker.RegisterRunner("conn-1", Conn());
+        using var reg = broker.RegisterRunner("conn-1", Conn());
         broker.HasAgent.ShouldBeTrue();
         reg.Dispose();
         broker.HasAgent.ShouldBeFalse();

@@ -4,6 +4,7 @@
 // overridable via MAILHOG_URL.
 
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -35,11 +36,7 @@ internal static class MailHog
             try { json = await Http.GetStringAsync($"{BaseUrl}/api/v2/messages").ConfigureAwait(false); }
             catch (HttpRequestException) { json = string.Empty; }
 
-            var all = true;
-            foreach (var n in needles)
-            {
-                if (!json.Contains(n, StringComparison.OrdinalIgnoreCase)) { all = false; break; }
-            }
+            var all = needles.All(n => json.Contains(n, StringComparison.OrdinalIgnoreCase));
             if (all && needles.Length > 0) { return true; }
 
             await Task.Delay(500).ConfigureAwait(false);

@@ -4,6 +4,7 @@
 
 using System.Threading;
 using System.Threading.Tasks;
+using AgentOs.SharedKernel.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Modules.Tenants.Email;
@@ -18,9 +19,11 @@ public sealed class NullEmailSender : IEmailSender
     /// <inheritdoc />
     public Task SendAsync(string toEmail, string subject, string htmlBody, string? textBody = null, CancellationToken ct = default)
     {
+        // Recipient address is PII — deliberately not logged. The body (which carries the invite link)
+        // is enough for the dev to act on; subject correlates it.
         _logger.LogInformation(
-            "Email sending is not configured (Email:SmtpHost empty) — would have sent '{Subject}' to {To}. Body: {Text}",
-            subject, toEmail, textBody ?? "(html only)");
+            "Email sending is not configured (Email:SmtpHost empty) — would have sent '{Subject}'. Body: {Text}",
+            LogSafe.Scrub(subject), LogSafe.Scrub(textBody ?? "(html only)"));
         return Task.CompletedTask;
     }
 }

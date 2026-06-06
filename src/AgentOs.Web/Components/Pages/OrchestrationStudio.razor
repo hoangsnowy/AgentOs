@@ -406,8 +406,6 @@
         BuildDiagram();
     }
 
-    private CancellationTokenSource? _runCts;
-
     /// <summary>Validates the drawn graph (LLM-free) then runs it against the REAL typed agents (Requirement
     /// / Coding / Testing / QA), lighting nodes Running→Done/Failed live + streaming the Run Log. Unsupported
     /// node types are refused (painted Skipped) before any agent runs; the QA gate's fail edge loops.</summary>
@@ -420,8 +418,8 @@
         _bottomTab = 2;
         ResetRunState();
         _running = true;
-        _runCts = new CancellationTokenSource();
-        var ct = _runCts.Token;
+        using var runCts = new CancellationTokenSource();
+        var ct = runCts.Token;
         SyncFromCanvas();
 
         Log($"▶ Run \"{_graph.Name}\"  ·  input: {(string.IsNullOrWhiteSpace(_runInput) ? "(default)" : _runInput)}");
@@ -444,8 +442,6 @@
             Log("■ Not runnable — need exactly one Start and every node on the path supported.");
             _running = false;
             _recentRuns++;
-            _runCts?.Dispose();
-            _runCts = null;
             await InvokeAsync(StateHasChanged);
             return;
         }
@@ -495,8 +491,6 @@
         {
             _running = false;
             _recentRuns++;
-            _runCts?.Dispose();
-            _runCts = null;
             await InvokeAsync(StateHasChanged);
         }
     }

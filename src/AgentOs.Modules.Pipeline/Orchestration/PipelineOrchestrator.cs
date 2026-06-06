@@ -13,6 +13,7 @@ using AgentOs.Domain.Pipeline;
 using AgentOs.Domain.Qa;
 using AgentOs.Domain.Requirements;
 using AgentOs.Domain.Testing;
+using AgentOs.SharedKernel.Logging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -75,7 +76,7 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
         var maxIterations = System.Math.Min(story.NMax, _options.MaxIterations);
         _logger.LogInformation(
             "Pipeline start: story={Title}, maxIter={Max}",
-            Truncate(story.Description, 60), maxIterations);
+            LogSafe.Scrub(Truncate(story.Description, 60)), maxIterations);
 
         // KC1 — Requirement Agent.
         RequirementSpec spec;

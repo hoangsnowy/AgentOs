@@ -28,6 +28,7 @@ public sealed class InMemoryMetricsCollector : IMetricsCollector
     {
         while (_records.TryDequeue(out _))
         {
+            // Drain loop — TryDequeue does the work; the body is intentionally empty.
         }
     }
 }

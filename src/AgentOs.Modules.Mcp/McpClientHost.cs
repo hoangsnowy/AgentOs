@@ -160,7 +160,7 @@ public sealed class McpClientHost : IAsyncDisposable
             Command = server.Command,
             Arguments = server.Args.Count > 0 ? server.Args.ToArray() : null,
             EnvironmentVariables = server.Env.Count > 0
-                ? server.Env.ToDictionary(kv => kv.Key, kv => (string?)kv.Value)
+                ? server.Env.ToDictionary<KeyValuePair<string, string>, string, string?>(kv => kv.Key, kv => kv.Value)
                 : null,
         });
     }

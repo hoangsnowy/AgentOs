@@ -1,6 +1,7 @@
 // Compute cost by model + tokens. Hardcoded pricing (Q2/2026 snapshot).
 
 using System.Collections.Generic;
+using System.Linq;
 
 namespace AgentOs.Modules.Llm;
 
@@ -27,14 +28,13 @@ public static class CostCalculator
             return 0m;
         }
 
-        foreach (var p in Pricings)
+        var p = Pricings.FirstOrDefault(
+            x => model.StartsWith(x.ModelPrefix, System.StringComparison.OrdinalIgnoreCase));
+        if (p is not null)
         {
-            if (model.StartsWith(p.ModelPrefix, System.StringComparison.OrdinalIgnoreCase))
-            {
-                var input = (decimal)inputTokens / 1_000_000m * p.InputPerMillion;
-                var output = (decimal)outputTokens / 1_000_000m * p.OutputPerMillion;
-                return System.Math.Round(input + output, 6, System.MidpointRounding.AwayFromZero);
-            }
+            var input = (decimal)inputTokens / 1_000_000m * p.InputPerMillion;
+            var output = (decimal)outputTokens / 1_000_000m * p.OutputPerMillion;
+            return System.Math.Round(input + output, 6, System.MidpointRounding.AwayFromZero);
         }
 
         return 0m;
@@ -48,15 +48,8 @@ public static class CostCalculator
             return false;
         }
 
-        foreach (var p in Pricings)
-        {
-            if (model.StartsWith(p.ModelPrefix, System.StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return Pricings.Any(
+            p => model.StartsWith(p.ModelPrefix, System.StringComparison.OrdinalIgnoreCase));
     }
 
     private sealed record ModelPricing(string ModelPrefix, decimal InputPerMillion, decimal OutputPerMillion);

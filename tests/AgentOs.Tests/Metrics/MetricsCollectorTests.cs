@@ -96,7 +96,7 @@ public class MetricsCollectorTests
     [Fact]
     public void Csv_RoundTrip_HeaderPlusRowsReadable()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"metrics_{Guid.NewGuid():N}.csv");
+        var path = Path.Join(Path.GetTempPath(), $"metrics_{Guid.NewGuid():N}.csv");
         try
         {
             var c = new CsvMetricsCollector(path);

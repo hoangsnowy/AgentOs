@@ -1035,10 +1035,15 @@ else if (_tab == Tab.Sessions)
     private IEnumerable<BoardTicket> FilteredTickets()
     {
         if (_tickets is null) { return Array.Empty<BoardTicket>(); }
-        return _tickets.Where(t =>
-            (string.IsNullOrEmpty(_filterRepo) || $"{t.RepoOwner}/{t.RepoName}" == _filterRepo)
-            && (string.IsNullOrEmpty(_filterLabel) || t.Labels.Contains(_filterLabel))
-            && (string.IsNullOrEmpty(_filterStatus) || t.Status == _filterStatus));
+        return _tickets.Where(MatchesFilters);
+
+        bool MatchesFilters(BoardTicket t)
+        {
+            var matchesRepo = string.IsNullOrEmpty(_filterRepo) || $"{t.RepoOwner}/{t.RepoName}" == _filterRepo;
+            var matchesLabel = string.IsNullOrEmpty(_filterLabel) || t.Labels.Contains(_filterLabel);
+            var matchesStatus = string.IsNullOrEmpty(_filterStatus) || t.Status == _filterStatus;
+            return matchesRepo && matchesLabel && matchesStatus;
+        }
     }
 
     // ── Repos under a board ──────────────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Security.Cryptography;
 
 namespace AgentOs.Modules.Sessions.Pairing;
@@ -59,12 +60,9 @@ internal sealed class PairingCodeStore : IPairingCodeStore
     private void Prune()
     {
         var now = _clock.GetUtcNow();
-        foreach (var kvp in _codes)
+        foreach (var kvp in _codes.Where(kvp => kvp.Value.ExpiresAt <= now))
         {
-            if (kvp.Value.ExpiresAt <= now)
-            {
-                _codes.TryRemove(kvp.Key, out _);
-            }
+            _codes.TryRemove(kvp.Key, out _);
         }
     }
 }

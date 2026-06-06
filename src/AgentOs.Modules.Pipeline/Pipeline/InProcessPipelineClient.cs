@@ -54,16 +54,16 @@ public sealed class InProcessPipelineClient : IPipelineClient
         holder.SetSink(new ChannelProgressSink(channel));
         var orchestrator = scope.ServiceProvider.GetRequiredService<IOrchestratorAgent>();
 
-        var runTask = Task.Run(async () =>
+        var runTask = Task.Run<(PipelineResult? Result, Exception? Error)>(async () =>
         {
             try
             {
                 var result = await orchestrator.RunAsync(story, cancellationToken).ConfigureAwait(false);
-                return (Result: (PipelineResult?)result, Error: (Exception?)null);
+                return (result, null);
             }
             catch (Exception ex)
             {
-                return (Result: (PipelineResult?)null, Error: (Exception?)ex);
+                return (null, ex);
             }
             finally
             {
