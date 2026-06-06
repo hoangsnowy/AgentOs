@@ -78,9 +78,11 @@ public sealed class DefaultToolGateway : IToolGateway
                 FinishedUtc: DateTimeOffset.UtcNow,
                 SessionId: request.SessionId)).ConfigureAwait(false);
         }
-        catch
-        {
-            // Evidence is best-effort — a log failure must never break the tool call.
-        }
+        // Evidence is best-effort — a log failure must never break the tool call. Narrow to the
+        // failure shapes a log sink realistically raises (the EF sink swallows its own DB errors).
+        catch (ObjectDisposedException ex) { _ = ex.Message; }
+        catch (IOException ex) { _ = ex.Message; }
+        catch (TimeoutException ex) { _ = ex.Message; }
+        catch (InvalidOperationException ex) { _ = ex.Message; }
     }
 }

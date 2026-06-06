@@ -869,14 +869,17 @@ else if (_tab == Tab.Sessions)
             _sessions = _isAdmin ? allSessions : allSessions.Where(s => s.MemberUserId == _userId).ToList();
             _sessionRepos = await Sessions.ListAllReposForTenantAsync(_tenantId);
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Load failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { HandleLoadError(ex); }
+        catch (InvalidOperationException ex) { HandleLoadError(ex); }
+        catch (System.IO.IOException ex) { HandleLoadError(ex); }
+        catch (TimeoutException ex) { HandleLoadError(ex); }
         finally
         {
             _loading = false;
         }
+
+        void HandleLoadError(Exception ex) =>
+            Toasts.Show("Spine", $"Load failed: {ex.Message}", ToastKind.Err);
     }
 
     private async Task PollRunningSessions()
@@ -892,10 +895,11 @@ else if (_tab == Tab.Sessions)
                 _pollTimer?.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
             }
         }
-        catch
-        {
-            // Suppress poll errors — next tick will retry.
-        }
+        // Suppress poll errors — next tick will retry.
+        catch (System.Net.Http.HttpRequestException ex) { _ = ex.Message; }
+        catch (System.IO.IOException ex) { _ = ex.Message; }
+        catch (InvalidOperationException ex) { _ = ex.Message; }
+        catch (TimeoutException ex) { _ = ex.Message; }
     }
 
     // Backstop only — the live stream drives immediate updates; this slow tick reconciles from the DB
@@ -915,7 +919,11 @@ else if (_tab == Tab.Sessions)
             }
         }
         catch (OperationCanceledException) { /* circuit closing — expected */ }
-        catch { /* stream fault — the backstop poll still reconciles from the DB */ }
+        // Stream fault — the backstop poll still reconciles from the DB.
+        catch (Microsoft.AspNetCore.SignalR.HubException ex) { _ = ex.Message; }
+        catch (System.Net.Http.HttpRequestException ex) { _ = ex.Message; }
+        catch (System.IO.IOException ex) { _ = ex.Message; }
+        catch (InvalidOperationException ex) { _ = ex.Message; }
     }
 
     // Runs on the circuit thread (via InvokeAsync from the render timer): drain queued events, fold them
@@ -958,7 +966,11 @@ else if (_tab == Tab.Sessions)
             _sessions = _isAdmin ? all : all.Where(s => s.MemberUserId == _userId).ToList();
             _sessionRepos = await Sessions.ListAllReposForTenantAsync(_tenantId);
         }
-        catch { /* best-effort; the next event or poll retries */ }
+        // Best-effort; the next event or poll retries.
+        catch (System.Net.Http.HttpRequestException ex) { _ = ex.Message; }
+        catch (System.IO.IOException ex) { _ = ex.Message; }
+        catch (InvalidOperationException ex) { _ = ex.Message; }
+        catch (TimeoutException ex) { _ = ex.Message; }
     }
 
     private string BoardName(Guid id) =>
@@ -1007,10 +1019,11 @@ else if (_tab == Tab.Sessions)
             var result = await BoardTicketSvc.ListTicketsAsync(descriptor);
             _tickets = result.Items;
         }
-        catch (Exception ex)
-        {
-            _ticketError = $"Failed to load tickets: {ex.Message}";
-        }
+        catch (System.Net.Http.HttpRequestException ex) { _ticketError = $"Failed to load tickets: {ex.Message}"; }
+        catch (System.Text.Json.JsonException ex) { _ticketError = $"Failed to load tickets: {ex.Message}"; }
+        catch (InvalidOperationException ex) { _ticketError = $"Failed to load tickets: {ex.Message}"; }
+        catch (System.IO.IOException ex) { _ticketError = $"Failed to load tickets: {ex.Message}"; }
+        catch (TimeoutException ex) { _ticketError = $"Failed to load tickets: {ex.Message}"; }
         finally
         {
             _loadingTickets = false;
@@ -1073,10 +1086,10 @@ else if (_tab == Tab.Sessions)
                 Toasts.Show("Spine", result.Error ?? "Could not add the repository.", ToastKind.Err);
             }
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;
@@ -1093,10 +1106,10 @@ else if (_tab == Tab.Sessions)
             Toasts.Show("Spine", $"Removed {repo.Owner}/{repo.Repo}.", ToastKind.Ok);
             _repos = await Workspaces.ListReposForTenantAsync(_tenantId, _selectedBoard.Id);
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1127,10 +1140,11 @@ else if (_tab == Tab.Sessions)
                 $"{repo.Owner}/{repo.Repo}: {result.Created.Count} label(s) created, {result.Existing.Count} already present.",
                 ToastKind.Ok);
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Text.Json.JsonException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1194,10 +1208,11 @@ else if (_tab == Tab.Sessions)
             }
             _ideaStep = IdeaStep.Review;
         }
-        catch (Exception ex)
-        {
-            _ideaError = $"Generation failed: {ex.Message}";
-        }
+        catch (System.Net.Http.HttpRequestException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
+        catch (System.Text.Json.JsonException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
+        catch (InvalidOperationException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
+        catch (System.IO.IOException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
+        catch (TimeoutException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
         finally
         {
             _ideaBusy = false;
@@ -1284,14 +1299,20 @@ else if (_tab == Tab.Sessions)
 
             _ideaStep = IdeaStep.Result;
         }
-        catch (Exception ex)
-        {
-            _ideaError = $"Create failed: {ex.Message}";
-            Toasts.Show("Spine", _ideaError, ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { HandleCreateError(ex); }
+        catch (System.Text.Json.JsonException ex) { HandleCreateError(ex); }
+        catch (InvalidOperationException ex) { HandleCreateError(ex); }
+        catch (System.IO.IOException ex) { HandleCreateError(ex); }
+        catch (TimeoutException ex) { HandleCreateError(ex); }
         finally
         {
             _ideaBusy = false;
+        }
+
+        void HandleCreateError(Exception ex)
+        {
+            _ideaError = $"Create failed: {ex.Message}";
+            Toasts.Show("Spine", _ideaError, ToastKind.Err);
         }
     }
 
@@ -1374,10 +1395,10 @@ else if (_tab == Tab.Sessions)
             _tab = Tab.Sessions;
             CloseBoard();
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;
@@ -1484,10 +1505,10 @@ else if (_tab == Tab.Sessions)
                 await RunSession(s);
             }
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;
@@ -1604,7 +1625,13 @@ else if (_tab == Tab.Sessions)
                                 prResult.Ok ? $"{repoLabel} — PR opened" : $"{repoLabel} — PR failed: {prResult.Error}",
                                 repoLabel, prResult.Ok ? "Done" : "Failed", prResult.HtmlUrl);
                         }
-                        catch (Exception prEx)
+                        catch (System.Net.Http.HttpRequestException prEx) { await HandlePrError(prEx).ConfigureAwait(false); }
+                        catch (System.Text.Json.JsonException prEx) { await HandlePrError(prEx).ConfigureAwait(false); }
+                        catch (InvalidOperationException prEx) { await HandlePrError(prEx).ConfigureAwait(false); }
+                        catch (System.IO.IOException prEx) { await HandlePrError(prEx).ConfigureAwait(false); }
+                        catch (TimeoutException prEx) { await HandlePrError(prEx).ConfigureAwait(false); }
+
+                        async Task HandlePrError(Exception prEx)
                         {
                             anyFailure = true;
                             await sessRepo.UpdateRepoRunResultAsync(capturedTenantId, outcome.SessionRepoId,
@@ -1621,7 +1648,14 @@ else if (_tab == Tab.Sessions)
                     void Publish(SessionRunEventKind kind, string message, string? repo = null, string? status = null, string? prUrl = null) =>
                         Feed.Publish(new SessionRunEvent(capturedTenantId, capturedSession.Id, kind, message, DateTimeOffset.UtcNow, repo, status, prUrl));
                 }
-                catch (Exception ex)
+                catch (System.Net.Http.HttpRequestException ex) { await HandleRunFailure(ex).ConfigureAwait(false); }
+                catch (System.Text.Json.JsonException ex) { await HandleRunFailure(ex).ConfigureAwait(false); }
+                catch (Microsoft.AspNetCore.SignalR.HubException ex) { await HandleRunFailure(ex).ConfigureAwait(false); }
+                catch (InvalidOperationException ex) { await HandleRunFailure(ex).ConfigureAwait(false); }
+                catch (System.IO.IOException ex) { await HandleRunFailure(ex).ConfigureAwait(false); }
+                catch (TimeoutException ex) { await HandleRunFailure(ex).ConfigureAwait(false); }
+
+                async Task HandleRunFailure(Exception ex)
                 {
                     try
                     {
@@ -1630,16 +1664,20 @@ else if (_tab == Tab.Sessions)
                         await sessRepo.UpdateRunResultAsync(capturedTenantId, capturedSession.Id,
                             "Failed", null, ex.Message).ConfigureAwait(false);
                     }
-                    catch { /* best-effort */ }
+                    // Best-effort.
+                    catch (System.Net.Http.HttpRequestException inner) { _ = inner.Message; }
+                    catch (System.IO.IOException inner) { _ = inner.Message; }
+                    catch (InvalidOperationException inner) { _ = inner.Message; }
+                    catch (TimeoutException inner) { _ = inner.Message; }
                     Feed.Publish(new SessionRunEvent(capturedTenantId, capturedSession.Id,
                         SessionRunEventKind.Failed, $"Session failed: {ex.Message}", DateTimeOffset.UtcNow));
                 }
             });
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1678,10 +1716,10 @@ else if (_tab == Tab.Sessions)
             var r0 = await Runners.ListForTenantAsync(_tenantId);
             _runners = _isAdmin ? r0 : r0.Where(r => r.OwnerUserId == _userId).ToList();
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Register failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Register failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Register failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Register failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Register failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;
@@ -1698,10 +1736,10 @@ else if (_tab == Tab.Sessions)
             var r0 = await Runners.ListForTenantAsync(_tenantId);
             _runners = _isAdmin ? r0 : r0.Where(r => r.OwnerUserId == _userId).ToList();
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Revoke failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Revoke failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Revoke failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Revoke failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Revoke failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1720,10 +1758,10 @@ else if (_tab == Tab.Sessions)
             var s0 = await Sessions.ListForTenantAsync(_tenantId);
             _sessions = _isAdmin ? s0 : s0.Where(s => s.MemberUserId == _userId).ToList();
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Close failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Close failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Close failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Close failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Close failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1749,14 +1787,20 @@ else if (_tab == Tab.Sessions)
                 Toasts.Show("Spine", "No boards visible to that token.", ToastKind.Info);
             }
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Find boards failed: {ex.Message}", ToastKind.Err);
-            _foundBoards = null;
-        }
+        catch (System.Net.Http.HttpRequestException ex) { HandleFindError(ex); }
+        catch (System.Text.Json.JsonException ex) { HandleFindError(ex); }
+        catch (InvalidOperationException ex) { HandleFindError(ex); }
+        catch (System.IO.IOException ex) { HandleFindError(ex); }
+        catch (TimeoutException ex) { HandleFindError(ex); }
         finally
         {
             _findingBoards = false;
+        }
+
+        void HandleFindError(Exception ex)
+        {
+            Toasts.Show("Spine", $"Find boards failed: {ex.Message}", ToastKind.Err);
+            _foundBoards = null;
         }
     }
 
@@ -1812,10 +1856,11 @@ else if (_tab == Tab.Sessions)
                 Toasts.Show("Spine", result.Error ?? "Connect failed.", ToastKind.Err);
             }
         }
-        catch (Exception ex)
-        {
-            Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err);
-        }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Text.Json.JsonException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;

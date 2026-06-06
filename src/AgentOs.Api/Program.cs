@@ -195,7 +195,23 @@ app.MapPost("/llm/test", async (ILlmClientFactory factory, IConfiguration cfg, C
         var resp = await client.SendAsync(probe, ct).ConfigureAwait(false);
         return Results.Ok(new { ok = true, provider = client.Provider, model, sample = resp.Content?.Trim() });
     }
-    catch (Exception ex)
+    catch (System.Net.Http.HttpRequestException ex)
+    {
+        return Results.Ok(new { ok = false, provider, model, error = ex.Message });
+    }
+    catch (System.Text.Json.JsonException ex)
+    {
+        return Results.Ok(new { ok = false, provider, model, error = ex.Message });
+    }
+    catch (TimeoutException ex)
+    {
+        return Results.Ok(new { ok = false, provider, model, error = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Ok(new { ok = false, provider, model, error = ex.Message });
+    }
+    catch (ArgumentException ex)
     {
         return Results.Ok(new { ok = false, provider, model, error = ex.Message });
     }

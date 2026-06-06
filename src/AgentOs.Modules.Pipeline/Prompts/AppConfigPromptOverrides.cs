@@ -38,9 +38,15 @@ internal sealed class AppConfigPromptOverrides : IPromptOverrides
             var overridden = await _config.GetForTenantAsync(tenant, Key(agentKey), cancellationToken).ConfigureAwait(false);
             return string.IsNullOrWhiteSpace(overridden) ? defaultPrompt : overridden;
         }
-#pragma warning disable CA1031 // A prompt lookup must never break an agent run — fall back to the default.
-        catch (Exception ex)
-#pragma warning restore CA1031
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) { return OnLookupFailed(ex); }
+        catch (System.Data.Common.DbException ex) { return OnLookupFailed(ex); }
+        catch (System.Security.Cryptography.CryptographicException ex) { return OnLookupFailed(ex); }
+        catch (TimeoutException ex) { return OnLookupFailed(ex); }
+        catch (IOException ex) { return OnLookupFailed(ex); }
+        catch (InvalidOperationException ex) { return OnLookupFailed(ex); }
+
+        // A prompt lookup must never break an agent run — fall back to the default on any store/decrypt error.
+        string OnLookupFailed(Exception ex)
         {
             _logger.LogWarning(ex, "Prompt override lookup failed for {Agent}; using the default prompt.", agentKey);
             return defaultPrompt;

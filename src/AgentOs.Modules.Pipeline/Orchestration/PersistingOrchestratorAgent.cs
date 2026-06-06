@@ -84,15 +84,29 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
                 new PipelineRunRecord(runId, result, runMetrics, createdAtUtc, completedAtUtc),
                 cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            throw;
+            OnPersistFailed(runId, ex);
         }
-#pragma warning disable CA1031 // Persist best-effort: a DB error must not corrupt a successful run.
-        catch (Exception ex)
-#pragma warning restore CA1031
+        catch (System.Data.Common.DbException ex)
         {
-            _logger.LogError(ex, "Failed to save pipeline run {RunId} — the result is still returned to the client.", runId);
+            OnPersistFailed(runId, ex);
         }
+        catch (TimeoutException ex)
+        {
+            OnPersistFailed(runId, ex);
+        }
+        catch (IOException ex)
+        {
+            OnPersistFailed(runId, ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            OnPersistFailed(runId, ex);
+        }
+
+        // Persist best-effort: a DB error must not corrupt a successful run — log and move on.
+        void OnPersistFailed(Guid id, Exception ex) =>
+            _logger.LogError(ex, "Failed to save pipeline run {RunId} — the result is still returned to the client.", id);
     }
 }

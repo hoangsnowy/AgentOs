@@ -155,16 +155,25 @@ internal static class TenantEndpoints
             var emailed = false;
             if (!string.IsNullOrWhiteSpace(body.Email))
             {
+                // Already logged by the sender; fall back to the returned URL. The address may also be
+                // unparseable (MimeKit.ParseException) — same outcome: emailed stays false.
+                static void Handle(Exception e) => _ = e.Message;
                 try
                 {
                     var (subject, htmlBody, textBody) = InvitationEmail.Build(tenantId, role, url);
                     await email.SendAsync(body.Email!, subject, htmlBody, textBody, ct).ConfigureAwait(false);
                     emailed = true;
                 }
-                catch (Exception)
-                {
-                    // Already logged by the sender; fall back to the returned URL.
-                }
+                // ServiceNotConnectedException derives from InvalidOperationException; CommandException →
+                // ProtocolException — derived clauses precede their bases (CS0160).
+                catch (MailKit.ServiceNotConnectedException ex) { Handle(ex); }
+                catch (MailKit.CommandException ex) { Handle(ex); }
+                catch (MailKit.ProtocolException ex) { Handle(ex); }
+                catch (MailKit.Security.AuthenticationException ex) { Handle(ex); }
+                catch (System.Net.Sockets.SocketException ex) { Handle(ex); }
+                catch (System.IO.IOException ex) { Handle(ex); }
+                catch (InvalidOperationException ex) { Handle(ex); }
+                catch (MimeKit.ParseException ex) { Handle(ex); }
             }
             return Results.Ok(new CreatedInvitationResponse(minted.Token, url, minted.ExpiresAtUtc, emailed));
         })

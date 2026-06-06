@@ -118,18 +118,24 @@ internal sealed partial class TenantSignupService : ITenantSignupService
                     DateTimeOffset.UtcNow);
                 await _repo.AddAsync(record, ct).ConfigureAwait(false);
             }
-            catch (Exception dbEx)
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx) { await HandleAsync(dbEx).ConfigureAwait(false); }
+            catch (System.Data.Common.DbException dbEx) { await HandleAsync(dbEx).ConfigureAwait(false); }
+            catch (InvalidOperationException dbEx) { await HandleAsync(dbEx).ConfigureAwait(false); }
+
+            async Task HandleAsync(Exception dbEx)
             {
+                void RollbackKeycloak(Exception rollbackEx) =>
+                    _logger.LogError(rollbackEx,
+                        "Tenant DB write failed for '{TenantId}', and rolling back Keycloak user '{UserId}' also failed — orphaned Keycloak user.",
+                        LogSafe.Scrub(tenantId), LogSafe.Scrub(kcUserId));
                 try
                 {
                     await _kc.DeleteUserAsync(kcUserId, CancellationToken.None).ConfigureAwait(false);
                 }
-                catch (Exception rollbackEx)
-                {
-                    _logger.LogError(rollbackEx,
-                        "Tenant DB write failed for '{TenantId}', and rolling back Keycloak user '{UserId}' also failed — orphaned Keycloak user.",
-                        LogSafe.Scrub(tenantId), LogSafe.Scrub(kcUserId));
-                }
+                catch (System.Net.Http.HttpRequestException rollbackEx) { RollbackKeycloak(rollbackEx); }
+                catch (JsonException rollbackEx) { RollbackKeycloak(rollbackEx); }
+                catch (TimeoutException rollbackEx) { RollbackKeycloak(rollbackEx); }
+                catch (InvalidOperationException rollbackEx) { RollbackKeycloak(rollbackEx); }
                 throw new InvalidOperationException(
                     $"Tenant registry write failed for '{tenantId}'; Keycloak user rolled back.", dbEx);
             }

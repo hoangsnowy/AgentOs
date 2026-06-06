@@ -61,14 +61,21 @@ public sealed class McpClientHost : IAsyncDisposable
             {
                 await ConnectServerAsync(server, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to connect MCP server '{Name}' ({Transport}). The server's tools will be unavailable; "
-                    + "the rest of the host continues to boot.",
-                    server.Name, server.Transport);
-            }
+            catch (ModelContextProtocol.McpException ex) { OnConnectFailed(server, ex); }
+            catch (System.ComponentModel.Win32Exception ex) { OnConnectFailed(server, ex); }
+            catch (System.Net.Http.HttpRequestException ex) { OnConnectFailed(server, ex); }
+            catch (System.Text.Json.JsonException ex) { OnConnectFailed(server, ex); }
+            catch (System.IO.IOException ex) { OnConnectFailed(server, ex); }
+            catch (TimeoutException ex) { OnConnectFailed(server, ex); }
+            catch (InvalidOperationException ex) { OnConnectFailed(server, ex); }
         }
+
+        // One server's failure is logged and skipped — the rest of the host still boots.
+        void OnConnectFailed(McpServerOptions server, Exception ex) =>
+            _logger.LogWarning(ex,
+                "Failed to connect MCP server '{Name}' ({Transport}). The server's tools will be unavailable; "
+                + "the rest of the host continues to boot.",
+                server.Name, server.Transport);
     }
 
     private async Task ConnectServerAsync(McpServerOptions server, CancellationToken cancellationToken)
@@ -176,8 +183,15 @@ public sealed class McpClientHost : IAsyncDisposable
         foreach (var client in _clients)
         {
             try { await client.DisposeAsync().ConfigureAwait(false); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed to dispose MCP client cleanly."); }
+            catch (ModelContextProtocol.McpException ex) { OnDisposeFailed(ex); }
+            catch (System.ComponentModel.Win32Exception ex) { OnDisposeFailed(ex); }
+            catch (ObjectDisposedException ex) { OnDisposeFailed(ex); }
+            catch (System.IO.IOException ex) { OnDisposeFailed(ex); }
+            catch (TimeoutException ex) { OnDisposeFailed(ex); }
+            catch (InvalidOperationException ex) { OnDisposeFailed(ex); }
         }
         _clients.Clear();
+
+        void OnDisposeFailed(Exception ex) => _logger.LogWarning(ex, "Failed to dispose MCP client cleanly.");
     }
 }

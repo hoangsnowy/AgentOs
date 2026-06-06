@@ -34,16 +34,18 @@ internal sealed class EfAuditLog(TenantsDbContext db, ILogger<EfAuditLog> logger
             });
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
+        catch (DbUpdateException ex) { Handle(ex); }
+        catch (System.Data.Common.DbException ex) { Handle(ex); }
+        catch (InvalidOperationException ex) { Handle(ex); }
+
+        void Handle(Exception e) =>
             // The action label is intentionally NOT echoed here: some action constants are named
             // after sensitive operations (e.g. password reset), which trips static-analysis secret
             // heuristics, and the action is already captured in the persisted audit record. Tenant +
             // exception are enough to diagnose a failed best-effort audit write.
-            logger.LogWarning(ex,
+            logger.LogWarning(e,
                 "Audit write failed for tenant={TenantId} — surrounding op continues.",
                 LogSafe.Scrub(entry.TenantId));
-        }
     }
 
     public async Task<IReadOnlyList<AuditEntry>> ListAsync(string tenantId, int max = 100, CancellationToken ct = default)

@@ -97,10 +97,10 @@ public sealed class KcLiveBenchTests
                 {
                     result = await orch.RunAsync(new UserStory(ProductStory, NMax: 3));
                 }
-                catch (Exception ex)
-                {
-                    error = ex.Message;
-                }
+                catch (System.Net.Http.HttpRequestException ex) { error = ex.Message; }
+                catch (System.Text.Json.JsonException ex) { error = ex.Message; }
+                catch (TimeoutException ex) { error = ex.Message; }
+                catch (InvalidOperationException ex) { error = ex.Message; }
             }
             sw.Stop();
 
@@ -235,10 +235,11 @@ public sealed class KcLiveBenchTests
             p.StandardError.ReadToEnd();
             return p.WaitForExit(120_000) && p.ExitCode == 0;
         }
-        catch (Exception)
-        {
-            return false;
-        }
+        // Probe build failed to even launch / run — treat as "does not compile".
+        catch (System.ComponentModel.Win32Exception ex) { _ = ex.Message; return false; }
+        catch (IOException ex) { _ = ex.Message; return false; }
+        catch (InvalidOperationException ex) { _ = ex.Message; return false; }
+        catch (TimeoutException ex) { _ = ex.Message; return false; }
     }
 
     private static void WriteFile(string root, CodeFile f)

@@ -43,7 +43,7 @@ public sealed class SessionRunStreamTests
         await Task.Delay(120);                 // let the subscription register its channel
         stream.Publish(Evt("t1", session, "hello"));
 
-        try { await sub; } catch (OperationCanceledException) { }
+        try { await sub; } catch (OperationCanceledException ex) { _ = ex.Message; } // expected on stream stop
 
         got.ShouldHaveSingleItem();
         got[0].SessionId.ShouldBe(session);
@@ -71,7 +71,7 @@ public sealed class SessionRunStreamTests
         stream.Publish(Evt("t2", Guid.NewGuid(), "other-tenant"));  // must be filtered out
         stream.Publish(Evt("t1", mine, "mine"));                    // the one we should receive
 
-        try { await sub; } catch (OperationCanceledException) { }
+        try { await sub; } catch (OperationCanceledException ex) { _ = ex.Message; } // expected on stream stop
 
         got.ShouldHaveSingleItem();
         got[0].SessionId.ShouldBe(mine);
@@ -124,6 +124,6 @@ public sealed class SessionRunStreamTests
 
         var finished = await Task.WhenAny(sub, Task.Delay(TimeSpan.FromSeconds(2)));
         finished.ShouldBe(sub, "cancellation should end the subscription enumeration");
-        try { await sub; } catch (OperationCanceledException) { }
+        try { await sub; } catch (OperationCanceledException ex) { _ = ex.Message; } // expected on stream stop
     }
 }

@@ -70,13 +70,14 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         {
             budget = await _budgetGuard!.EvaluateAsync(request.TenantId, ct).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-#pragma warning disable CA1031 // fail-open: a transient budget-store error must not block a run.
-        catch (Exception ex)
-#pragma warning restore CA1031
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) { return BudgetEvalFailed(ex); }
+        catch (System.Data.Common.DbException ex) { return BudgetEvalFailed(ex); }
+        catch (TimeoutException ex) { return BudgetEvalFailed(ex); }
+        catch (IOException ex) { return BudgetEvalFailed(ex); }
+        catch (InvalidOperationException ex) { return BudgetEvalFailed(ex); }
+
+        // fail-open: a transient budget-store error must not block a run — log and proceed.
+        IssueWorkResult? BudgetEvalFailed(Exception ex)
         {
             _logger.LogWarning(ex, "IssueWorkAgent: budget evaluation failed for tenant {Tenant}; proceeding.", request.TenantId);
             return null;
@@ -142,11 +143,16 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
         {
             llm = _factory.Create(providerName);
         }
-        catch (Exception ex)
+        catch (LlmException ex) { return LlmInitFailed(ex); }
+        catch (ArgumentException ex) { return LlmInitFailed(ex); }
+        catch (NotSupportedException ex) { return LlmInitFailed(ex); }
+        catch (InvalidOperationException ex) { return LlmInitFailed(ex); }
+
+        // Client init failed — no repo could run. Report each as failed so the caller surfaces it per repo.
+        IssueWorkResult LlmInitFailed(Exception ex)
         {
             _logger.LogError(ex, "IssueWorkAgent: LLM client init failed for session {SessionId}", request.SessionId);
             Emit(request, SessionRunEventKind.Step, $"LLM client init failed: {ex.Message}");
-            // No repo could run — report each as failed so the caller can surface it per repo.
             var failed = request.Repos
                 .Select(r => new RepoWorkOutcome(r.SessionRepoId, false, r.Owner, r.Repo, "", "", $"LLM client init failed: {ex.Message}"))
                 .ToList();
@@ -218,7 +224,14 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
             var response = await llm.SendAsync(req, ct).ConfigureAwait(false);
             return ParseOutcome(response.Content ?? "", request, repo);
         }
-        catch (Exception ex)
+        catch (LlmException ex) { return LlmCallFailed(ex); }
+        catch (System.Net.Http.HttpRequestException ex) { return LlmCallFailed(ex); }
+        catch (System.Text.Json.JsonException ex) { return LlmCallFailed(ex); }
+        catch (TimeoutException ex) { return LlmCallFailed(ex); }
+        catch (IOException ex) { return LlmCallFailed(ex); }
+        catch (InvalidOperationException ex) { return LlmCallFailed(ex); }
+
+        RepoWorkOutcome LlmCallFailed(Exception ex)
         {
             _logger.LogError(ex, "IssueWorkAgent: LLM call failed for session {SessionId} repo {Owner}/{Repo}",
                 request.SessionId, repo.Owner, repo.Repo);

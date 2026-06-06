@@ -45,22 +45,29 @@ public static class RetryPolicy
             {
                 throw;
             }
-            catch (Exception ex) when (IsTransient(ex))
+            // Concrete transient types mirror IsTransient: marker 429/5xx, HTTP failures, and
+            // HttpClient timeouts (TaskCanceledException raised by a request timeout, not our token —
+            // that case is rethrown by the guard above). Each shares the same backoff handling.
+            catch (TransientHttpException ex) { lastException = ex; if (await HandleTransientAsync(ex, attempt).ConfigureAwait(false)) { break; } }
+            catch (HttpRequestException ex) { lastException = ex; if (await HandleTransientAsync(ex, attempt).ConfigureAwait(false)) { break; } }
+            catch (TaskCanceledException ex) { lastException = ex; if (await HandleTransientAsync(ex, attempt).ConfigureAwait(false)) { break; } }
+        }
+
+        // Backoff for one transient attempt. Returns true when retries are exhausted (caller breaks).
+        async Task<bool> HandleTransientAsync(Exception ex, int attempt)
+        {
+            if (attempt == maxRetries)
             {
-                lastException = ex;
-
-                if (attempt == maxRetries)
-                {
-                    break;
-                }
-
-                var wait = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * Math.Pow(2, attempt));
-                logger?.LogWarning(
-                    "[{Provider}] Transient failure on attempt {Attempt}/{Max}: {Error}. Retrying in {Delay}ms.",
-                    providerName, attempt + 1, maxRetries + 1, ex.Message, wait.TotalMilliseconds);
-
-                await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
+                return true;
             }
+
+            var wait = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * Math.Pow(2, attempt));
+            logger?.LogWarning(
+                "[{Provider}] Transient failure on attempt {Attempt}/{Max}: {Error}. Retrying in {Delay}ms.",
+                providerName, attempt + 1, maxRetries + 1, ex.Message, wait.TotalMilliseconds);
+
+            await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
+            return false;
         }
 
         throw new LlmException(

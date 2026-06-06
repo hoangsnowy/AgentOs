@@ -42,12 +42,14 @@ public static class PluginLoader
                 {
                     assemblies.Add(AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(dll)));
                 }
-#pragma warning disable CA1031 // A broken plugin file must be reported, not crash host startup.
-                catch (Exception ex)
-#pragma warning restore CA1031
-                {
-                    results.Add(FailedFile(dll, ex));
-                }
+                // A broken plugin file must be reported, not crash host startup.
+                // FileLoadException + FileNotFoundException derive from IOException → before it (CS0160).
+                catch (BadImageFormatException ex) { results.Add(FailedFile(dll, ex)); }
+                catch (FileLoadException ex) { results.Add(FailedFile(dll, ex)); }
+                catch (FileNotFoundException ex) { results.Add(FailedFile(dll, ex)); }
+                catch (ReflectionTypeLoadException ex) { results.Add(FailedFile(dll, ex)); }
+                catch (InvalidOperationException ex) { results.Add(FailedFile(dll, ex)); }
+                catch (IOException ex) { results.Add(FailedFile(dll, ex)); }
             }
         }
 
@@ -92,20 +94,27 @@ public static class PluginLoader
                 // plugin's real identity in the catalog (not a synthetic type-name placeholder).
                 IAgentOsPlugin plugin;
                 PluginManifest manifest;
+
+                // A plugin that won't even construct must not abort the others.
+                void RecordConstructFailure(Exception e) =>
+                    sink.Add(new LoadedPlugin(
+                        new PluginManifest(type.FullName ?? type.Name, type.Name, "?"),
+                        PluginStatus.Failed, assembly.Location, [], e.Message));
+
                 try
                 {
                     plugin = (IAgentOsPlugin)Activator.CreateInstance(type)!;
                     manifest = plugin.Manifest;
                 }
-#pragma warning disable CA1031 // A plugin that won't even construct must not abort the others.
-                catch (Exception ex)
-#pragma warning restore CA1031
-                {
-                    sink.Add(new LoadedPlugin(
-                        new PluginManifest(type.FullName ?? type.Name, type.Name, "?"),
-                        PluginStatus.Failed, assembly.Location, [], ex.Message));
-                    continue;
-                }
+                // MissingMethodException → MissingMemberException → MemberAccessException
+                // (derived→base) — derived clauses precede their bases (CS0160).
+                catch (TargetInvocationException ex) { RecordConstructFailure(ex); continue; }
+                catch (MissingMethodException ex) { RecordConstructFailure(ex); continue; }
+                catch (MissingMemberException ex) { RecordConstructFailure(ex); continue; }
+                catch (MemberAccessException ex) { RecordConstructFailure(ex); continue; }
+                catch (TypeLoadException ex) { RecordConstructFailure(ex); continue; }
+                catch (InvalidOperationException ex) { RecordConstructFailure(ex); continue; }
+                catch (InvalidCastException ex) { RecordConstructFailure(ex); continue; }
 
                 try
                 {
@@ -118,12 +127,23 @@ public static class PluginLoader
 
                     sink.Add(new LoadedPlugin(manifest, PluginStatus.Loaded, assembly.Location, capabilities));
                 }
-#pragma warning disable CA1031 // One plugin throwing must not abort discovery of the others.
-                catch (Exception ex)
-#pragma warning restore CA1031
-                {
-                    sink.Add(new LoadedPlugin(manifest, PluginStatus.Failed, assembly.Location, [], ex.Message));
-                }
+                // One plugin throwing must not abort discovery of the others.
+                // MissingMethodException → MissingMemberException → MemberAccessException
+                // (derived→base) — derived clauses precede their bases (CS0160).
+                catch (TargetInvocationException ex) { RecordRegisterFailure(ex); }
+                catch (TypeLoadException ex) { RecordRegisterFailure(ex); }
+                catch (MissingMethodException ex) { RecordRegisterFailure(ex); }
+                catch (MissingMemberException ex) { RecordRegisterFailure(ex); }
+                catch (MemberAccessException ex) { RecordRegisterFailure(ex); }
+                catch (FileLoadException ex) { RecordRegisterFailure(ex); }
+                catch (FileNotFoundException ex) { RecordRegisterFailure(ex); }
+                catch (BadImageFormatException ex) { RecordRegisterFailure(ex); }
+                catch (InvalidOperationException ex) { RecordRegisterFailure(ex); }
+                catch (NotSupportedException ex) { RecordRegisterFailure(ex); }
+                catch (ArgumentException ex) { RecordRegisterFailure(ex); }
+
+                void RecordRegisterFailure(Exception e) =>
+                    sink.Add(new LoadedPlugin(manifest, PluginStatus.Failed, assembly.Location, [], e.Message));
             }
         }
     }

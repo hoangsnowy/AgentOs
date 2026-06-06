@@ -227,7 +227,23 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
                 }
                 StateHasChanged();
             }
-            catch { /* API unreachable / unauthorized — keep the seeded values */ }
+            catch (System.Net.Http.HttpRequestException ex)
+            {
+                // API unreachable / unauthorized — keep the seeded values.
+                _ = ex.Message;
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                _ = ex.Message;
+            }
+            catch (System.InvalidOperationException ex)
+            {
+                _ = ex.Message;
+            }
+            catch (System.TimeoutException ex)
+            {
+                _ = ex.Message;
+            }
         }
     }
 
@@ -331,7 +347,22 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
                 _testResult = $"{provider} · {model}";
             }
         }
-        catch (Exception ex)
+        catch (System.InvalidOperationException ex)
+        {
+            _testOk = false;
+            _testResult = ex.Message;
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            _testOk = false;
+            _testResult = ex.Message;
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _testOk = false;
+            _testResult = ex.Message;
+        }
+        catch (System.TimeoutException ex)
         {
             _testOk = false;
             _testResult = ex.Message;

@@ -61,10 +61,15 @@ public sealed class ChatClientLlmClient : ILlmClient
         {
             throw;
         }
-        catch (Exception ex)
+        catch (System.Net.Http.HttpRequestException ex) { throw OnChatFailed(ex); }
+        catch (System.ClientModel.ClientResultException ex) { throw OnChatFailed(ex); }
+        catch (System.Text.Json.JsonException ex) { throw OnChatFailed(ex); }
+        catch (TimeoutException ex) { throw OnChatFailed(ex); }
+        catch (InvalidOperationException ex) { throw OnChatFailed(ex); }
+        LlmException OnChatFailed(Exception ex)
         {
             LlmTelemetry.RecordError(activity, ex.Message);
-            throw new LlmException($"{Provider} chat request failed: {ex.Message}", Provider, innerException: ex);
+            return new LlmException($"{Provider} chat request failed: {ex.Message}", Provider, innerException: ex);
         }
         stopwatch.Stop();
 

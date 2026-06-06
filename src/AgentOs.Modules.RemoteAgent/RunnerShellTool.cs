@@ -88,10 +88,10 @@ public sealed class RunnerShellTool : ITool
                 workingDir = wdProp.GetString();
             }
         }
-        catch (Exception ex) when (ex is not ToolException)
-        {
-            throw new ToolException($"runner_shell: invalid input JSON — {ex.Message}", ex);
-        }
+        catch (JsonException ex) { throw new ToolException($"runner_shell: invalid input JSON — {ex.Message}", ex); }
+        catch (System.Collections.Generic.KeyNotFoundException ex) { throw new ToolException($"runner_shell: invalid input JSON — {ex.Message}", ex); }
+        catch (InvalidOperationException ex) { throw new ToolException($"runner_shell: invalid input JSON — {ex.Message}", ex); }
+        catch (ArgumentException ex) { throw new ToolException($"runner_shell: invalid input JSON — {ex.Message}", ex); }
 
         var target = ResolveTarget(request.TenantId);
         if (!_broker.HasRunnerFor(target))
@@ -165,10 +165,10 @@ public sealed class RunnerShellTool : ITool
             _feed.Publish(new SessionRunEvent(
                 amb.TenantId, sessionId, SessionRunEventKind.Step, message, DateTimeOffset.UtcNow));
         }
-        catch
-        {
-            // Best-effort telemetry — a feed hiccup must never break the tool call.
-        }
+        // Best-effort telemetry — a feed hiccup must never break the tool call.
+        catch (ObjectDisposedException ex) { _ = ex.Message; }
+        catch (IOException ex) { _ = ex.Message; }
+        catch (InvalidOperationException ex) { _ = ex.Message; }
     }
 
     private static string Truncate(string? s, int max) =>

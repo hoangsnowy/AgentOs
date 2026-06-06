@@ -70,10 +70,10 @@ public class LivePipelineSmokeTests
             {
                 result = await orch.RunAsync(userStory);
             }
-            catch (Exception ex)
-            {
-                failure = ex;
-            }
+            catch (System.Net.Http.HttpRequestException ex) { failure = ex; }
+            catch (JsonException ex) { failure = ex; }
+            catch (TimeoutException ex) { failure = ex; }
+            catch (InvalidOperationException ex) { failure = ex; }
         }
 
         var snapshot = collector.Snapshot();

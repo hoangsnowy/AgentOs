@@ -144,7 +144,14 @@ public sealed class PooledChatLlmClient : ILlmClient
             {
                 throw;
             }
-            catch (Exception ex) when (_isRateLimited(ex))
+            // Deliberately broad, gated by the injected rate-limit predicate: different providers'
+            // SDKs surface a 429 as different exception types (ClientResultException, HttpRequestException,
+            // provider-specific) and _isRateLimited inspects the whole inner-exception chain by message.
+            // Narrowing the caught type here would silently break key failover, so the predicate — not the
+            // type — is the gate. (CodeQL cs/catch-of-all-exceptions is expected to flag this single line.)
+            catch (Exception ex) when (_isRateLimited(ex)) { await HandleRateLimit(ex).ConfigureAwait(false); }
+
+            async Task HandleRateLimit(Exception ex)
             {
                 LlmTelemetry.RecordError(activity, ex.Message);
                 last = ex;

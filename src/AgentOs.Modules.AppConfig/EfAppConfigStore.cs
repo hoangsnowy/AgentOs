@@ -150,15 +150,19 @@ public sealed class EfAppConfigStore : IAppConfigStore
 
     private string? TryUnprotect(string cipher)
     {
+        string? Handle(Exception e)
+        {
+            _logger.LogWarning(e, "Failed to decrypt an app_config value; treating as unset");
+            return null;
+        }
+
         try
         {
             return _protector.Unprotect(cipher);
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to decrypt an app_config value; treating as unset");
-            return null;
-        }
+        catch (System.Security.Cryptography.CryptographicException ex) { return Handle(ex); }
+        catch (FormatException ex) { return Handle(ex); }
+        catch (ArgumentException ex) { return Handle(ex); }
     }
 
     private readonly record struct CacheEntry(string? Value, DateTime FetchedUtc);

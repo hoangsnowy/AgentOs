@@ -85,7 +85,15 @@
                 _user = await JS.InvokeAsync<string?>("localStorage.getItem", "agentic-signed-in");
                 StateHasChanged();
             }
-            catch { }
+            catch (Microsoft.JSInterop.JSException ex)
+            {
+                // Prerender / JS unavailable — leave the signed-in label unresolved.
+                _ = ex.Message;
+            }
+            catch (System.InvalidOperationException ex)
+            {
+                _ = ex.Message;
+            }
         }
     }
 
