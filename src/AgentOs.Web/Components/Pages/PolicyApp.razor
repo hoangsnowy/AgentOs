@@ -1,0 +1,116 @@
+@* PolicyApp — admin governance: which tools agents may invoke for this tenant. Off (default) = every
+   registered tool is allowed. On = only the checked tools pass the IToolGateway policy gate; denied calls
+   are recorded in the Evidence audit trail. Tenant read from AuthenticationState (circuit has no
+   HttpContext) and passed to the tenant-explicit IToolPolicyService. *@
+
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Domain.Tools
+@using AgentOs.Modules.Tools.Policy
+@inject IToolRegistry Registry
+@inject IToolPolicyService Policy
+@inject AgentOs.Web.Services.ToastService Toasts
+
+@if (!_resolved)
+{
+    <Spinner />
+}
+else if (!_isAdmin)
+{
+    <div class="login-error">Admin role required to manage tool policy.</div>
+}
+else
+{
+    <header class="page-head">
+        <div>
+            <h1 class="page-title">Tool Policy · <code>@_tenantId</code></h1>
+            <p class="page-sub">Gate which tools agents may invoke. Enforcement off = every registered tool is allowed.</p>
+        </div>
+        <div style="display:flex;gap:var(--space-3);align-items:center">
+            <Toggle Label="Enforce allowlist" Checked="_enforce" CheckedChanged="(v) => _enforce = v" />
+            <Btn OnClick="Save" Disabled="_saving" Variant="Btn.ButtonVariant.Primary">Save</Btn>
+        </div>
+    </header>
+
+    @if (_tools.Count == 0)
+    {
+        <div class="muted spine-empty">No tools registered. Tools appear here once a module or plugin registers them.</div>
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Allow</th>
+                    <th>Tool</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var tool in _tools)
+                {
+                    <tr>
+                        <td>
+                            <input type="checkbox" checked="@_allowed.Contains(tool.Name)" disabled="@(!_enforce)"
+                                   @onchange="e => Toggle(tool.Name, (bool)(e.Value ?? false))" />
+                        </td>
+                        <td><code>@tool.Name</code></td>
+                        <td class="muted">@tool.Description</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _resolved;
+    private bool _isAdmin;
+    private bool _saving;
+    private bool _enforce;
+    private string _tenantId = "default";
+    private IReadOnlyList<ToolDefinition> _tools = [];
+    private HashSet<string> _allowed = new(System.StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsInRole("admin");
+            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
+        }
+        _resolved = true;
+        if (_isAdmin)
+        {
+            _tools = Registry.List();
+            var policy = await Policy.GetAsync(_tenantId);
+            _enforce = policy.Enforce;
+            _allowed = new HashSet<string>(policy.AllowedTools, System.StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private void Toggle(string name, bool on)
+    {
+        if (on) { _allowed.Add(name); } else { _allowed.Remove(name); }
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        try
+        {
+            await Policy.SetAsync(_tenantId, _enforce, _allowed.ToList());
+            Toasts.Show("Policy", _enforce ? $"Enforcing {_allowed.Count} allowed tool(s)." : "Enforcement off — all tools allowed.", ToastKind.Ok);
+        }
+        catch (System.Exception ex)
+        {
+            Toasts.Show("Policy", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
