@@ -1,0 +1,33 @@
+@* Sample plugin UI — rendered in its own AgentOS desktop window via DynamicComponent. This component
+   ships INSIDE the plugin assembly (loaded at runtime from the host's plugins/ folder), proving a plugin
+   can contribute a desktop window, not just services. Read-only: it uses only global shell CSS classes
+   so it matches the desktop without referencing any host component.
+
+   NOTE: interactive event handlers on a component loaded from a runtime-discovered assembly are not yet
+   wired to the Blazor Server circuit — plugin windows are render-only for now (see the PR's deferred
+   list). So this sample renders a static panel rather than a live input. *@
+
+<header class="page-head">
+    <div>
+        <h1 class="page-title">Sample Plugin</h1>
+        <p class="page-sub">A desktop window contributed by a runtime-discovered plugin.</p>
+    </div>
+</header>
+
+<div class="metrics">
+    <div class="metric">
+        <div class="v">word_count</div>
+        <div class="k">Tool contributed</div>
+    </div>
+    <div class="metric">
+        <div class="v">DynamicComponent</div>
+        <div class="k">Rendered via</div>
+    </div>
+</div>
+
+<p class="muted" style="margin-top:14px">
+    This window ships inside <code>AgentOs.Plugins.Sample.dll</code> — loaded at startup from the host's
+    <code>plugins/</code> folder, with no compile-time reference from the host. The same plugin also
+    registers the <code>word_count</code> tool; see the <strong>Plugins</strong> manager for the full list
+    of what it contributes.
+</p>

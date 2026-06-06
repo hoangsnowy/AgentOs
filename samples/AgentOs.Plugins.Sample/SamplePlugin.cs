@@ -16,11 +16,19 @@ public sealed class SamplePlugin : IAgentOsPlugin
     public PluginManifest Manifest { get; } = new(
         Id: "agentos.sample.tools",
         Name: "Sample Tools",
-        Version: "1.0.0",
+        Version: "1.1.0",
         Author: "AgentOS",
-        Description: "Reference plugin — contributes a word_count tool, discovered at runtime.");
+        Description: "Reference plugin — contributes a word_count tool and a desktop window, discovered at runtime.");
 
     /// <inheritdoc />
     public void AddServices(IServiceCollection services, IConfiguration configuration)
-        => services.AddSingleton<ITool, WordCountTool>();
+    {
+        services.AddSingleton<ITool, WordCountTool>();
+        services.AddSingleton(new PluginAppDescriptor(
+            Key: "sample.window",
+            Title: "Sample Plugin",
+            Icon: "squares-stack",
+            Caption: "A plugin-contributed desktop window",
+            ComponentType: typeof(WordCountApp)));
+    }
 }

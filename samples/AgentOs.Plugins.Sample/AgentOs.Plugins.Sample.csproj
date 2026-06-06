@@ -1,12 +1,18 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
     <RootNamespace>AgentOs.Plugins.Sample</RootNamespace>
     <AssemblyName>AgentOs.Plugins.Sample</AssemblyName>
     <!-- A runtime PLUGIN, not a host dependency. No host references this project; it is built separately
-         (scripts/build-plugins.ps1) and its single DLL is dropped into the host's plugins/ folder. -->
+         (scripts/build-plugins.ps1) and its single DLL is dropped into the host's plugins/ folder.
+         Razor SDK so the plugin can ship a Blazor component (its desktop window). -->
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+
+  <!-- Blazor component base types (ComponentBase, etc.) — resolved to the host's copy at load time. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Private=false: the host already loads these — the plugin binds to the host's copies at runtime,
