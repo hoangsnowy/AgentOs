@@ -4,6 +4,7 @@
 
 using System.Threading;
 using System.Threading.Tasks;
+using AgentOs.SharedKernel.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Modules.Tenants.Email;
@@ -20,7 +21,7 @@ public sealed class NullEmailSender : IEmailSender
     {
         _logger.LogInformation(
             "Email sending is not configured (Email:SmtpHost empty) — would have sent '{Subject}' to {To}. Body: {Text}",
-            subject, toEmail, textBody ?? "(html only)");
+            LogSafe.Scrub(subject), LogSafe.MaskEmail(toEmail), LogSafe.Scrub(textBody ?? "(html only)"));
         return Task.CompletedTask;
     }
 }

@@ -22,7 +22,7 @@ public static class KcBenchHarness
 {
     /// <summary>Path to the CSV output, relative to the test run dir.</summary>
     public static readonly string CsvPath =
-        Path.Combine(AppContext.BaseDirectory, "TestResults", "kc_metrics.csv");
+        Path.Join(AppContext.BaseDirectory, "TestResults", "kc_metrics.csv");
 
     private static readonly Lazy<CsvMetricsCollector> _collector = new(() =>
     {

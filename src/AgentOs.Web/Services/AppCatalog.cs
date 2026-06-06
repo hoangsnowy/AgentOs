@@ -55,12 +55,10 @@ public static class AppCatalog
     /// <summary>Register plugin-contributed desktop apps (idempotent by key). Call once at startup.</summary>
     public static void RegisterPluginApps(IEnumerable<DesktopApp> apps)
     {
-        foreach (var app in apps)
+        foreach (var app in apps.Where(app =>
+            !_builtIn.Any(a => a.Key == app.Key) && !_plugin.Any(a => a.Key == app.Key)))
         {
-            if (!_builtIn.Any(a => a.Key == app.Key) && !_plugin.Any(a => a.Key == app.Key))
-            {
-                _plugin.Add(app);
-            }
+            _plugin.Add(app);
         }
     }
 

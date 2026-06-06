@@ -5,6 +5,7 @@
 // URL) for the runner credentials. See tools/agentos-vscode.
 
 using System;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -112,14 +113,8 @@ public static class PairingEndpoints
         {
             return false;
         }
-        foreach (var scheme in AllowedCallbackSchemes)
-        {
-            if (callback.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-        return false;
+        return AllowedCallbackSchemes.Any(
+            scheme => callback.StartsWith(scheme, StringComparison.OrdinalIgnoreCase));
     }
 
     // Minimal branded page chrome (AgentOS, dark) — no external CSS dependency.

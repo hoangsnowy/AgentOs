@@ -59,5 +59,5 @@ public sealed class GitHubPrServiceGuardTests
     [Fact]
     public async Task OpenPr_NullWorkspace_Throws()
         => await Should.ThrowAsync<ArgumentNullException>(
-            () => Sut().OpenPrAsync(Result(), (WorkspaceDescriptor)null!, "title", "body", CancellationToken.None));
+            () => Sut().OpenPrAsync(Result(), null!, "title", "body", CancellationToken.None));
 }

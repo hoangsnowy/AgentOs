@@ -204,7 +204,7 @@ public sealed class KcLiveBenchTests
     {
         try
         {
-            var dir = Path.Combine(Path.GetTempPath(), $"kc-build-{label}-{Guid.NewGuid():N}");
+            var dir = Path.Join(Path.GetTempPath(), $"kc-build-{label}-{Guid.NewGuid():N}");
             Directory.CreateDirectory(dir);
             foreach (var f in code.Files)
             {
@@ -217,7 +217,7 @@ public sealed class KcLiveBenchTests
                     WriteFile(dir, f);
                 }
             }
-            File.WriteAllText(Path.Combine(dir, "Probe.csproj"),
+            File.WriteAllText(Path.Join(dir, "Probe.csproj"),
                 "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup>"
                 + "<TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable>"
                 + "<TreatWarningsAsErrors>false</TreatWarningsAsErrors></PropertyGroup>"
@@ -244,7 +244,7 @@ public sealed class KcLiveBenchTests
     private static void WriteFile(string root, CodeFile f)
     {
         var rel = f.Path.Replace('\\', '/').TrimStart('/');
-        var full = Path.Combine(root, rel);
+        var full = Path.Join(root, rel);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         File.WriteAllText(full, f.Content);
     }
@@ -350,7 +350,7 @@ public sealed class KcLiveBenchTests
 
     private static string OutPath(string rel)
     {
-        var full = Path.Combine(AppContext.BaseDirectory, "TestResults", rel);
+        var full = Path.Join(AppContext.BaseDirectory, "TestResults", rel);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         return full;
     }

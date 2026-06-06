@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Tenants.Persistence.Entities;
+using AgentOs.SharedKernel.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -37,7 +38,7 @@ internal sealed class EfAuditLog(TenantsDbContext db, ILogger<EfAuditLog> logger
         {
             logger.LogWarning(ex,
                 "Audit write failed for tenant={TenantId} action={Action} — surrounding op continues.",
-                entry.TenantId, entry.Action);
+                LogSafe.Scrub(entry.TenantId), LogSafe.Scrub(entry.Action));
         }
     }
 

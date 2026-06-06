@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Tenants.Keycloak;
+using AgentOs.SharedKernel.Logging;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging;
 
@@ -127,7 +128,7 @@ internal sealed partial class TenantSignupService : ITenantSignupService
                 {
                     _logger.LogError(rollbackEx,
                         "Tenant DB write failed for '{TenantId}', and rolling back Keycloak user '{UserId}' also failed — orphaned Keycloak user.",
-                        tenantId, kcUserId);
+                        LogSafe.Scrub(tenantId), LogSafe.Scrub(kcUserId));
                 }
                 throw new InvalidOperationException(
                     $"Tenant registry write failed for '{tenantId}'; Keycloak user rolled back.", dbEx);

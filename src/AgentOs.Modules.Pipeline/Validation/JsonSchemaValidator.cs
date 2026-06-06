@@ -1,5 +1,5 @@
 // AgentOs.Infrastructure/Validation/JsonSchemaValidator.cs
-// Sprint 3 — ILlmOutputValidator impl using JsonSchema.Net 7.
+// Sprint 3 — ILlmOutputValidator impl using JsonSchema.Net 9.
 
 using System;
 using System.Collections.Concurrent;
@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using AgentOs.Modules.Pipeline.Validation;
 using Json.Schema;
 
@@ -23,6 +22,12 @@ public sealed class JsonSchemaValidator : ILlmOutputValidator
         RequireFormatValidation = false,
     };
 
+    // v9 registers each schema's $id into the SchemaRegistry at build time and refuses to overwrite
+    // an existing entry. Build into a per-instance registry (reads still fall back to Global for the
+    // meta-schemas) so registering the same $id from more than one validator — multiple AddValidation()
+    // calls across tests/hosts — never collides in the global registry.
+    private readonly BuildOptions _buildOptions = new() { SchemaRegistry = new SchemaRegistry() };
+
     /// <summary>Registers a schema from a file path. Call once at startup.</summary>
     public void RegisterFromFile(string schemaName, string filePath)
     {
@@ -33,7 +38,7 @@ public sealed class JsonSchemaValidator : ILlmOutputValidator
             throw new FileNotFoundException($"Schema file not found: {filePath}", filePath);
         }
         var text = File.ReadAllText(filePath);
-        var schema = JsonSchema.FromText(text);
+        var schema = JsonSchema.FromText(text, _buildOptions);
         _schemas[schemaName] = schema;
     }
 
@@ -42,7 +47,7 @@ public sealed class JsonSchemaValidator : ILlmOutputValidator
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(schemaName);
         ArgumentException.ThrowIfNullOrWhiteSpace(schemaJson);
-        _schemas[schemaName] = JsonSchema.FromText(schemaJson);
+        _schemas[schemaName] = JsonSchema.FromText(schemaJson, _buildOptions);
     }
 
     /// <inheritdoc />
@@ -57,10 +62,10 @@ public sealed class JsonSchemaValidator : ILlmOutputValidator
             throw new InvalidOperationException($"Schema '{schemaName}' has not been registered.");
         }
 
-        JsonNode? node;
+        JsonDocument doc;
         try
         {
-            node = JsonNode.Parse(json);
+            doc = JsonDocument.Parse(json);
         }
         catch (JsonException ex)
         {
@@ -69,27 +74,37 @@ public sealed class JsonSchemaValidator : ILlmOutputValidator
                 new[] { $"$: JSON parse error — {ex.Message}" });
         }
 
-        var result = schema.Evaluate(node, _options);
-        if (result.IsValid)
+        // JsonSchema.Net 9 evaluates a read-only JsonElement (no JsonNode allocation).
+        using (doc)
         {
-            return;
-        }
+            var result = schema.Evaluate(doc.RootElement, _options);
+            if (result.IsValid)
+            {
+                return;
+            }
 
-        var errors = Flatten(result).ToList();
-        if (errors.Count == 0)
-        {
-            errors.Add("$: schema validation failed (no detail).");
+            var errors = Flatten(result).ToList();
+            if (errors.Count == 0)
+            {
+                errors.Add("$: schema validation failed (no detail).");
+            }
+            throw new LlmOutputValidationException(agentName, schemaName, errors);
         }
-        throw new LlmOutputValidationException(agentName, schemaName, errors);
     }
 
     private static IEnumerable<string> Flatten(EvaluationResults results)
     {
-        if (!results.IsValid && results.HasErrors && results.Errors is not null)
+        // v9: HasErrors/HasDetails removed — check the collections directly. InstanceLocation is a
+        // non-nullable JsonPointer struct (root renders as an empty string).
+        if (results.Errors is not null)
         {
             foreach (var (key, message) in results.Errors)
             {
-                var path = results.InstanceLocation?.ToString() ?? "$";
+                var path = results.InstanceLocation.ToString();
+                if (string.IsNullOrEmpty(path))
+                {
+                    path = "$";
+                }
                 yield return $"{path}: [{key}] {message}";
             }
         }

@@ -10,6 +10,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -197,9 +198,8 @@ internal static class GitHubProjectsClient
 
         if (itemsEl.TryGetProperty("nodes", out var nodes))
         {
-            foreach (var it in nodes.EnumerateArray())
+            foreach (var ticket in nodes.EnumerateArray().Select(MapItem))
             {
-                var ticket = MapItem(it);
                 if (ticket is not null)
                 {
                     sink.Add(ticket);
@@ -275,13 +275,10 @@ internal static class GitHubProjectsClient
         var labels = new List<string>();
         if (content.TryGetProperty("labels", out var lab) && lab.TryGetProperty("nodes", out var lnodes))
         {
-            foreach (var l in lnodes.EnumerateArray())
-            {
-                if (l.TryGetProperty("name", out var ln) && ln.GetString() is { } name)
-                {
-                    labels.Add(name);
-                }
-            }
+            labels.AddRange(lnodes.EnumerateArray()
+                .Select(l => l.TryGetProperty("name", out var ln) ? ln.GetString() : null)
+                .Where(name => name is not null)
+                .Select(name => name!));
         }
 
         string? assignee = null;

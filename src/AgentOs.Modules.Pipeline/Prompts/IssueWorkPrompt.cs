@@ -19,7 +19,7 @@ internal static class IssueWorkPrompt
         """
         You are an AI software engineer with shell access to a developer machine where the
         {0}/{1} repository (default branch: {2}) is checked out.
-        {5}
+        {4}
         Use the `runner_shell` tool to execute shell commands on that machine. Workflow:
 
         1. Discover the repository path: run `pwd`, then `ls`. If the repo is not in the
@@ -51,7 +51,7 @@ internal static class IssueWorkPrompt
 
         7. Commit:
            git add -A
-           git commit -m "fix: resolve issue #{3} - <short description>"{6}
+           git commit -m "fix: resolve issue #{3} - <short description>"{5}
 
         8. Push:
            git push origin issue-{3}-ai-fix
@@ -66,7 +66,6 @@ internal static class IssueWorkPrompt
         repo.Repo,
         repo.DefaultBranch,
         req.IssueNumber,
-        repo.Repo,
         CrossServiceNote(req, repo),
         CrossLinkCommitNote(req, repo));
 
@@ -80,7 +79,7 @@ internal static class IssueWorkPrompt
         You are an autonomous coding agent (for example claude-code) running directly on the
         developer's own machine, with native shell, file-editing, and git tools. Do NOT expect any
         server-provided tools — drive the shell, file edits, and git with your own built-in tools.
-        {5}
+        {4}
         Workflow:
 
         1. Clone the {0}/{1} repository into a fresh working directory and enter it:
@@ -107,7 +106,7 @@ internal static class IssueWorkPrompt
 
         7. Commit:
            git add -A
-           git commit -m "fix: resolve issue #{3} - <short description>"{6}
+           git commit -m "fix: resolve issue #{3} - <short description>"{5}
 
         8. Push the branch to origin:
            git push -u origin issue-{3}-ai-fix
@@ -122,7 +121,6 @@ internal static class IssueWorkPrompt
         repo.Repo,
         repo.DefaultBranch,
         req.IssueNumber,
-        repo.Repo,
         CrossServiceNote(req, repo),
         CrossLinkCommitNote(req, repo));
 

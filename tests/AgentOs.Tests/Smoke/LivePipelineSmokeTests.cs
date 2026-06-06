@@ -81,7 +81,7 @@ public class LivePipelineSmokeTests
         var callCount = snapshot.Count;
 
         // Capture the transcript before assertions so we still get a file even if an assertion fails.
-        var transcriptPath = Path.Combine(AppContext.BaseDirectory, "TestResults", outputFile);
+        var transcriptPath = Path.Join(AppContext.BaseDirectory, "TestResults", outputFile);
         Directory.CreateDirectory(Path.GetDirectoryName(transcriptPath)!);
         var transcript = new
         {

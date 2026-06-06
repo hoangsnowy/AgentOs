@@ -82,7 +82,7 @@ public sealed class PluginLoaderTests
     public void AddPlugins_MissingFolder_IsNoOp_EmptyCatalog()
     {
         var services = new ServiceCollection();
-        var missing = Path.Combine(Path.GetTempPath(), "agentos-no-plugins-" + Guid.NewGuid().ToString("N"));
+        var missing = Path.Join(Path.GetTempPath(), "agentos-no-plugins-" + Guid.NewGuid().ToString("N"));
 
         services.AddPlugins(EmptyConfig(), missing);
 

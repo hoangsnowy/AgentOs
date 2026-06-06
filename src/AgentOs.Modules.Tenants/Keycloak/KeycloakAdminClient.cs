@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using AgentOs.SharedKernel.Logging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -109,7 +110,7 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
                 using var roleResp = await _http.SendAsync(roleReq, ct).ConfigureAwait(false);
                 if (!roleResp.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("Keycloak role {Role} lookup failed: {Status}", roleName, roleResp.StatusCode);
+                    _logger.LogWarning("Keycloak role {Role} lookup failed: {Status}", LogSafe.Scrub(roleName), roleResp.StatusCode);
                     continue;
                 }
                 var roleJson = await roleResp.Content.ReadFromJsonAsync<KeycloakRoleDto>(ct).ConfigureAwait(false);
@@ -189,12 +190,10 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
         if (!resp.IsSuccessStatusCode) { return Array.Empty<string>(); }
         var dtos = await resp.Content.ReadFromJsonAsync<List<KeycloakRoleDto>>(ct).ConfigureAwait(false);
         if (dtos is null) { return Array.Empty<string>(); }
-        var roles = new List<string>(dtos.Count);
-        foreach (var d in dtos)
-        {
-            if (!string.IsNullOrEmpty(d.Name)) { roles.Add(d.Name); }
-        }
-        return roles;
+        return dtos
+            .Where(d => !string.IsNullOrEmpty(d.Name))
+            .Select(d => d.Name!)
+            .ToList();
     }
 
     /// <inheritdoc />
@@ -320,7 +319,7 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
             {
                 return _cachedToken;
             }
-            var form = new FormUrlEncodedContent(new Dictionary<string, string>
+            using var form = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["grant_type"] = "password",
                 ["client_id"] = _options.ClientId,

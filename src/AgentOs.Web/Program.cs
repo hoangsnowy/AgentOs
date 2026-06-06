@@ -316,6 +316,7 @@ if (devAutoLogin)
                 new Microsoft.AspNetCore.Http.CookieOptions
                 {
                     HttpOnly = true,
+                    Secure = true,
                     SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
                     Path = "/",
                 });

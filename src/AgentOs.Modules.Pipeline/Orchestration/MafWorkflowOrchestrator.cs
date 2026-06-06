@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Pipeline.Agents;
@@ -80,14 +81,11 @@ public sealed class MafWorkflowOrchestrator : IOrchestratorAgent
 
         var run = await InProcessExecution.RunAsync(workflow, ctx, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        PipelineState? final = null;
-        foreach (var ev in run.NewEvents)
-        {
-            if (ev is WorkflowOutputEvent output && output.Data is PipelineState ps)
-            {
-                final = ps;
-            }
-        }
+        var final = run.NewEvents
+            .OfType<WorkflowOutputEvent>()
+            .Select(output => output.Data)
+            .OfType<PipelineState>()
+            .LastOrDefault();
 
         return (final ?? ctx).ToResult();
     }

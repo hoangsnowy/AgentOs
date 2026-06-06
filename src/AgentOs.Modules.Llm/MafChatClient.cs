@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Azure.AI.OpenAI;
 using AgentOs.Domain.Llm;
 using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Logging;
 using AgentOs.SharedKernel.Telemetry;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -88,7 +89,7 @@ public sealed class MafChatClient : ILlmClient
             inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalSeconds);
         _logger.LogInformation(
             "LlmCallCompleted {Provider} {Model} {InTok} {OutTok} {CostUsd} {Ms} {Tenant}",
-            Provider, deployment, inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalMilliseconds, tenantId ?? "");
+            Provider, LogSafe.Scrub(deployment), inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalMilliseconds, LogSafe.Scrub(tenantId ?? ""));
 
         return new LlmResponse(
             Content: response.Text ?? string.Empty,

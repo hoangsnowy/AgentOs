@@ -5,7 +5,7 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <!-- Allow JsonSchema.Net's floating "7.*" version under CPM. -->
+    <!-- Allow JsonSchema.Net's floating "9.*" version under CPM. -->
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
 
@@ -21,9 +21,10 @@
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.9.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.9.0" />
 
-    <!-- JSON schema validation. Pinned to the 7.x line for now; bumping to 9.x is a major-bump
-         follow-up because JsonSchema.Net 9 reworks evaluation result shapes. -->
-    <PackageVersion Include="JsonSchema.Net" Version="7.*" />
+    <!-- JSON schema validation. JsonSchema.Net 9 reworked the evaluation API: Evaluate runs on
+         JsonElement (not JsonNode), EvaluationResults.HasErrors/HasDetails were removed, and
+         InstanceLocation is now a non-nullable struct. See JsonSchemaValidator for the v9 usage. -->
+    <PackageVersion Include="JsonSchema.Net" Version="9.*" />
 
     <!-- Microsoft.Extensions (.NET 10) -->
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.8" />

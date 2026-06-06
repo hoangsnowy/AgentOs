@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
 using AgentOs.Domain.Tools;
 using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Logging;
 using AgentOs.SharedKernel.Telemetry;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -129,7 +130,7 @@ public sealed class PooledChatLlmClient : ILlmClient
                     inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalSeconds);
                 _logger.LogInformation(
                     "LlmCallCompleted {Provider} {Model} {InTok} {OutTok} {CostUsd} {Ms} {Tenant}",
-                    Provider, request.Model, inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalMilliseconds, tenantId ?? "");
+                    Provider, LogSafe.Scrub(request.Model), inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalMilliseconds, LogSafe.Scrub(tenantId ?? ""));
                 return new LlmResponse(
                     Content: response.Text ?? string.Empty,
                     InputTokens: inputTokens,

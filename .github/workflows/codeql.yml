@@ -43,9 +43,9 @@ jobs:
         with:
           languages: csharp
           build-mode: manual
-          # security-and-quality = the full pack (security + maintainability), the
-          # enterprise default. Drop to security-extended if scan time becomes a problem.
-          queries: security-and-quality
+          # Full pack (security + maintainability) lives in the config file, which also excludes
+          # generated build output (obj/bin) so the scan only flags hand-fixable source.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Restore
         run: dotnet restore AgentOs.slnx

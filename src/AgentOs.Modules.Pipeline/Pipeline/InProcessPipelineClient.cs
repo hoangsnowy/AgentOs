@@ -59,11 +59,11 @@ public sealed class InProcessPipelineClient : IPipelineClient
             try
             {
                 var result = await orchestrator.RunAsync(story, cancellationToken).ConfigureAwait(false);
-                return (Result: (PipelineResult?)result, Error: (Exception?)null);
+                return (Result: result, Error: (Exception?)null);
             }
             catch (Exception ex)
             {
-                return (Result: (PipelineResult?)null, Error: (Exception?)ex);
+                return (Result: (PipelineResult?)null, Error: ex);
             }
             finally
             {
