@@ -1,0 +1,49 @@
+// Provider-neutral graph DTOs + validation/run result types for the OrchestrationStudio executor.
+// The Web layer owns the rich GraphNode/GraphEdge (canvas) types; it maps them into these minimal mirrors
+// so the executable core stays in the Pipeline module — no Blazor / diagram / Web dependency, fully testable.
+
+using System.Collections.Generic;
+
+namespace AgentOs.Modules.Pipeline.GraphExecution;
+
+/// <summary>Minimal mirror of a canvas node — only what the executor needs.</summary>
+public sealed record PlanNode(string Id, string StepType, string? AgentRole, string Title, int MaxIterations, bool IsStart);
+
+/// <summary>Minimal mirror of a canvas edge.</summary>
+public sealed record PlanEdge(string Id, string SourceId, string TargetId, string Label);
+
+/// <summary>A graph to validate + run.</summary>
+public sealed record PlanGraph(string Id, string Name, IReadOnlyList<PlanNode> Nodes, IReadOnlyList<PlanEdge> Edges);
+
+/// <summary>Per-node support verdict.</summary>
+public enum NodeSupport
+{
+    /// <summary>An agent node with a known role, the QA gate (Evaluator), or End.</summary>
+    Supported,
+
+    /// <summary>A node type the executor can't run yet (Tool/Parallel/Human/…).</summary>
+    UnsupportedType,
+
+    /// <summary>An Agent node whose AgentRole isn't one of Requirement/Coding/Testing/Qa.</summary>
+    UnknownAgentRole,
+}
+
+/// <summary>Why a node is (un)supported.</summary>
+public sealed record NodeValidation(string NodeId, NodeSupport Support, string Reason);
+
+/// <summary>The result of validating a graph: runnable-or-not + per-node verdicts + best-effort order.</summary>
+public sealed record GraphValidationResult(
+    bool IsRunnable,
+    string? StartNodeId,
+    IReadOnlyList<NodeValidation> Nodes,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<string> LinearOrder);
+
+/// <summary>Live per-node status pushed to the canvas during a run.</summary>
+public enum GraphNodePhase { Pending, Running, Done, Failed, Skipped }
+
+/// <summary>One node-status update (node-id correlated, unlike the 5-value PipelineStage).</summary>
+public sealed record GraphNodeEvent(string NodeId, GraphNodePhase Phase, string? Meta, string? Message);
+
+/// <summary>The outcome of a graph run.</summary>
+public sealed record GraphRunResult(bool Completed, string? FailureMessage);
