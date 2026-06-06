@@ -30,6 +30,7 @@ public sealed class TestingAgent : ITestingAgent
     private readonly IMetricsCollector _collector;
     private readonly AgentOptions _options;
     private readonly ILogger<TestingAgent> _logger;
+    private readonly IPromptOverrides? _prompts;
 
     /// <summary>Initializes.</summary>
     public TestingAgent(
@@ -37,7 +38,8 @@ public sealed class TestingAgent : ITestingAgent
         IOptions<AgentsOptions> options,
         ILlmOutputValidator validator,
         IMetricsCollector collector,
-        ILogger<TestingAgent> logger)
+        ILogger<TestingAgent> logger,
+        IPromptOverrides? prompts = null)
     {
         System.ArgumentNullException.ThrowIfNull(factory);
         System.ArgumentNullException.ThrowIfNull(options);
@@ -46,6 +48,7 @@ public sealed class TestingAgent : ITestingAgent
         _validator = validator ?? throw new System.ArgumentNullException(nameof(validator));
         _collector = collector ?? throw new System.ArgumentNullException(nameof(collector));
         _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
+        _prompts = prompts;
     }
 
     /// <inheritdoc />
@@ -58,8 +61,12 @@ public sealed class TestingAgent : ITestingAgent
         System.ArgumentNullException.ThrowIfNull(spec);
         System.ArgumentNullException.ThrowIfNull(code);
 
+        var systemPrompt = _prompts is null
+            ? TestingPrompt.System
+            : await _prompts.ResolveAsync("Testing", TestingPrompt.System, cancellationToken).ConfigureAwait(false);
+
         var request = new LlmRequest(
-            SystemPrompt: TestingPrompt.System,
+            SystemPrompt: systemPrompt,
             UserPrompt: TestingPrompt.RenderUser(spec, code, previousFeedback),
             Model: _options.Model,
             Temperature: _options.Temperature,

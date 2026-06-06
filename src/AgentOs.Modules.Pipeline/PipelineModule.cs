@@ -49,6 +49,13 @@ public sealed class PipelineModule : IModule, IEndpointModule, IInitializableMod
         services.AddScoped<AgentOs.Domain.Cost.IBudgetGuard, Cost.BudgetGuard>();
         services.AddScoped<Cost.IBudgetService, Cost.BudgetService>();
 
+        // Runtime per-tenant prompt overrides: the resolver the agents consult (degrades to the default
+        // prompt when no config store is wired) + the tenant-explicit read/write the Prompts app uses.
+        services.AddSingleton<Prompts.IPromptOverrides>(sp => new Prompts.AppConfigPromptOverrides(
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Prompts.AppConfigPromptOverrides>>(),
+            sp.GetService<AgentOs.Modules.AppConfig.IAppConfigStore>()));
+        services.AddScoped<Prompts.IPromptOverrideService, Prompts.PromptOverrideService>();
+
         // Persistence: real EF + Postgres when a connection string is set; otherwise no-op repos so
         // the host still boots stateless (Persistence:RequireDatabase=false opts into the legacy path).
         var connectionString = configuration.GetConnectionString("DefaultConnection");
