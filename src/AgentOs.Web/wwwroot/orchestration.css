@@ -220,6 +220,7 @@ a.syn-nav-item { text-decoration: none; }
 .step-node.run-running { border-color: var(--syn-blue); box-shadow: 0 0 0 1px var(--syn-blue), 0 0 18px rgba(92,200,255,.35); }
 .step-node.run-done { border-color: var(--syn-green-border); }
 .step-node.run-failed { border-color: var(--syn-danger-border); box-shadow: 0 0 0 1px var(--syn-human), 0 0 16px rgba(192,86,106,.35); }
+.step-node.run-skipped { border-style: dashed; opacity: .55; }
 .step-node.is-selected { border-color: var(--syn-blue); }
 
 /* ports (4 sides) */

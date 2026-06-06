@@ -175,6 +175,7 @@ builder.Services.AddSingleton<AgentOs.Web.Orchestrations.OrchestrationStore>();
 // (and their Z-order) across every connected circuit/user on the server.
 builder.Services.AddScoped<AgentOs.Web.Services.ToastService>();
 builder.Services.AddScoped<AgentOs.Web.Services.WindowManagerService>();
+builder.Services.AddScoped<AgentOs.Web.Orchestrations.GraphRunnerService>();
 
 // Per-circuit auth session — surfaces identity + (optional) bearer to the HttpPipelineClient.
 builder.Services.AddScoped<AuthSession>();
