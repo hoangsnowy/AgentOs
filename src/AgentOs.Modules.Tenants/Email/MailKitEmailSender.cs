@@ -62,13 +62,14 @@ public sealed class MailKitEmailSender : IEmailSender
             }
             await client.SendAsync(message, ct).ConfigureAwait(false);
             await client.DisconnectAsync(quit: true, ct).ConfigureAwait(false);
-            _logger.LogInformation("Email '{Subject}' sent to {To} via {Host}:{Port}",
-                LogSafe.Scrub(subject), LogSafe.MaskEmail(toEmail), _options.SmtpHost, _options.SmtpPort);
+            // Recipient address is PII — deliberately not logged; subject is enough to correlate.
+            _logger.LogInformation("Email '{Subject}' sent via {Host}:{Port}",
+                LogSafe.Scrub(subject), _options.SmtpHost, _options.SmtpPort);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send email '{Subject}' to {To} via {Host}:{Port}",
-                LogSafe.Scrub(subject), LogSafe.MaskEmail(toEmail), _options.SmtpHost, _options.SmtpPort);
+            _logger.LogError(ex, "Failed to send email '{Subject}' via {Host}:{Port}",
+                LogSafe.Scrub(subject), _options.SmtpHost, _options.SmtpPort);
             throw;
         }
     }

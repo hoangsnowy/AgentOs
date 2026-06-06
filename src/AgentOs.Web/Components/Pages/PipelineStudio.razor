@@ -220,7 +220,7 @@
                 }
             </div>
 
-            @if (_result?.Code is { Files.Count: > 0 })
+            @if (_result?.Code?.Files.Count > 0)
             {
                 <div class="card">
                     <h2>Verify build (sandbox)</h2>
