@@ -27,13 +27,15 @@ public sealed class QaAgent : IQaAgent
     private readonly IMetricsCollector _collector;
     private readonly AgentOptions _options;
     private readonly ILogger<QaAgent> _logger;
+    private readonly IPromptOverrides? _prompts;
 
     /// <summary>Initializes.</summary>
     public QaAgent(
         ILlmClientFactory factory,
         IOptions<AgentsOptions> options,
         IMetricsCollector collector,
-        ILogger<QaAgent> logger)
+        ILogger<QaAgent> logger,
+        IPromptOverrides? prompts = null)
     {
         System.ArgumentNullException.ThrowIfNull(factory);
         System.ArgumentNullException.ThrowIfNull(options);
@@ -41,6 +43,7 @@ public sealed class QaAgent : IQaAgent
         _llm = factory.Create(_options.Provider);
         _collector = collector ?? throw new System.ArgumentNullException(nameof(collector));
         _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
+        _prompts = prompts;
     }
 
     /// <inheritdoc />
@@ -54,8 +57,12 @@ public sealed class QaAgent : IQaAgent
         System.ArgumentNullException.ThrowIfNull(code);
         System.ArgumentNullException.ThrowIfNull(tests);
 
+        var systemPrompt = _prompts is null
+            ? QaPrompt.System
+            : await _prompts.ResolveAsync("Qa", QaPrompt.System, cancellationToken).ConfigureAwait(false);
+
         var request = new LlmRequest(
-            SystemPrompt: QaPrompt.System,
+            SystemPrompt: systemPrompt,
             UserPrompt: QaPrompt.RenderUser(spec, code, tests),
             Model: _options.Model,
             Temperature: _options.Temperature,
