@@ -64,7 +64,7 @@ Don't memorize values — reference these names. Full list in `app.css`; the fam
 
 | Component | Use for | Don't |
 |---|---|---|
-| `Btn` (Primary/Default/Ghost/Danger × Sm/Md/Lg) | Every button | Hand-roll a `<button class>`; raw buttons miss focus ring + states |
+| `Btn` (Primary/Default/Ghost/Danger × Sm/Md) | Every button | Hand-roll a `<button class>`; raw buttons miss focus ring + states |
 | `IconBtn` | Square icon-only action | Put a bare `<Icon>` in a clickable `<span>` |
 | `Icon` | All iconography | Inline SVG, emoji, icon fonts |
 | `Panel` / `.card` | Titled content block | Nest panels >1 deep |

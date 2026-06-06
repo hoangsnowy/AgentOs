@@ -11,8 +11,8 @@ What are you trying to do that's hard or impossible today?
 
 ## Proposed solution
 
-What you'd like to see. Note which layer it touches (Domain / Application / Infrastructure /
-Api / Web) if you know.
+What you'd like to see. Note which layer it touches (Domain / SharedKernel / a module
+(`AgentOs.Modules.*`) / Api / Web) if you know.
 
 ## Alternatives considered
 

@@ -46,7 +46,7 @@ The slider in System → Appearance writes `--glass-blur` (0–32 px) and `--gla
 | `--state-danger` / `--err` | `#dc2626` | `#e74c3c` |
 | `--state-info` | = `--accent` | = `--accent` |
 
-`--accent-2` is kept as an alias of `--accent` for back-compat with 17 call sites. New code must use `--accent`.
+`--accent-2` is kept as an alias of `--accent` for back-compat. New code must use `--accent`.
 
 ## Focus, elevation, radius, spacing, typography, motion
 
@@ -71,13 +71,4 @@ All five wallpaper/theme combinations are intended to meet WCAG 2.1 AA:
 - `--accent` ≥ 3:1 against `--surface-0` for non-text UI (light: 3.05, dark: 4.6);
 - focus halo is 2 px and stays visible on every surface.
 
-Contrast values are a static snapshot — `axe` or `pa11y` against `/_/components` is the canonical check (C6).
-
-## Migration status
-
-| Wave | What | Where |
-| --- | --- | --- |
-| C1 (done) | Tokens defined; AppFrame surfaces wired to tokens; SystemApp Appearance functional. | this commit |
-| C3 | Mass refactor of the remaining 16 `backdrop-filter` sites + every `.btn*` / `.panel` / `.field*` to use tokens. | next |
-| C4 | AppFrame KDE Breeze chrome (8-edge resize, focus accent border, ARIA, status bar). | next |
-| C5 | Desktop / TopBar / Taskbar restyled; emoji replaced with `<Icon>` per `icon-map.md`. | next |
+Contrast values are a static snapshot — `axe` or `pa11y` against `/_/components` is the canonical check.

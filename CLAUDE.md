@@ -62,6 +62,8 @@ Modular monolith. Solution file is **`AgentOs.slnx`** (the .NET 10 XML format). 
 | `AgentOs.Modules.Tenants` | Tenant registry + Keycloak admin client (member lifecycle) + signup/invitations + audit, `TenantsDbContext` (schema `tenants`). |
 | `AgentOs.Modules.Tools` | `IToolRegistry`, `IToolPolicy` (per-tenant gate), `IToolInvocationLog` (evidence), `IToolGateway` (the policy→invoke→log seam). |
 | `AgentOs.Modules.Integration` | `IGitHubPrService` (Octokit) + `IBuildVerifier` (`dotnet build` in a temp dir), exposed as ITools. |
+| `AgentOs.Modules.Workspaces` | Connected source workspaces (repo/token registry) + `IWorkspaceConnector`, `WorkspacesDbContext` (schema `workspaces`). |
+| `AgentOs.Modules.Sessions` | Remote-runner registry + pairing handshake + session-run feed (`IRunnerPairingService`, `ISessionRunFeed`), `SessionsDbContext` (schema `sessions`). |
 | `AgentOs.Modules.Mcp` | MCP client (consume external tool servers) + server adapter; Api also serves MCP at `/mcp`. |
 | `AgentOs.Modules.RemoteAgent` | SignalR hub + transport + `RemoteAgentLlmClient` — dispatches work to a paired dev-machine agent (zero server API tokens). |
 | `AgentOs.Api` | ASP.NET Core minimal API (REST + Scalar UI + `/mcp`). A composition root. |

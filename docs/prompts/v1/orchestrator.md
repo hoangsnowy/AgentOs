@@ -1,6 +1,6 @@
 # OrchestratorPrompt — v1
 
-Version: **v1** · Source: `src/AgentOs.Application/Prompts/OrchestratorPrompt.cs`
+Version: **v1** · Source: `src/AgentOs.Modules.Pipeline/Prompts/OrchestratorPrompt.cs`
 
 The Orchestrator is currently a deterministic state machine (does NOT call an LLM). This file only records the policy text used for documentation + as a fallback if there is later an LLM-driven "meta-orchestrator".
 
