@@ -70,12 +70,11 @@ public static class JwtAuthExtensions
             using var doc = JsonDocument.Parse(realmAccess);
             if (doc.RootElement.TryGetProperty("roles", out var roles) && roles.ValueKind == JsonValueKind.Array)
             {
-                foreach (var name in roles.EnumerateArray().Select(r => r.GetString()))
+                foreach (var name in roles.EnumerateArray()
+                    .Select(r => r.GetString())
+                    .Where(name => !string.IsNullOrEmpty(name)))
                 {
-                    if (!string.IsNullOrEmpty(name))
-                    {
-                        identity.AddClaim(new Claim(ClaimTypes.Role, name));
-                    }
+                    identity.AddClaim(new Claim(ClaimTypes.Role, name!));
                 }
             }
         }
