@@ -71,4 +71,32 @@ public class LlmClientFactoryTests
 
         Should.Throw<LlmException>(() => factory.Create("Bedrock"));
     }
+
+    [Fact]
+    public void Create_PluginRegisteredProvider_ResolvesByItsOwnKey()
+    {
+        // A plugin registers a keyed ILlmClient under a name the built-in NormalizeKey doesn't know;
+        // the factory must fall through to that exact key instead of throwing "unknown provider".
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new System.Collections.Generic.Dictionary<string, string?> { ["Llm:Provider"] = "Echo" })
+            .Build();
+        services.AddModulesFromAssemblies(config, typeof(LlmModule).Assembly, typeof(AgentOs.Modules.AppConfig.AppConfigModule).Assembly);
+        services.AddKeyedSingleton<ILlmClient>("Echo", (_, _) => new EchoClient());
+        var factory = services.BuildServiceProvider().GetRequiredService<ILlmClientFactory>();
+
+        factory.Create("Echo").Provider.ShouldBe("Echo");
+        factory.CreateDefault().Provider.ShouldBe("Echo");
+    }
+
+    private sealed class EchoClient : ILlmClient
+    {
+        public string Provider => "Echo";
+
+        public System.Threading.Tasks.Task<LlmResponse> SendAsync(
+            LlmRequest request, System.Threading.CancellationToken cancellationToken = default)
+            => System.Threading.Tasks.Task.FromResult(
+                new LlmResponse(string.Empty, 0, 0, 0m, System.TimeSpan.Zero, "echo-model", "Echo"));
+    }
 }
