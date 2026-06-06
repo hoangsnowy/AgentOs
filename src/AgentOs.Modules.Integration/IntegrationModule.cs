@@ -26,8 +26,9 @@ public sealed class IntegrationModule : IModule
         // ToolsModule.InitializeAsync pumps every ITool DI registration into the IToolRegistry at startup.
         services.AddTool<BuildVerifierTool>();
 
-        // M2 — source-control providers behind one seam (GitHub live, Azure DevOps wired-but-deferred)
-        // + the by-kind resolver the Workspaces module consumes.
+        // M2 — source-control providers behind one seam (GitHub + Azure DevOps both live for repos;
+        // ADO boards/work-items are a later milestone) + the by-kind resolver the Workspaces module consumes.
+        services.AddHttpClient(); // IHttpClientFactory for the Azure DevOps REST provider
         services.AddSingleton<ISourceProvider, GitHubSourceProvider>();
         services.AddSingleton<ISourceProvider, AzureDevOpsSourceProvider>();
         services.AddSingleton<ISourceProviderResolver, SourceProviderResolver>();

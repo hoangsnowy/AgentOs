@@ -108,31 +108,32 @@ public sealed class WorkspacesTests
         Should.Throw<InvalidOperationException>(() => resolver.Resolve(SourceProviderKind.AzureDevOps));
     }
 
-    // ---- AzureDevOpsSourceProvider: wired but deferred (graceful + honest) ----
+    // ---- AzureDevOpsSourceProvider: repos live over REST; boards a later milestone ----
+    // (Validate / ListRepositories make live REST calls — exercised by the user against a real org;
+    //  the response parser is unit-tested in AzureDevOpsRestClientTests.)
 
     [Fact]
-    public async Task AzureDevOps_Validate_FailsGracefullyWithMessage()
+    public async Task AzureDevOps_ReadRepoContext_ReturnsIdentityAndBranch()
     {
         var ado = new AzureDevOpsSourceProvider();
         var d = new WorkspaceDescriptor(
-            Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "org", "repo", "proj", "main", "pat");
+            Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "acme", "api", "Platform", "main", "pat");
 
-        var v = await ado.ValidateAsync(d, CancellationToken.None);
+        var ctx = await ado.ReadRepoContextAsync(d, CancellationToken.None);
 
-        v.Ok.ShouldBeFalse();
-        v.Error.ShouldNotBeNullOrWhiteSpace();
+        ctx.FullName.ShouldBe("acme/Platform/api");
+        ctx.DefaultBranch.ShouldBe("main");
     }
 
     [Fact]
-    public async Task AzureDevOps_ListAndReadContext_ThrowNotSupported()
+    public async Task AzureDevOps_Boards_NotSupported()
     {
         var ado = new AzureDevOpsSourceProvider();
         var creds = new ConnectionCredentials(SourceProviderKind.AzureDevOps, "pat");
-        var d = new WorkspaceDescriptor(
-            Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "org", "repo", "proj", "main", "pat");
+        var board = new BoardDescriptor(Guid.NewGuid(), "t1", SourceProviderKind.AzureDevOps, "org", "org", null, null, "pat", "proj");
 
-        await Should.ThrowAsync<NotSupportedException>(() => ado.ListRepositoriesAsync(creds, CancellationToken.None));
-        await Should.ThrowAsync<NotSupportedException>(() => ado.ReadRepoContextAsync(d, CancellationToken.None));
+        await Should.ThrowAsync<NotSupportedException>(() => ado.ListBoardsAsync(creds, CancellationToken.None));
+        (await ado.ValidateBoardAsync(board, CancellationToken.None)).Ok.ShouldBeFalse();
     }
 
     [Fact]
