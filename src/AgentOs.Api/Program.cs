@@ -166,7 +166,15 @@ app.MapGet("/health", (IOptions<LlmOptions> llm) =>
     });
 })
    .WithName("Health")
-   .WithSummary("Liveness probe + LLM provider readiness")
+   .WithSummary("Readiness probe + LLM provider readiness")
+   .WithTags("Meta");
+
+// E4 — liveness probe. Distinct from /health (readiness): returns 200 while the process can serve a
+// request, so a hung instance fails liveness and Container Apps recycles it. Mapped unconditionally
+// (the old shared MapDefaultEndpoints gated this behind IsDevelopment, so prod had no liveness target).
+app.MapGet("/alive", () => Results.Ok(new { status = "Alive", utc = DateTime.UtcNow }))
+   .WithName("Alive")
+   .WithSummary("Liveness probe")
    .WithTags("Meta");
 
 app.MapModuleEndpoints();

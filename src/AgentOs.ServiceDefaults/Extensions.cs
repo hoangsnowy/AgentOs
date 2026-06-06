@@ -75,19 +75,19 @@ public static class Extensions
         return builder;
     }
 
-    /// <summary>Maps /health (all checks) and /alive (liveness) — development only by default.</summary>
+    /// <summary>Maps /health (readiness — all checks) and /alive (liveness — live-tagged checks).
+    /// Mapped UNCONDITIONALLY: Container Apps / k8s liveness+readiness probes must work in Production,
+    /// not just Development. (The hosts currently hand-roll equivalent /health + /alive routes; adopt
+    /// this helper to centralise them once the per-host /health payloads are reconciled.)</summary>
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        if (app.Environment.IsDevelopment())
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/alive", new HealthCheckOptions
         {
-            app.MapHealthChecks("/health");
-            app.MapHealthChecks("/alive", new HealthCheckOptions
-            {
-                Predicate = r => r.Tags.Contains("live"),
-            });
-        }
+            Predicate = r => r.Tags.Contains("live"),
+        });
 
         return app;
     }
