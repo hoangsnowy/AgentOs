@@ -8,8 +8,9 @@
 @using Blazor.Diagrams.Options
 @using AgentOs.Domain.Llm
 @using AgentOs.Modules.Llm
+@using AgentOs.Modules.Pipeline.GraphExecution
 @inject OrchestrationStore Store
-@inject ILlmClientFactory LlmFactory
+@inject GraphRunnerService GraphRunner
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject Microsoft.JSInterop.IJSRuntime JS
 @implements IDisposable
@@ -407,8 +408,9 @@
 
     private CancellationTokenSource? _runCts;
 
-    /// <summary>Interprets the graph: starts at the Start node and follows edges, one LLM call per node,
-    /// lighting up nodes in realtime + streaming the Run Log. Evaluator branches on isConsistent ⇒ illustrates the loop.</summary>
+    /// <summary>Validates the drawn graph (LLM-free) then runs it against the REAL typed agents (Requirement
+    /// / Coding / Testing / QA), lighting nodes Running→Done/Failed live + streaming the Run Log. Unsupported
+    /// node types are refused (painted Skipped) before any agent runs; the QA gate's fail edge loops.</summary>
     private async Task Run()
     {
         if (_running)
@@ -420,70 +422,74 @@
         _running = true;
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
-
-        var start = _graph.Nodes.FirstOrDefault(n => n.IsStart) ?? _graph.Nodes.FirstOrDefault();
-        if (start is null)
-        {
-            Log("⚠ Empty graph — no node to run.");
-            _running = false;
-            return;
-        }
+        SyncFromCanvas();
 
         Log($"▶ Run \"{_graph.Name}\"  ·  input: {(string.IsNullOrWhiteSpace(_runInput) ? "(default)" : _runInput)}");
         Log($"mode: Live → {ActiveProvider}");
-        var client = LlmFactory.CreateDefault();
-        var visits = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        // LLM-free gate first — refuse + paint Skipped on unsupported nodes before any agent runs.
+        var validation = GraphRunnerService.Validate(_graph);
+        if (!validation.IsRunnable)
+        {
+            foreach (var err in validation.Errors)
+            {
+                Log($"⚠ {err}");
+            }
+            foreach (var v in validation.Nodes.Where(n => n.Support != NodeSupport.Supported))
+            {
+                Log($"⤫ {NodeTitle(v.NodeId)}: {v.Reason}");
+                var node = _graph.Nodes.FirstOrDefault(n => n.Id == v.NodeId);
+                if (node is not null) { SetNode(node, NodeRunState.Skipped, v.Reason); }
+            }
+            Log("■ Not runnable — need exactly one Start and every node on the path supported.");
+            _running = false;
+            _recentRuns++;
+            _runCts?.Dispose();
+            _runCts = null;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        var story = string.IsNullOrWhiteSpace(_runInput) ? "Build the feature this workflow describes." : _runInput;
+        var nMax = _graph.Nodes
+            .Where(n => n.Type == StepType.Evaluator || string.Equals(n.AgentRole, "Qa", StringComparison.OrdinalIgnoreCase))
+            .Select(n => n.MaxIterations).FirstOrDefault();
+        if (nMax <= 0) { nMax = 3; }
 
         try
         {
-            var current = start;
-            var guard = 0;
-            while (current is not null && guard++ < 30)
+            var result = await GraphRunner.RunAsync(_graph, story, nMax, ev => InvokeAsync(() =>
             {
-                ct.ThrowIfCancellationRequested();
-                visits[current.Id] = visits.GetValueOrDefault(current.Id) + 1;
-
-                if (_nodeModels.TryGetValue(current.Id, out var mStart))
+                var node = _graph.Nodes.FirstOrDefault(n => n.Id == ev.NodeId);
+                if (node is not null)
                 {
-                    mStart.RunState = NodeRunState.Running;
-                    mStart.Refresh();
+                    var state = ev.Phase switch
+                    {
+                        GraphNodePhase.Running => NodeRunState.Running,
+                        GraphNodePhase.Done => NodeRunState.Done,
+                        GraphNodePhase.Failed => NodeRunState.Failed,
+                        GraphNodePhase.Skipped => NodeRunState.Skipped,
+                        _ => NodeRunState.Idle,
+                    };
+                    SetNode(node, state, ev.Meta);
                 }
-                await InvokeAsync(StateHasChanged);
+                if (ev.Phase == GraphNodePhase.Running) { Log($"▷ {NodeTitle(ev.NodeId)}…"); }
+                else if (ev.Phase == GraphNodePhase.Done) { Log($"✓ {NodeTitle(ev.NodeId)}{(string.IsNullOrEmpty(ev.Meta) ? "" : "  ·  " + ev.Meta)}"); }
+                else if (ev.Phase == GraphNodePhase.Failed) { Log($"✖ {NodeTitle(ev.NodeId)}: {ev.Message}"); }
+                StateHasChanged();
+            }), ct);
 
-                bool? consistent;
-                string meta;
-                try
-                {
-                    (meta, consistent) = await ExecuteNodeAsync(current, client, ct);
-                }
-                catch (LlmException ex)
-                {
-                    SetNode(current, NodeRunState.Failed, null);
-                    Log($"✖ {current.Title}: {ex.Message}");
-                    await InvokeAsync(StateHasChanged);
-                    break;
-                }
-
-                SetNode(current, NodeRunState.Done, meta);
-                Log($"✓ {current.Title}{(consistent is null ? "" : consistent.Value ? "  → pass" : "  → loop")}{(string.IsNullOrEmpty(meta) ? "" : "  ·  " + meta)}");
-                await InvokeAsync(StateHasChanged);
-
-                if (current.Type == StepType.End)
-                {
-                    Log("■ Workflow complete.");
-                    break;
-                }
-
-                current = ChooseNext(current, consistent, visits);
-            }
-            if (guard >= 30)
-            {
-                Log("⚠ Stopped: hit the 30-step limit (to avoid infinite loops).");
-            }
+            Log(result.Completed ? "■ Workflow complete." : $"✖ Stopped: {result.FailureMessage}");
         }
         catch (OperationCanceledException)
         {
             Log("⏹ Run cancelled.");
+        }
+#pragma warning disable CA1031 // A run handler must never crash the Blazor circuit — surface the failure in the log.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            Log($"✖ Run failed: {ex.Message}");
         }
         finally
         {
@@ -495,99 +501,7 @@
         }
     }
 
-    private async Task<(string meta, bool? consistent)> ExecuteNodeAsync(GraphNode node, ILlmClient client, CancellationToken ct)
-    {
-        // Human: no LLM call — auto-answer in demo mode.
-        if (node.Type == StepType.Human)
-        {
-            await Task.Delay(450, ct).ConfigureAwait(false);
-            return ("human ✓ (demo auto-approve)", null);
-        }
-        if (node.Type == StepType.End)
-        {
-            return ("", null);
-        }
-
-        var req = new LlmRequest(
-            SystemPrompt: SystemFor(node),
-            UserPrompt: UserFor(node),
-            Model: ModelFor(node),
-            Temperature: 0.2,
-            MaxTokens: 1500);
-        var resp = await client.SendAsync(req, ct).ConfigureAwait(false);
-
-        bool? consistent = null;
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(resp.Content);
-            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
-                && doc.RootElement.TryGetProperty("isConsistent", out var p)
-                && p.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
-            {
-                consistent = p.GetBoolean();
-            }
-        }
-        catch (System.Text.Json.JsonException) { /* output is not a JSON object — ignore */ }
-
-        var meta = $"{resp.InputTokens}→{resp.OutputTokens} tok · ${resp.CostUsd:0.0000} · {resp.Latency.TotalMilliseconds:0}ms";
-        return (meta, consistent);
-    }
-
-    /// <summary>Pick the next node: Evaluator + not yet consistent + iterations left ⇒ branch backward (loop); otherwise go forward.</summary>
-    private GraphNode? ChooseNext(GraphNode node, bool? consistent, Dictionary<string, int> visits)
-    {
-        var outs = _graph.Edges.Where(e => e.SourceId == node.Id).ToList();
-        if (outs.Count == 0)
-        {
-            return null;
-        }
-        GraphNode? Target(GraphEdge e) => _graph.Nodes.FirstOrDefault(n => n.Id == e.TargetId);
-
-        var back = outs.Where(e => Target(e) is { } t && t.X <= node.X).ToList();
-        var fwd = outs.Where(e => Target(e) is { } t && t.X > node.X).ToList();
-
-        var isBranch = node.Category == StepCategory.Evaluator;
-        // Honour the node's editable max-iterations (inspector); fall back to 3 if unset.
-        var cap = node.MaxIterations > 0 ? node.MaxIterations : 3;
-        var underCap = visits.GetValueOrDefault(node.Id) < cap;
-        if (isBranch && consistent == false && back.Count > 0 && underCap)
-        {
-            return Target(back[0]);
-        }
-        return Target(fwd.FirstOrDefault() ?? outs[0]);
-    }
-
-    private string SystemFor(GraphNode n)
-    {
-        // The "You are the <X> Agent" prefix is the canonical system-prompt opener used by the
-        // Application/Prompts/*.cs files — keep these literals in sync if reworded.
-        if (n.Type == StepType.Agent && !string.IsNullOrWhiteSpace(n.AgentRole))
-        {
-            var role = n.AgentRole switch
-            {
-                "Requirement" => "Requirement", "Coding" => "Coding", "Testing" => "Testing",
-                "Qa" => "QA", _ => n.AgentRole,
-            };
-            return $"You are the {role} Agent in the Agentic SDLC system.";
-        }
-        if (n.Category == StepCategory.Evaluator)
-        {
-            return "You are the QA Agent in the Agentic SDLC system.";
-        }
-        return $"You are an assistant executing step '{n.Title}'. Answer concisely.";
-    }
-
-    private string UserFor(GraphNode n)
-        => $"Step: {n.Title}\nDescription: {n.Description}\nInput: {n.Input}\nUser input: {(_runInput.Length == 0 ? "(default)" : _runInput)}";
-
-    // Assign the real model per role ⇒ estimated cost reflects the hybrid LLM strategy.
-    private static string ModelFor(GraphNode n) => n.AgentRole switch
-    {
-        "Requirement" => "claude-sonnet-4",
-        "Coding" => "gpt-4.1",
-        "Testing" => "gpt-4o-mini",
-        _ => "claude-haiku-4-5",
-    };
+    private string NodeTitle(string id) => _graph.Nodes.FirstOrDefault(n => n.Id == id)?.Title ?? id;
 
     private void SetNode(GraphNode node, NodeRunState state, string? meta)
     {
