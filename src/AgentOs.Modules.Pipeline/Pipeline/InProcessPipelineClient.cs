@@ -63,16 +63,16 @@ public sealed class InProcessPipelineClient : IPipelineClient
             }
             // Capture any expected pipeline failure so it surfaces to the UI as an Error event. Cancellation
             // (OperationCanceledException) is deliberately NOT caught — it propagates as a cancelled run.
-            catch (AgentOs.Domain.Llm.LlmException ex) { return ((PipelineResult?)null, (Exception?)ex); }
-            catch (AgentOs.Domain.Cost.BudgetExceededException ex) { return ((PipelineResult?)null, (Exception?)ex); }
-            catch (System.Net.Http.HttpRequestException ex) { return ((PipelineResult?)null, (Exception?)ex); }
-            catch (System.Text.Json.JsonException ex) { return ((PipelineResult?)null, (Exception?)ex); }
-            catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) { return ((PipelineResult?)null, (Exception?)ex); }
-            catch (System.Data.Common.DbException ex) { return ((PipelineResult?)null, (Exception?)ex); }
-            catch (TimeoutException ex) { return ((PipelineResult?)null, (Exception?)ex); }
-            catch (IOException ex) { return ((PipelineResult?)null, (Exception?)ex); }
-            catch (InvalidOperationException ex) { return ((PipelineResult?)null, (Exception?)ex); }
-            catch (ArgumentException ex) { return ((PipelineResult?)null, (Exception?)ex); }
+            catch (AgentOs.Domain.Llm.LlmException ex) { return (null, ex); }
+            catch (AgentOs.Domain.Cost.BudgetExceededException ex) { return (null, ex); }
+            catch (System.Net.Http.HttpRequestException ex) { return (null, ex); }
+            catch (System.Text.Json.JsonException ex) { return (null, ex); }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) { return (null, ex); }
+            catch (System.Data.Common.DbException ex) { return (null, ex); }
+            catch (TimeoutException ex) { return (null, ex); }
+            catch (IOException ex) { return (null, ex); }
+            catch (InvalidOperationException ex) { return (null, ex); }
+            catch (ArgumentException ex) { return (null, ex); }
             finally
             {
                 channel.Writer.TryComplete();
