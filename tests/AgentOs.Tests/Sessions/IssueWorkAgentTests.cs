@@ -217,6 +217,21 @@ public class IssueWorkAgentTests
         captured!.Tools.ShouldNotBeNull();
         captured.Tools!.ShouldContain("runner_shell");
         captured.Timeout.ShouldBeNull();
+        captured.Cli.ShouldBeNull(); // server mode never sets a CLI profile
+    }
+
+    [Fact]
+    public async Task RunAsync_RunOnMachine_ForwardsCliProfileToLlmRequest()
+    {
+        LlmRequest? captured = null;
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Do<LlmRequest>(r => captured = r), Arg.Any<CancellationToken>())
+           .Returns(AgentTestHelpers.StubResponse("""{"branch":"issue-42-ai-fix","summary":"Done."}"""));
+
+        var request = MakeRequest(42) with { ProviderOverride = "RemoteAgent", CliProfile = "codex" };
+        await MakeAgent(llm).RunAsync(request);
+
+        captured!.Cli.ShouldBe("codex"); // the runner picks the Codex CLI for this run
     }
 
     [Fact]
