@@ -31,27 +31,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-
-      # Manual build-mode: autobuild does not understand the .NET 10 .slnx solution
-      # format, so we drive the build ourselves between init and analyze.
+      # Buildless (build-mode: none): the C# extractor reads source directly instead of compiling,
+      # so it never extracts the source-generator output under obj/ — and paths-ignore in the config
+      # then genuinely excludes generated code. It also sidesteps autobuild's lack of .slnx support,
+      # so no Restore/Build steps (or .NET SDK setup) are needed here.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: csharp
-          build-mode: manual
+          build-mode: none
           # Full pack (security + maintainability) lives in the config file, which also excludes
           # generated build output (obj/bin) so the scan only flags hand-fixable source.
           config-file: ./.github/codeql/codeql-config.yml
-
-      - name: Restore
-        run: dotnet restore AgentOs.slnx
-
-      - name: Build (Release)
-        run: dotnet build AgentOs.slnx --configuration Release --no-restore
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
