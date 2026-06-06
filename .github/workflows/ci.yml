@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+# Least privilege: CI only reads the repo + uploads artifacts via the default token scope.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     name: Build & Test

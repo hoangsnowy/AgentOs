@@ -1,0 +1,24 @@
+name: Dependency Review
+
+# Blocks a PR that introduces a dependency with a known high-severity vulnerability
+# or a disallowed license, before it reaches main. Complements CodeQL (which scans
+# our code) by scanning the dependency delta of each PR.
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Review dependency changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

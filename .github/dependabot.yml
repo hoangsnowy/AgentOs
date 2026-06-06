@@ -1,0 +1,30 @@
+# Dependabot — automated dependency PRs. Keeps NuGet packages and GitHub Actions
+# current so CodeQL / dependency-review don't flag stale, vulnerable versions.
+# Grouped so a week's patch/minor bumps arrive as one reviewable PR, not a swarm.
+version: 2
+updates:
+  # .NET / NuGet — scans every *.csproj + Directory.Packages/Build.props under the repo.
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      nuget-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions used by the workflows in .github/workflows/.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions-all:
+        patterns: ["*"]

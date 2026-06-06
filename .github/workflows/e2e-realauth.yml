@@ -8,6 +8,10 @@ name: E2E (real-auth, full stack)
 on:
   workflow_dispatch:
 
+# Least privilege: this job only checks out + builds; no write scopes needed.
+permissions:
+  contents: read
+
 jobs:
   e2e-realauth:
     name: Real-auth E2E (Aspire stack)
