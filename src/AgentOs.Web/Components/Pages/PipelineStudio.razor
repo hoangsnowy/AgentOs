@@ -5,6 +5,7 @@
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
 @inject AgentOs.Modules.Integration.IGitHubPrService GitHubPr
 @inject AgentOs.Modules.Integration.IBuildVerifier BuildVerifier
+@inject AgentOs.Web.Services.WindowManagerService WM
 @implements IDisposable
 
 <PageTitle>Pipeline — AgentOS</PageTitle>
@@ -25,6 +26,10 @@
         <span class="app-tb-sep"></span>
         <span class="app-tb-lbl">NMax</span>
         <input type="number" min="1" max="5" @bind="_nmax" class="app-tb-num" />
+        <span class="app-tb-sep"></span>
+        <button class="app-tb-btn" @onclick="OpenInWorkflow" title="Edit + run this same 5-agent pipeline as a visual graph">
+            <span class="app-tb-ic"><Icon Name="graph" Size="13" /></span> Edit in Workflow
+        </button>
     </div>
     <div class="app-toolbar-right">
         <span class="status-chip mode-live"><span class="tb-dot ok"></span> @ActiveProvider</span>
@@ -324,6 +329,17 @@
     private PipelineResult? _result;
     private PipelineStatus _finalStatus;
     private CancellationTokenSource? _cts;
+
+    // The Workflow app is the visual editor for THIS same 5-agent pipeline (same agents, same QA loop) —
+    // open it from here so the two surfaces read as one engine, not two separate SDLC apps.
+    private void OpenInWorkflow()
+    {
+        var app = AgentOs.Web.Services.AppCatalog.Find("workflow");
+        if (app is not null)
+        {
+            WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
+        }
+    }
 
     // ---- Cumulative metrics ----
     private long _tokIn;
