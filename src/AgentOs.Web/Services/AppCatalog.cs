@@ -17,6 +17,8 @@ namespace AgentOs.Web.Services;
 /// <param name="H">Default window height.</param>
 /// <param name="Pinned">Whether the app appears in the dock + pinned grid.</param>
 /// <param name="AdminOnly">When true the app is only shown to users holding the tenant <c>admin</c> role.</param>
+/// <param name="ComponentType">For plugin-contributed apps: the Blazor component the WindowHost renders
+/// via <c>DynamicComponent</c>. Null for built-in apps (rendered by the WindowHost switch).</param>
 public sealed record DesktopApp(
     string Key,
     string Title,
@@ -26,13 +28,13 @@ public sealed record DesktopApp(
     int W = 920,
     int H = 620,
     bool Pinned = true,
-    bool AdminOnly = false);
+    bool AdminOnly = false,
+    System.Type? ComponentType = null);
 
-/// <summary>The fixed catalog of apps the AgentOS shell can launch.</summary>
+/// <summary>The catalog of apps the AgentOS shell can launch — built-ins plus any registered by plugins.</summary>
 public static class AppCatalog
 {
-    /// <summary>All registered apps, in display order.</summary>
-    public static IReadOnlyList<DesktopApp> All { get; } = new List<DesktopApp>
+    private static readonly List<DesktopApp> _builtIn = new()
     {
         new("pipeline", "Pipeline", "play",  "Run the 5-agent SDLC pipeline", "Agents", 920, 620),
         new("workflow", "Workflow", "graph", "Visual orchestration editor",   "Agents", 1080, 660),
@@ -45,9 +47,26 @@ public static class AppCatalog
         new("system",   "System",   "wrench","OS appearance, themes, about",  "System", 760, 600),
     };
 
+    // Plugin-contributed apps, appended once at host startup (before any request is served).
+    private static readonly List<DesktopApp> _plugin = new();
+
+    /// <summary>Register plugin-contributed desktop apps (idempotent by key). Call once at startup.</summary>
+    public static void RegisterPluginApps(IEnumerable<DesktopApp> apps)
+    {
+        foreach (var app in apps)
+        {
+            if (!_builtIn.Any(a => a.Key == app.Key) && !_plugin.Any(a => a.Key == app.Key))
+            {
+                _plugin.Add(app);
+            }
+        }
+    }
+
+    /// <summary>All registered apps, in display order (built-ins first, then plugin apps).</summary>
+    public static IReadOnlyList<DesktopApp> All => _builtIn.Concat(_plugin).ToList();
+
     /// <summary>Apps that appear in the dock and the pinned grid.</summary>
-    public static IReadOnlyList<DesktopApp> Pinned { get; } =
-        All.Where(a => a.Pinned).ToList();
+    public static IReadOnlyList<DesktopApp> Pinned => All.Where(a => a.Pinned).ToList();
 
     /// <summary>Resolve an app by key, or <c>null</c> if unknown.</summary>
     public static DesktopApp? Find(string key) =>
