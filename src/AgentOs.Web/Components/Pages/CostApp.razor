@@ -6,8 +6,12 @@
 @using System.Globalization
 @using Microsoft.AspNetCore.Components.Authorization
 @using AgentOs.Modules.Pipeline.Persistence
+@using AgentOs.Modules.Pipeline.Cost
+@using AgentOs.Domain.Cost
 @inject IPipelineRunRepository Runs
+@inject IBudgetService Budgets
 @inject AgentOs.Web.Services.ToastService Toasts
+@inject NavigationManager Nav
 
 @if (!_resolved)
 {
@@ -29,8 +33,28 @@ else
             <Btn Size="Btn.ButtonSize.Sm" Variant="@RangeVariant(30)" OnClick="() => SetRange(30)" Disabled="_loading">30d</Btn>
             <Btn Size="Btn.ButtonSize.Sm" Variant="@RangeVariant(0)"  OnClick="() => SetRange(0)"  Disabled="_loading">All</Btn>
             <Btn OnClick="Reload" Disabled="_loading"><Icon Name="arrow-clockwise" Size="14" /> Refresh</Btn>
+            <Btn Size="Btn.ButtonSize.Sm" OnClick="ExportCsv" Disabled="_loading"><Icon Name="arrow-square-out" Size="14" /> Export CSV</Btn>
         </div>
     </header>
+
+    <Panel Title="Budget">
+        <div class="budget-row">
+            <Field Label="Monthly cap (USD)" Hint="0 = no cap (unconstrained spend)">
+                <input class="prefs-input" type="number" min="0" step="1" @bind="_cap" />
+            </Field>
+            <Toggle Label="Enforce" Checked="_enforce" CheckedChanged="(v) => _enforce = v"
+                    Title="When on, a run is blocked once month-to-date spend reaches the cap." />
+            <Btn OnClick="SaveBudget" Disabled="_savingBudget" Variant="Btn.ButtonVariant.Primary">Save</Btn>
+            <Badge Variant="@BudgetBadge()">@BudgetStateLabel()</Badge>
+        </div>
+        @if (_budget is { CapUsd: > 0 })
+        {
+            <div class="budget-bar">
+                <Progress Value="@System.Math.Min(_budget.Percent, 1.0)" ShowLabel="true" />
+                <span class="muted">@Money(_budget.SpentUsd) of @Money(_budget.CapUsd) spent this month</span>
+            </div>
+        }
+    </Panel>
 
     @if (_summary is null)
     {
@@ -115,6 +139,11 @@ else
     private string _rangeLabel = "all time";
     private CostSummary? _summary;
 
+    private decimal _cap;
+    private bool _enforce;
+    private bool _savingBudget;
+    private BudgetStatus? _budget;
+
     protected override async Task OnInitializedAsync()
     {
         if (AuthState is not null)
@@ -124,8 +153,62 @@ else
             _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
         }
         _resolved = true;
-        if (_isAdmin) { await LoadAsync(); }
+        if (_isAdmin)
+        {
+            await LoadBudgetAsync();
+            await LoadAsync();
+        }
     }
+
+    private async Task LoadBudgetAsync()
+    {
+        try
+        {
+            _budget = await Budgets.GetAsync(_tenantId);
+            _cap = _budget.CapUsd;
+            _enforce = _budget.EnforceOn;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Budget", $"Load failed: {ex.Message}", ToastKind.Err);
+        }
+    }
+
+    private async Task SaveBudget()
+    {
+        _savingBudget = true;
+        try
+        {
+            await Budgets.SetCapAsync(_tenantId, _cap);
+            await Budgets.SetEnforceAsync(_tenantId, _enforce);
+            await LoadBudgetAsync();
+            Toasts.Show("Budget", _cap > 0 ? $"Cap set to {Money(_cap)}/month." : "Cap cleared.", ToastKind.Ok);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show("Budget", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _savingBudget = false;
+        }
+    }
+
+    private Badge.BadgeVariant BudgetBadge() => _budget?.State switch
+    {
+        BudgetState.Exceeded => Badge.BadgeVariant.Err,
+        BudgetState.Warn => Badge.BadgeVariant.Warn,
+        BudgetState.Ok when _budget.CapUsd > 0 => Badge.BadgeVariant.Ok,
+        _ => Badge.BadgeVariant.Default,
+    };
+
+    private string BudgetStateLabel() => _budget?.State switch
+    {
+        BudgetState.Exceeded => "Over budget",
+        BudgetState.Warn => "Near cap",
+        BudgetState.Ok when _budget.CapUsd > 0 => "Within budget",
+        _ => "No cap",
+    };
 
     private async Task LoadAsync()
     {
@@ -153,6 +236,9 @@ else
     }
 
     private async Task Reload() => await LoadAsync();
+
+    // Same-origin, cookie-authed browser download via the /cost/export endpoint (mapped in Web Program.cs).
+    private void ExportCsv() => Nav.NavigateTo($"/cost/export?days={_days}", forceLoad: true);
 
     private Btn.ButtonVariant RangeVariant(int days) =>
         _days == days ? Btn.ButtonVariant.Primary : Btn.ButtonVariant.Default;

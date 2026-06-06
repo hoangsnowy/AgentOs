@@ -4,7 +4,9 @@
 using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.Metrics;
 using AgentOs.Modules.Pipeline.Persistence;
+using AgentOs.Domain.Cost;
 using AgentOs.Domain.Pipeline;
+using AgentOs.SharedKernel.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Modules.Pipeline.Orchestration;
@@ -14,6 +16,7 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
     private readonly IOrchestratorAgent _inner;
     private readonly IPipelineRunRepository _repository;
     private readonly IMetricsCollector _metrics;
+    private readonly IBudgetGuard _budgetGuard;
     private readonly TimeProvider _clock;
     private readonly ILogger<PersistingOrchestratorAgent> _logger;
 
@@ -21,18 +24,34 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
         IOrchestratorAgent inner,
         IPipelineRunRepository repository,
         IMetricsCollector metrics,
+        IBudgetGuard budgetGuard,
         TimeProvider clock,
         ILogger<PersistingOrchestratorAgent> logger)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
+        _budgetGuard = budgetGuard ?? throw new ArgumentNullException(nameof(budgetGuard));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<PipelineResult> RunAsync(UserStory story, CancellationToken cancellationToken = default)
     {
+        // Run-level budget gate: protect the whole (expensive) pipeline run with one spend check.
+        var tenantId = AmbientIdentity.Current?.TenantId ?? ITenantContext.DefaultTenantId;
+        var budget = await _budgetGuard.EvaluateAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        if (budget is { State: BudgetState.Exceeded, EnforceOn: true })
+        {
+            throw new BudgetExceededException(tenantId, budget.CapUsd, budget.SpentUsd);
+        }
+        if (budget.State == BudgetState.Warn)
+        {
+            _logger.LogWarning(
+                "LLM budget warning for tenant {Tenant}: spent ${Spent} of ${Cap} ({Percent:P0}) this month.",
+                tenantId, budget.SpentUsd, budget.CapUsd, budget.Percent);
+        }
+
         var runId = Guid.NewGuid();
         var createdAtUtc = _clock.GetUtcNow();
 

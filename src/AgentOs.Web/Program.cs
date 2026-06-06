@@ -255,6 +255,23 @@ app.MapGet("/runner/version", (IHostEnvironment env, string? rid) =>
     return Results.Text(token);
 });
 
+// Cost CSV export for the admin Cost app. Mapped here on the Web (not via the API's MapModuleEndpoints)
+// so the Cost circuit can trigger a same-origin, cookie-authed browser download — like /runner/download.
+// Tenant comes from the OIDC 'tenant' claim; admin-gated; `days` (0/absent = all time) sets the cutoff.
+app.MapGet("/cost/export", async (HttpContext http, AgentOs.Modules.Pipeline.Persistence.IPipelineRunRepository runs, int? days) =>
+{
+    if (!http.User.IsInRole("admin"))
+    {
+        return Results.Forbid();
+    }
+
+    var tenant = http.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
+    DateTimeOffset? since = days is > 0 ? DateTimeOffset.UtcNow.AddDays(-days.Value) : null;
+    var summary = await runs.GetCostSummaryForTenantAsync(tenant, since);
+    var bytes = System.Text.Encoding.UTF8.GetBytes(AgentOs.Modules.Pipeline.Cost.CostCsv.ToCsv(summary));
+    return Results.File(bytes, "text/csv", "agentos-cost.csv");
+}).RequireAuthorization();
+
 // VS Code browser-pairing: the approve page (/pair/vscode, OIDC-cookie authed) + the one-time code
 // exchange (/runner/pair/exchange). Mapped here on the Web — the extension and browser both target the
 // Web origin, and the approve step uses the browser session, not a Bearer token.

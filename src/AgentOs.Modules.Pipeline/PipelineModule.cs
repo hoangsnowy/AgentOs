@@ -44,6 +44,11 @@ public sealed class PipelineModule : IModule, IEndpointModule, IInitializableMod
         services.AddAgents(configuration);
         services.AddInProcessPipelineClient();
 
+        // Cost governance: the budget gate (run-level enforcement) + the tenant-explicit budget service
+        // the Cost app uses to read/set the cap. Scoped — depends on the scoped run repository.
+        services.AddScoped<AgentOs.Domain.Cost.IBudgetGuard, Cost.BudgetGuard>();
+        services.AddScoped<Cost.IBudgetService, Cost.BudgetService>();
+
         // Persistence: real EF + Postgres when a connection string is set; otherwise no-op repos so
         // the host still boots stateless (Persistence:RequireDatabase=false opts into the legacy path).
         var connectionString = configuration.GetConnectionString("DefaultConnection");

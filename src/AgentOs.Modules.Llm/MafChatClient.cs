@@ -9,6 +9,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure.AI.OpenAI;
 using AgentOs.Domain.Llm;
+using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Telemetry;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -63,13 +65,30 @@ public sealed class MafChatClient : ILlmClient
             MaxOutputTokens = request.MaxTokens,
         };
 
+        var tenantId = AmbientIdentity.Current?.TenantId;
+        var genAiSystem = LlmTelemetry.SystemFor(Provider);
+        using var activity = LlmTelemetry.StartChat(genAiSystem, deployment, tenantId);
         var stopwatch = Stopwatch.StartNew();
-        var response = await chat.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+        ChatResponse response;
+        try
+        {
+            response = await chat.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LlmTelemetry.RecordError(activity, ex.Message);
+            throw;
+        }
         stopwatch.Stop();
 
         var inputTokens = (int)(response.Usage?.InputTokenCount ?? 0);
         var outputTokens = (int)(response.Usage?.OutputTokenCount ?? 0);
         var cost = CostCalculator.Calculate(request.Model, inputTokens, outputTokens);
+        LlmTelemetry.RecordSuccess(activity, genAiSystem, deployment, response.ModelId ?? deployment,
+            inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalSeconds);
+        _logger.LogInformation(
+            "LlmCallCompleted {Provider} {Model} {InTok} {OutTok} {CostUsd} {Ms} {Tenant}",
+            Provider, deployment, inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalMilliseconds, tenantId ?? "");
 
         return new LlmResponse(
             Content: response.Text ?? string.Empty,

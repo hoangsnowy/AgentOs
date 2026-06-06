@@ -8,6 +8,8 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
+using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Telemetry;
 using Microsoft.Extensions.AI;
 
 namespace AgentOs.Modules.Llm;
@@ -46,6 +48,9 @@ public sealed class ChatClientLlmClient : ILlmClient
             MaxOutputTokens = request.MaxTokens,
         };
 
+        var tenantId = AmbientIdentity.Current?.TenantId;
+        var genAiSystem = LlmTelemetry.SystemFor(Provider);
+        using var activity = LlmTelemetry.StartChat(genAiSystem, request.Model, tenantId);
         var stopwatch = Stopwatch.StartNew();
         ChatResponse response;
         try
@@ -58,18 +63,22 @@ public sealed class ChatClientLlmClient : ILlmClient
         }
         catch (Exception ex)
         {
+            LlmTelemetry.RecordError(activity, ex.Message);
             throw new LlmException($"{Provider} chat request failed: {ex.Message}", Provider, innerException: ex);
         }
         stopwatch.Stop();
 
         var inputTokens = (int)(response.Usage?.InputTokenCount ?? 0);
         var outputTokens = (int)(response.Usage?.OutputTokenCount ?? 0);
+        var cost = CostCalculator.Calculate(request.Model, inputTokens, outputTokens);
+        LlmTelemetry.RecordSuccess(activity, genAiSystem, request.Model, response.ModelId ?? request.Model,
+            inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalSeconds);
 
         return new LlmResponse(
             Content: response.Text ?? string.Empty,
             InputTokens: inputTokens,
             OutputTokens: outputTokens,
-            CostUsd: CostCalculator.Calculate(request.Model, inputTokens, outputTokens),
+            CostUsd: cost,
             Latency: stopwatch.Elapsed,
             Model: request.Model,
             Provider: Provider);
