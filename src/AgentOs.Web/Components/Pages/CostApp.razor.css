@@ -17,3 +17,19 @@
 @media (max-width: 720px) {
     .cost-grid { grid-template-columns: 1fr; }
 }
+
+.budget-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-3);
+}
+
+.budget-row .field { max-width: 180px; }
+
+.budget-bar {
+    flex: 1 1 220px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
