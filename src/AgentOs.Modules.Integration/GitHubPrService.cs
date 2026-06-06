@@ -17,7 +17,6 @@ namespace AgentOs.Modules.Integration;
 /// <inheritdoc cref="IGitHubPrService"/>
 public sealed class GitHubPrService : IGitHubPrService
 {
-    private const string UserAgent = "agentos";
     private const string DefaultBranchPrefix = "agentos";
 
     private readonly IRuntimeOverrides _overrides;
@@ -55,9 +54,7 @@ public sealed class GitHubPrService : IGitHubPrService
 
         ArgumentNullException.ThrowIfNull(result);
 
-        var client = string.IsNullOrWhiteSpace(baseUrl)
-            ? new GitHubClient(new ProductHeaderValue(UserAgent)) { Credentials = new Credentials(pat) }
-            : new GitHubClient(new ProductHeaderValue(UserAgent), new Uri(baseUrl)) { Credentials = new Credentials(pat) };
+        var client = GitHubClientFactory.Create(pat, baseUrl);
 
         // 1. Locate base branch SHA.
         ct.ThrowIfCancellationRequested();

@@ -15,8 +15,6 @@ namespace AgentOs.Modules.Integration;
 /// <inheritdoc cref="IPrCreationService"/>
 public sealed class GitHubPrCreationService : IPrCreationService
 {
-    private const string UserAgent = "agentos";
-
     private readonly ILogger<GitHubPrCreationService> _logger;
 
     public GitHubPrCreationService(ILogger<GitHubPrCreationService> logger)
@@ -42,11 +40,7 @@ public sealed class GitHubPrCreationService : IPrCreationService
                 $"PR creation not supported for provider '{workspace.Kind}' yet.");
         }
 
-        var client = string.IsNullOrWhiteSpace(workspace.Host)
-            ? new GitHubClient(new ProductHeaderValue(UserAgent))
-            { Credentials = new Credentials(workspace.AccessToken) }
-            : new GitHubClient(new ProductHeaderValue(UserAgent), new Uri(workspace.Host))
-            { Credentials = new Credentials(workspace.AccessToken) };
+        var client = GitHubClientFactory.Create(workspace.AccessToken, workspace.Host);
 
         ct.ThrowIfCancellationRequested();
         try
