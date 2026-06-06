@@ -1,0 +1,128 @@
+@* PromptsApp — admin: override the agents' system prompts for this tenant. Each agent shows its current
+   prompt (the tenant override, or the compiled-in default) in an editable box; Save stores an override,
+   Reset reverts to the default. The agents read the override at runtime via IPromptOverrides. Tenant read
+   from AuthenticationState (circuit has no HttpContext) → tenant-explicit IPromptOverrideService. *@
+
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Modules.Pipeline.Prompts
+@inject IPromptOverrideService Prompts
+@inject AgentOs.Web.Services.ToastService Toasts
+
+@if (!_resolved)
+{
+    <Spinner />
+}
+else if (!_isAdmin)
+{
+    <div class="login-error">Admin role required to tune prompts.</div>
+}
+else
+{
+    <header class="page-head">
+        <div>
+            <h1 class="page-title">Prompts · <code>@_tenantId</code></h1>
+            <p class="page-sub">Override the agents' system prompts for this tenant. Reset reverts to the built-in default.</p>
+        </div>
+    </header>
+
+    @foreach (var entry in PromptCatalog.All)
+    {
+        <Panel Title="@entry.DisplayName">
+            <div style="margin-bottom:8px">
+                <Badge Variant="@(_overridden.Contains(entry.Key) ? Badge.BadgeVariant.Warn : Badge.BadgeVariant.Ok)">
+                    @(_overridden.Contains(entry.Key) ? "Overridden" : "Default")
+                </Badge>
+            </div>
+            <textarea class="prefs-input" rows="8" style="width:100%;font-family:var(--font-mono, monospace)"
+                      value="@CurrentText(entry)"
+                      @onchange="e => _text[entry.Key] = e.Value?.ToString() ?? string.Empty"></textarea>
+            <div style="display:flex;gap:var(--space-2);margin-top:8px">
+                <Btn OnClick="() => Save(entry)" Disabled="_saving" Variant="Btn.ButtonVariant.Primary">Save</Btn>
+                <Btn OnClick="() => Reset(entry)" Disabled="_saving">Reset to default</Btn>
+            </div>
+        </Panel>
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _resolved;
+    private bool _isAdmin;
+    private bool _saving;
+    private string _tenantId = "default";
+    private readonly Dictionary<string, string> _text = new(System.StringComparer.Ordinal);
+    private readonly HashSet<string> _overridden = new(System.StringComparer.Ordinal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsInRole("admin");
+            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
+        }
+        _resolved = true;
+        if (_isAdmin) { await LoadAllAsync(); }
+    }
+
+    private string CurrentText(PromptEntry entry) => _text.TryGetValue(entry.Key, out var v) ? v : entry.DefaultPrompt;
+
+    private async Task LoadAllAsync()
+    {
+        foreach (var entry in PromptCatalog.All)
+        {
+            var ov = await Prompts.GetAsync(_tenantId, entry.Key);
+            if (ov is not null) { _overridden.Add(entry.Key); } else { _overridden.Remove(entry.Key); }
+            _text[entry.Key] = ov ?? entry.DefaultPrompt;
+        }
+    }
+
+    private async Task Save(PromptEntry entry)
+    {
+        _saving = true;
+        try
+        {
+            var text = CurrentText(entry);
+            // Unchanged from the default → clear the override rather than storing a duplicate.
+            if (string.Equals(text.Trim(), entry.DefaultPrompt.Trim(), System.StringComparison.Ordinal))
+            {
+                await Prompts.ClearAsync(_tenantId, entry.Key);
+            }
+            else
+            {
+                await Prompts.SetAsync(_tenantId, entry.Key, text);
+            }
+            await LoadAllAsync();
+            Toasts.Show("Prompts", $"{entry.DisplayName} saved.", ToastKind.Ok);
+        }
+        catch (System.Exception ex)
+        {
+            Toasts.Show("Prompts", $"Save failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task Reset(PromptEntry entry)
+    {
+        _saving = true;
+        try
+        {
+            await Prompts.ClearAsync(_tenantId, entry.Key);
+            _text[entry.Key] = entry.DefaultPrompt;
+            await LoadAllAsync();
+            Toasts.Show("Prompts", $"{entry.DisplayName} reset to default.", ToastKind.Ok);
+        }
+        catch (System.Exception ex)
+        {
+            Toasts.Show("Prompts", $"Reset failed: {ex.Message}", ToastKind.Err);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
