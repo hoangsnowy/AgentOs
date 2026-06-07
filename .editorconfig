@@ -59,3 +59,7 @@ dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait is not required for 
 # EF Core migrations — auto-generated, exempt from style/analyzer enforcement (block-scoped namespace, etc.).
 [**/Migrations/*.cs]
 generated_code = true
+
+# Per-context subfolders (e.g. Migrations/DataProtection/*.cs) — same exemption.
+[**/Migrations/**/*.cs]
+generated_code = true

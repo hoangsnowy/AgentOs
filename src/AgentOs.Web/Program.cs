@@ -40,7 +40,10 @@ builder.Logging.AddSimpleConsole(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddDataProtection();
+// Durable, shared key ring (Postgres-backed when configured) — without it the OIDC correlation/nonce
+// cookies + the auth cookie + encrypted tenant secrets break on every restart/scale and don't decrypt
+// across the Api ↔ Web hosts. Replaces a bare AddDataProtection() (in-memory, per-host).
+builder.AddAgentOsDataProtection();
 
 // Response compression — Brotli + Gzip for dynamic responses (the initial Razor document, /health,
 // any non-static endpoint). NOTE: static assets are ALREADY compressed at build time by
@@ -196,6 +199,10 @@ await app.Services.InitializeModulesAsync();
 AppCatalog.RegisterPluginApps(app.Services.GetServices<PluginAppDescriptor>().Select(d =>
     new DesktopApp(d.Key, d.Title, d.Icon, d.Caption, "Plugins", d.Width, d.Height, Pinned: true,
         AdminOnly: d.AdminOnly, ComponentType: d.ComponentType)));
+
+// FIRST middleware: honour X-Forwarded-Proto/For from the Container Apps ingress. Critical for the Web
+// — the OIDC redirect_uri + secure-cookie decisions depend on the request being seen as https.
+app.UseAgentOsForwardedHeaders();
 
 // Early in the pipeline so it wraps every downstream response. Skips assets MapStaticAssets already
 // served pre-compressed (their Content-Encoding is set), so there is no double-compression.

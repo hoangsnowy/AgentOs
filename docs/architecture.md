@@ -1,0 +1,199 @@
+# AgentOS — Architecture
+
+> Source of truth for the system shape. Diagrams are [Mermaid](https://mermaid.js.org/) — they
+> render on GitHub and in most Markdown viewers. Verified against the code on 2026-06-07
+> (csproj references, host module sets, hub mapping).
+
+AgentOS is a **.NET 10 modular monolith**: every feature is a self-contained `IModule` that
+references **`AgentOs.Domain` + `AgentOs.SharedKernel` only**, owns its DbContext + Postgres schema
++ migration history, and is wired into a host by one `AddModulesFromAssemblies(...)` call. Two
+composition roots ship the product: the **Api** (minimal API + `/mcp` + the SignalR hub) and the
+**Web** (Blazor Server AgentOS desktop).
+
+---
+
+## 1. Deployment topology
+
+How the pieces run in production (Azure Container Apps via Aspire + `azd`) and where the dev-machine
+runner plugs in.
+
+```mermaid
+flowchart TB
+  subgraph clients[Clients]
+    Browser["Browser<br/>(AgentOS desktop)"]
+    MCPhost["MCP host<br/>(Claude Desktop / VS Code)"]
+    Runner["Dev-machine runner<br/>AgentOs.RemoteAgent.exe<br/>(needs claude CLI)"]
+  end
+
+  subgraph aca["Azure Container Apps env"]
+    Web["AgentOs.Web<br/>Blazor Server · 9 modules<br/>(no RemoteAgent / Mcp)"]
+    Api["AgentOs.Api<br/>minimal API + Scalar<br/>/mcp + /hubs/remote-agent<br/>11 modules"]
+  end
+
+  subgraph managed["Managed / external services"]
+    PG[("PostgreSQL flexible server<br/>schemas: pipeline · tenants · config<br/>workspaces · sessions")]
+    KC["Keycloak<br/>OIDC realm 'agentic'<br/>⚠ currently an Aspire container"]
+    KV["Key Vault<br/>secrets"]
+    SMTP["SMTP (prod)<br/>⚠ MailHog only in dev"]
+  end
+
+  subgraph providers[LLM providers]
+    ANTH["Anthropic API"]
+    AOAI["Azure OpenAI"]
+  end
+
+  Browser -->|"OIDC code flow"| KC
+  Browser -->|"HTTPS / SignalR circuit"| Web
+  MCPhost -->|"/mcp Streamable HTTP"| Api
+  Runner <-->|"SignalR pair<br/>server-thinks / runner-does"| Api
+
+  Web -->|"bearer REST"| Api
+  Web --> PG
+  Api --> PG
+  Web -.->|"JWT validate"| KC
+  Api -.->|"JWT validate"| KC
+  Api -.secrets.-> KV
+  Web -.secrets.-> KV
+  Api --> SMTP
+  Api --> ANTH
+  Api --> AOAI
+```
+
+**Deploy notes / risks**
+- `azd up` deploys the whole Aspire app model. Keycloak + MailHog are declared as **containers** in
+  `infra/AgentOs.AppHost/Program.cs` → they land in ACA too. Keycloak-in-a-container (bootstrap
+  admin param, data volume, theme bind-mount) is **not a production identity story** — use a managed
+  Keycloak / Entra External ID and point `Auth:Keycloak:Authority` at it.
+- MailHog is a dev catcher; prod needs a real `Email:SmtpHost`.
+- The runner's default hub is `https://localhost:5080/hubs/remote-agent` (**Api**). The Web host does
+  **not** include the RemoteAgent module, so pairing must target the Api host.
+
+---
+
+## 2. Module dependency graph (modular monolith)
+
+Every module sits on `Domain` + `SharedKernel`. Cross-module edges are explicit and minimal
+(verified from `.csproj` references).
+
+```mermaid
+flowchart BT
+  subgraph base[Foundation]
+    Domain["AgentOs.Domain<br/>DTOs · ILlmClient · ITool · exceptions"]
+    SK["AgentOs.SharedKernel<br/>IModule · ModuleLoader · ITenantContext"]
+  end
+
+  AppConfig["AppConfig<br/>schema: config"]
+  Llm["Llm<br/>gateway · pool · failover"]
+  Tools["Tools<br/>registry · policy · log"]
+  Pipeline["Pipeline<br/>schema: pipeline"]
+  Integration["Integration<br/>GitHub PR · build verifier"]
+  Identity["Identity"]
+  Tenants["Tenants<br/>schema: tenants"]
+  Workspaces["Workspaces<br/>schema: workspaces"]
+  Sessions["Sessions<br/>schema: sessions"]
+  Mcp["Mcp"]
+  RemoteAgent["RemoteAgent<br/>SignalR hub"]
+
+  Llm --> AppConfig
+  Tools --> AppConfig
+  Pipeline --> AppConfig
+  Workspaces --> AppConfig
+  Integration --> Llm
+  Integration --> Tools
+  Tenants --> Identity
+
+  %% everything rests on the foundation
+  AppConfig -.-> Domain
+  Llm -.-> Domain
+  Tools -.-> Domain
+  Pipeline -.-> Domain
+  Integration -.-> Domain
+  Identity -.-> Domain
+  Tenants -.-> Domain
+  Workspaces -.-> Domain
+  Sessions -.-> Domain
+  Mcp -.-> Domain
+  RemoteAgent -.-> Domain
+  Domain --- SK
+```
+
+| Host | Modules included |
+|---|---|
+| **Api** | AppConfig, Llm, Tools, Pipeline, Integration, Identity, Tenants, Workspaces, Sessions, **Mcp**, **RemoteAgent** (all 11) |
+| **Web** | AppConfig, Llm, Tools, Pipeline, Integration, Identity, Tenants, Workspaces, Sessions (9 — no Mcp/RemoteAgent) |
+
+---
+
+## 3. LLM gateway (provider-agnostic)
+
+The 5 agents depend only on `ILlmClient` (Domain). The factory resolves a keyed client by its
+**canonical** provider name; the pooled client round-robins a multi-key pool and fails over on 429.
+
+```mermaid
+flowchart LR
+  Agent["Pipeline agent<br/>(LlmAgentBase)"] --> Factory["ILlmClientFactory<br/>Create(name) / CreateDefault()"]
+
+  Factory -->|"key 'Claude'"| Claude["PooledChatLlmClient<br/>(Anthropic.SDK)"]
+  Factory -->|"key 'AzureOpenAI'"| AOAI["PooledChatLlmClient<br/>(Azure.AI.OpenAI)"]
+  Factory -->|"key 'MAF'"| MAF["Microsoft Agent Framework"]
+  Factory -->|"key 'RemoteAgent'"| RA["RemoteAgentLlmClient<br/>→ SignalR → dev machine"]
+
+  Claude --> Pool["multi-key pool<br/>round-robin + 429 cooldown"]
+  AOAI --> Pool
+  Pool --> Fail["FailoverLlmClient<br/>(Llm:Fallbacks)"]
+
+  Claude -. tool loop .-> FIC["FunctionInvokingChatClient"]
+  FIC --> Gateway["IToolGateway"]
+
+  subgraph runtime[runtime overrides]
+    Cfg["tenant-scoped AppConfig<br/>(Settings UI)"]
+  end
+  Cfg -.hydrate per request.-> Factory
+```
+
+> ⚠ Canonical keys are **`Claude`** and **`AzureOpenAI`**. `appsettings.json` currently sets
+> `Agents:*:Provider = "Anthropic"` and Web `Llm:Provider = "Anthropic"` — a name mismatch to verify
+> against the registration keys.
+
+---
+
+## 4. Pipeline — Leader / Specialists / Quality loop
+
+A user story flows through 4 specialists; QA scores requirement↔code↔test consistency and loops
+until convergence or the `NMax` iteration cap. Tools run through the governance seam.
+
+```mermaid
+flowchart TB
+  Story["User story"] --> Orch["Orchestrator agent<br/>(leader)"]
+  Orch --> Req["Requirement agent"]
+  Req -->|RequirementSpec| Code["Coding agent"]
+  Code -->|CodeArtifact| Test["Testing agent"]
+  Test -->|TestArtifact| QA["QA agent<br/>scores the triple"]
+
+  QA -->|"converged / NMax"| Result["PipelineResult<br/>→ pipeline.pipeline_runs (+ run_metrics)"]
+  QA -->|"iterate"| Code
+
+  Code -. "Tools = [build_verifier, ...]" .-> GW["IToolGateway"]
+  GW --> Policy["IToolPolicy<br/>(per-tenant allowlist)"]
+  Policy --> Tool["ITool.InvokeAsync<br/>(build verifier · GitHub PR · MCP)"]
+  Tool --> LogE["IToolInvocationLog<br/>(evidence: ok / refused / error)"]
+```
+
+**Governance moat:** every tool call — local, MCP, or dispatched to a remote runner — passes through
+`IToolGateway → IToolPolicy → ITool → IToolInvocationLog`. The server decides and records; the
+runner only executes ("server thinks, runner does").
+
+---
+
+## 5. Persistence & multi-tenancy
+
+- One Postgres, **one schema per module** (`pipeline`, `tenants`, `config`, `workspaces`,
+  `sessions`), each with its own `__EFMigrationsHistory`. Each module applies its migrations at
+  startup via its init hook.
+- Without a connection string, modules fall back to **no-op repositories** so a host boots stateless
+  (CI / standalone dev). In prod this means: no connection string ⇒ silent data loss.
+- Row-level isolation: tenant-scoped entities carry `TenantId` + an EF global query filter reading
+  `ITenantContext.TenantId`. `Auth:Mode` switches `operator` (HS256, single pseudo-tenant) vs
+  `keycloak` (RS256, `tenant` claim).
+- A Blazor interactive-Server component has no `HttpContext` → read the tenant from
+  `AuthenticationState`, never from `ITenantContext` inside a circuit.

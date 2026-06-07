@@ -14,6 +14,11 @@ using Aspire.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Run mode = local `dotnet run` (single-F5 dev stack). Publish mode = `azd`/manifest generation for the
+// cloud. Dev-only affordances (theme bind-mount, theme-cache disable, header-size hack, the Web's
+// Development environment pin) are gated to run mode so they never leak into the Container Apps deploy.
+var isPublish = builder.ExecutionContext.IsPublishMode;
+
 var kcAdminUsername = builder.AddParameter("KeycloakAdminUsername");
 var kcAdminPassword = builder.AddParameter("KeycloakAdminPassword", secret: true);
 var kcWebClientSecret = builder.AddParameter("KeycloakWebClientSecret", secret: true);
@@ -32,21 +37,34 @@ var mailhog = builder.AddContainer("mailhog", "mailhog/mailhog")
 var keycloak = builder.AddKeycloak("keycloak", port: 8080)
     .WithDataVolume()
     .WithRealmImport("../../infra/keycloak")
-    // Custom AgentOs login/account theme — Breeze look matching the Web Studio. KC scans
-    // /opt/keycloak/themes/<name>/ for themes; bind-mount our source dir so edits to the CSS
-    // hot-reload without rebuilding the container (KC auto-detects in dev mode).
-    .WithBindMount("../../infra/keycloak/themes/agentos", "/opt/keycloak/themes/agentos")
     .WithEnvironment("KC_BOOTSTRAP_ADMIN_USERNAME", kcAdminUsername)
     .WithEnvironment("KC_BOOTSTRAP_ADMIN_PASSWORD", kcAdminPassword)
-    // Dev only: disable theme caching so CSS edits show up on reload (default is 24h cache).
-    .WithEnvironment("KC_SPI_THEME_STATIC_MAX_AGE", "-1")
-    .WithEnvironment("KC_SPI_THEME_CACHE_THEMES", "false")
-    .WithEnvironment("KC_SPI_THEME_CACHE_TEMPLATES", "false")
-    // Dev only: localhost shares one cookie jar across EVERY dev app on the box, so the Cookie header
-    // sent to Keycloak can blow past Quarkus's default max header size → HTTP 431 on /auth. Raise the
-    // ceiling (a real Keycloak on its own domain never sees this pollution).
-    .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE", "64K")
     .WaitFor(mailhog);
+
+if (!isPublish)
+{
+    keycloak
+        // Custom AgentOs login/account theme — Breeze look matching the Web Studio. KC scans
+        // /opt/keycloak/themes/<name>/ for themes; bind-mount our source dir so edits to the CSS
+        // hot-reload without rebuilding the container. The host path does NOT exist in the Container
+        // Apps image, so this is run-mode only — bake the theme into a custom KC image for the cloud.
+        .WithBindMount("../../infra/keycloak/themes/agentos", "/opt/keycloak/themes/agentos")
+        // Dev only: disable theme caching so CSS edits show up on reload (default is 24h cache).
+        .WithEnvironment("KC_SPI_THEME_STATIC_MAX_AGE", "-1")
+        .WithEnvironment("KC_SPI_THEME_CACHE_THEMES", "false")
+        .WithEnvironment("KC_SPI_THEME_CACHE_TEMPLATES", "false")
+        // Dev only: localhost shares one cookie jar across EVERY dev app on the box, so the Cookie header
+        // sent to Keycloak can blow past Quarkus's default max header size → HTTP 431 on /auth. Raise the
+        // ceiling (a real Keycloak on its own domain never sees this pollution).
+        .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE", "64K");
+}
+else
+{
+    // Behind the Container Apps TLS-terminating ingress, Keycloak must trust the X-Forwarded-* hop so it
+    // builds https issuer/redirect URLs. (Durable storage + a stable KC_HOSTNAME + a theme-baked image
+    // are the remaining prod-Keycloak steps — see docs/deploy-readiness-audit.md.)
+    keycloak.WithEnvironment("KC_PROXY", "edge");
+}
 
 builder.AddProject<Projects.AgentOs_Api>("api")
     .WithReference(db).WaitFor(db)
@@ -81,7 +99,9 @@ builder.AddProject<Projects.AgentOs_Api>("api")
 // (Standalone `dotnet run --project src/AgentOs.Web` is unaffected — it still uses its own launchSettings.)
 builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null)
     .WithHttpsEndpoint(port: 5180, targetPort: 5180, name: "https", isProxied: false)
-    .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
+    // Development only locally (Keycloak is http, DevAutoLogin guard relaxed). In the cloud the Web must
+    // run Production so the prod exception handler + Always-secure cookie + ClientSecret guard engage.
+    .WithEnvironment("ASPNETCORE_ENVIRONMENT", isPublish ? "Production" : "Development")
     // Full stack uses real Keycloak OIDC — turn OFF the standalone dev-run auto-login.
     .WithEnvironment("Auth__DevAutoLogin", "false")
     .WithReference(db).WaitFor(db)

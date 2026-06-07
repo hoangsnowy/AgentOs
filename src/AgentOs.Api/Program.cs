@@ -36,7 +36,9 @@ builder.Logging.AddSimpleConsole(options =>
 });
 
 builder.Services.AddOpenApi();
-builder.Services.AddDataProtection();
+// Durable, shared key ring (Postgres-backed when configured) — survives restart/scale + decrypts across
+// the Api ↔ Web hosts. Replaces a bare AddDataProtection() (in-memory, per-host).
+builder.AddAgentOsDataProtection();
 
 // S2 — per-tenant request rate limiting. An in-flight throttle on the request pipeline, INDEPENDENT
 // of the month-to-date BudgetGuard (which is post-hoc and cannot bound a burst). Partitioned by the
@@ -120,6 +122,10 @@ builder.Services.AddMcpServer()
 var app = builder.Build();
 
 await app.Services.InitializeModulesAsync();
+
+// FIRST middleware: honour X-Forwarded-Proto/For from the Container Apps ingress so auth + link
+// generation see the original https scheme + client IP.
+app.UseAgentOsForwardedHeaders();
 
 app.UseResponseCompression();
 

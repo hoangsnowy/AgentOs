@@ -2,6 +2,7 @@
 // Shared by AgentOs.Api and AgentOs.Web; wired by the AppHost.
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -15,7 +16,8 @@ namespace AgentOs.ServiceDefaults;
 /// <summary>Aspire-compatible defaults shared by the API + Web hosts.</summary>
 public static class Extensions
 {
-    /// <summary>Adds OpenTelemetry, default health checks, service discovery, and HTTP client resilience.</summary>
+    /// <summary>Adds OpenTelemetry, default health checks, service discovery, HTTP client resilience,
+    /// and forwarded-headers handling (for TLS-terminating reverse proxies / Container Apps ingress).</summary>
     public static IHostApplicationBuilder AddServiceDefaults(this IHostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -25,6 +27,18 @@ public static class Extensions
 
         builder.Services.AddServiceDiscovery();
 
+        // Behind Azure Container Apps (and any TLS-terminating ingress) the app receives plain HTTP with
+        // X-Forwarded-Proto: https. Without honouring it the OIDC middleware builds an http:// redirect_uri
+        // (Keycloak then rejects it) and CookieSecurePolicy.Always drops the auth cookie. The proxy IP is
+        // not known ahead of time in ACA, so the default KnownNetworks/KnownProxies allow-list (loopback
+        // only) would discard the headers — clear it and trust the single hop in front of us.
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            options.KnownIPNetworks.Clear();
+            options.KnownProxies.Clear();
+        });
+
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
             http.AddStandardResilienceHandler();
@@ -32,6 +46,15 @@ public static class Extensions
         });
 
         return builder;
+    }
+
+    /// <summary>Applies forwarded headers as the FIRST middleware so every downstream component (OIDC,
+    /// cookie policy, link generation) sees the original https scheme + client IP. Call before any auth.</summary>
+    public static WebApplication UseAgentOsForwardedHeaders(this WebApplication app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        app.UseForwardedHeaders();
+        return app;
     }
 
     /// <summary>Configures OpenTelemetry logging, metrics, and tracing (+ OTLP export when configured).</summary>
