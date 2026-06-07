@@ -571,6 +571,7 @@
         }
         ResetState();
         _running = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
         try

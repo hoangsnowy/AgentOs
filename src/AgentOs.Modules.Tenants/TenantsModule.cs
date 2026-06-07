@@ -12,6 +12,7 @@ using AgentOs.Modules.Tenants.Persistence;
 using AgentOs.Modules.Tenants.Persistence.Entities;
 using AgentOs.Modules.Tenants.Persistence.Repositories;
 using AgentOs.SharedKernel.Modularity;
+using AgentOs.SharedKernel.Persistence;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -65,6 +66,7 @@ public sealed class TenantsModule : IModule, IEndpointModule, IInitializableModu
             services.AddDbContext<TenantsDbContext>(opt =>
                 opt.UseNpgsql(connectionString, npg =>
                     npg.MigrationsHistoryTable("__EFMigrationsHistory", schema: "tenants")));
+            services.AddNpgsqlConnectionFactory(connectionString);
             services.AddScoped<ITenantsRepository, TenantsRepository>();
             services.AddScoped<IAuditLog, EfAuditLog>();
         }

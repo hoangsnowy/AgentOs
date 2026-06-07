@@ -21,7 +21,7 @@ using Microsoft.Extensions.Logging;
 namespace AgentOs.Modules.Llm;
 
 /// <summary><see cref="ILlmClient"/> backed by a pool of <see cref="IChatClient"/> instances keyed by API key.</summary>
-public sealed class PooledChatLlmClient : ILlmClient
+public sealed class PooledChatLlmClient : ILlmClient, IDisposable
 {
     private readonly Func<string, string, IChatClient> _clientFactory;
     private readonly Func<IReadOnlyList<string>> _keyProvider;
@@ -194,5 +194,27 @@ public sealed class PooledChatLlmClient : ILlmClient
             resolved.Add(new AIToolFunction(tool, tenantId, runId: null, policy: _toolPolicy, log: _toolInvocationLog));
         }
         return resolved;
+    }
+
+    /// <summary>Disposes the pooled chat clients (this is a keyed singleton, so the DI container
+    /// disposes it on shutdown). Each base client is disposed exactly once — a FunctionInvoking
+    /// wrapper cascades to its inner base client, so base clients that have a wrapper are skipped.</summary>
+    public void Dispose()
+    {
+        foreach (var wrapped in _wrappedClients.Values)
+        {
+            wrapped.Dispose();
+        }
+
+        foreach (var (cacheKey, client) in _clients)
+        {
+            if (!_wrappedClients.ContainsKey(cacheKey))
+            {
+                client.Dispose();
+            }
+        }
+
+        _wrappedClients.Clear();
+        _clients.Clear();
     }
 }

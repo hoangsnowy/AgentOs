@@ -1,11 +1,10 @@
-// AgentOs.Infrastructure/Agents/RequirementAgent.cs
-// Phase 4 — IRequirementAgent impl. Calls the LLM with a structured-output system prompt and parses JSON.
+// Phase 4 — IRequirementAgent impl. Analyzes a user story → a structured JSON RequirementSpec.
+// The LLM-call / parse / validate / metrics / error skeleton lives in LlmAgentBase.
 
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.Metrics;
 using AgentOs.Modules.Pipeline.Prompts;
 using AgentOs.Modules.Pipeline.Validation;
@@ -19,17 +18,8 @@ using Microsoft.Extensions.Options;
 namespace AgentOs.Modules.Pipeline.Agents;
 
 /// <summary>Analyzes a user story → a structured JSON <see cref="RequirementSpec"/>.</summary>
-public sealed class RequirementAgent : IRequirementAgent
+public sealed class RequirementAgent : LlmAgentBase, IRequirementAgent
 {
-    private const string AgentName = nameof(RequirementAgent);
-
-    private readonly ILlmClient _llm;
-    private readonly ILlmOutputValidator _validator;
-    private readonly IMetricsCollector _collector;
-    private readonly AgentOptions _options;
-    private readonly ILogger<RequirementAgent> _logger;
-    private readonly IPromptOverrides? _prompts;
-
     /// <summary>Initializes.</summary>
     public RequirementAgent(
         ILlmClientFactory factory,
@@ -38,60 +28,40 @@ public sealed class RequirementAgent : IRequirementAgent
         IMetricsCollector collector,
         ILogger<RequirementAgent> logger,
         IPromptOverrides? prompts = null)
+        : base(factory, Slice(options), collector, logger, validator, prompts)
     {
-        System.ArgumentNullException.ThrowIfNull(factory);
-        System.ArgumentNullException.ThrowIfNull(options);
-        _options = options.Value.Requirement;
-        _llm = factory.Create(_options.Provider);
-        _validator = validator ?? throw new System.ArgumentNullException(nameof(validator));
-        _collector = collector ?? throw new System.ArgumentNullException(nameof(collector));
-        _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
-        _prompts = prompts;
     }
 
+    private static AgentOptions Slice(IOptions<AgentsOptions> options)
+    {
+        System.ArgumentNullException.ThrowIfNull(options);
+        return options.Value.Requirement;
+    }
+
+    protected override string PromptKey => "Requirement";
+
+    protected override string DefaultSystemPrompt => RequirementPrompt.System;
+
+    protected override string? SchemaName => SchemaNames.RequirementSpecV1;
+
     /// <inheritdoc />
-    public async Task<RequirementSpec> RunAsync(UserStory story, CancellationToken cancellationToken = default)
+    public Task<RequirementSpec> RunAsync(UserStory story, CancellationToken cancellationToken = default)
     {
         System.ArgumentNullException.ThrowIfNull(story);
         story.Validate();
-
-        var systemPrompt = _prompts is null
-            ? RequirementPrompt.System
-            : await _prompts.ResolveAsync("Requirement", RequirementPrompt.System, cancellationToken).ConfigureAwait(false);
-
-        var request = new LlmRequest(
-            SystemPrompt: systemPrompt,
-            UserPrompt: RequirementPrompt.RenderUser(story),
-            Model: _options.Model,
-            Temperature: _options.Temperature,
-            MaxTokens: _options.MaxTokens);
-
-        var response = await _llm.SendAsync(request, cancellationToken).ConfigureAwait(false);
-
-        try
-        {
-            var json = JsonExtractor.ExtractJson(response.Content, AgentName);
-            _validator.Validate(json, SchemaNames.RequirementSpecV1, AgentName);
-
-            var dto = JsonExtractor.Deserialize<RequirementSpecDto>(json, AgentName);
-            dto.Validate(AgentName);
-
-            var metrics = MetricsMapper.From(response);
-            _collector.Add(RunMetricFactory.From(response, AgentName, success: true, errorMessage: null));
-
-            _logger.LogInformation(
-                "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms ({Provider} {Model})",
-                AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
-                metrics.Latency.TotalMilliseconds, metrics.Provider, metrics.Model);
-
-            return Map(dto, metrics);
-        }
-        catch (LlmException ex)
-        {
-            _collector.Add(RunMetricFactory.From(response, AgentName, success: false, errorMessage: ex.Message));
-            throw;
-        }
+        return ExecuteAsync<RequirementSpecDto, RequirementSpec>(
+            RequirementPrompt.RenderUser(story),
+            dto => dto.Validate(AgentName),
+            Map,
+            LogSuccess,
+            cancellationToken);
     }
+
+    private void LogSuccess(AgentMetrics metrics, RequirementSpecDto dto)
+        => Logger.LogInformation(
+            "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms ({Provider} {Model})",
+            AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
+            metrics.Latency.TotalMilliseconds, metrics.Provider, metrics.Model);
 
     private static RequirementSpec Map(RequirementSpecDto dto, AgentMetrics metrics)
         => new(

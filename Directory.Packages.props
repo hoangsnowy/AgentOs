@@ -40,6 +40,11 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <!-- Raw Npgsql (pinned to the version the EF provider 10.0.2 resolves) + Dapper for the read-side:
+         hot projections/aggregations/pagination run as hand-tuned SQL; EF still owns writes, migrations,
+         change-tracking, and entity-graph loads. See INpgsqlConnectionFactory (SharedKernel). -->
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <PackageVersion Include="Dapper" Version="2.1.79" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
 

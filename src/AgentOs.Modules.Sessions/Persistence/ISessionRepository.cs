@@ -6,13 +6,15 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Sessions.Persistence.Entities;
+using AgentOs.SharedKernel.Persistence;
 
 namespace AgentOs.Modules.Sessions.Persistence;
 
 /// <summary>CRUD for remote sessions (member × workspace), scoped to the current tenant.</summary>
 public interface ISessionRepository
 {
-    Task<IReadOnlyList<RemoteSessionEntity>> ListAsync(CancellationToken ct = default);
+    /// <summary>List the current tenant's sessions, newest first, bounded by offset/limit pagination.</summary>
+    Task<IReadOnlyList<RemoteSessionEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default);
     Task<RemoteSessionEntity?> GetAsync(Guid id, CancellationToken ct = default);
     Task AddAsync(RemoteSessionEntity session, CancellationToken ct = default);
 

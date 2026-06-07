@@ -9,12 +9,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Tenants.Persistence.Entities;
 using AgentOs.SharedKernel.Logging;
+using AgentOs.SharedKernel.Persistence;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Modules.Tenants.Persistence.Repositories;
 
-internal sealed class EfAuditLog(TenantsDbContext db, ILogger<EfAuditLog> logger) : IAuditLog
+internal sealed class EfAuditLog(
+    TenantsDbContext db,
+    ILogger<EfAuditLog> logger,
+    INpgsqlConnectionFactory? connectionFactory = null) : IAuditLog
 {
     public async Task WriteAsync(AuditEntry entry, CancellationToken ct = default)
     {
@@ -51,6 +56,12 @@ internal sealed class EfAuditLog(TenantsDbContext db, ILogger<EfAuditLog> logger
     public async Task<IReadOnlyList<AuditEntry>> ListAsync(string tenantId, int max = 100, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+
+        if (connectionFactory is not null)
+        {
+            return await ListViaDapperAsync(tenantId, max, ct).ConfigureAwait(false);
+        }
+
         var rows = await db.AuditEvents.AsNoTracking()
             .Where(e => e.TenantId == tenantId)
             .OrderByDescending(e => e.TimestampUtc)
@@ -58,6 +69,28 @@ internal sealed class EfAuditLog(TenantsDbContext db, ILogger<EfAuditLog> logger
             .Select(e => new AuditEntry(e.Id, e.TenantId, e.UserId, e.Action, e.Target, e.IpAddress, e.UserAgent, e.TimestampUtc))
             .ToListAsync(ct).ConfigureAwait(false);
         return rows;
+    }
+
+    // Dapper fast-path: audit_events under the "tenants" schema; the (TenantId, TimestampUtc) index
+    // serves the filter + ordering. LIMIT is clamped to ≥0 to match EF's Take semantics.
+    private async Task<IReadOnlyList<AuditEntry>> ListViaDapperAsync(string tenantId, int max, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT "Id", "TenantId", "UserId", "Action", "Target", "IpAddress", "UserAgent", "TimestampUtc"
+            FROM tenants.audit_events
+            WHERE "TenantId" = @tenantId
+            ORDER BY "TimestampUtc" DESC
+            LIMIT @max
+            """;
+
+        await using var conn = connectionFactory!.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<AuditEventEntity>(
+            new CommandDefinition(sql, new { tenantId, max = Math.Max(0, max) }, cancellationToken: ct))
+            .ConfigureAwait(false);
+
+        return rows.Select(e => new AuditEntry(
+            e.Id, e.TenantId, e.UserId, e.Action, e.Target, e.IpAddress, e.UserAgent, e.TimestampUtc)).ToList();
     }
 }
 

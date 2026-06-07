@@ -6,13 +6,15 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Sessions.Persistence.Entities;
+using AgentOs.SharedKernel.Persistence;
 
 namespace AgentOs.Modules.Sessions.Persistence;
 
 /// <summary>CRUD for runners (paired dev machines), scoped to the current tenant.</summary>
 public interface IRunnerRepository
 {
-    Task<IReadOnlyList<RunnerEntity>> ListAsync(CancellationToken ct = default);
+    /// <summary>List the current tenant's runners, newest first, bounded by offset/limit pagination.</summary>
+    Task<IReadOnlyList<RunnerEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default);
     Task<RunnerEntity?> GetAsync(Guid id, CancellationToken ct = default);
     Task AddAsync(RunnerEntity runner, CancellationToken ct = default);
 

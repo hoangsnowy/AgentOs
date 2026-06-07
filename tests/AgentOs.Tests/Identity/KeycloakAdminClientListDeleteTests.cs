@@ -26,7 +26,7 @@ public sealed class KeycloakAdminClientListDeleteTests
     [Fact]
     public async Task DeleteUserAsync_NoContent_Succeeds()
     {
-        var handler = new StubHandler();
+        using var handler = new StubHandler();
         handler.Enqueue(_ => true, Json("{\"access_token\":\"tok\",\"expires_in\":300}"));
         handler.Enqueue(req => req.Method == HttpMethod.Delete && req.RequestUri!.AbsolutePath.EndsWith("/admin/realms/agentic/users/u-1"),
             new HttpResponseMessage(HttpStatusCode.NoContent));
@@ -39,7 +39,7 @@ public sealed class KeycloakAdminClientListDeleteTests
     [Fact]
     public async Task DeleteUserAsync_NotFound_DoesNotThrow()
     {
-        var handler = new StubHandler();
+        using var handler = new StubHandler();
         handler.Enqueue(_ => true, Json("{\"access_token\":\"tok\",\"expires_in\":300}"));
         handler.Enqueue(_ => true, new HttpResponseMessage(HttpStatusCode.NotFound));
 
@@ -50,7 +50,7 @@ public sealed class KeycloakAdminClientListDeleteTests
     [Fact]
     public async Task DeleteUserAsync_500_Throws()
     {
-        var handler = new StubHandler();
+        using var handler = new StubHandler();
         handler.Enqueue(_ => true, Json("{\"access_token\":\"tok\",\"expires_in\":300}"));
         handler.Enqueue(_ => true, new HttpResponseMessage(HttpStatusCode.InternalServerError)
         {
@@ -64,7 +64,7 @@ public sealed class KeycloakAdminClientListDeleteTests
     [Fact]
     public async Task ListUsersByTenantAsync_FiltersByTenantAttribute_AndFetchesRoles()
     {
-        var handler = new StubHandler();
+        using var handler = new StubHandler();
         handler.Enqueue(_ => true, Json("{\"access_token\":\"tok\",\"expires_in\":300}"));
         // GET /users — return two users, only one is in tenant 'acme'.
         handler.Enqueue(req => req.Method == HttpMethod.Get && req.RequestUri!.AbsolutePath.EndsWith("/admin/realms/agentic/users"),
@@ -110,28 +110,55 @@ public sealed class KeycloakAdminClientListDeleteTests
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly Queue<(Func<HttpRequestMessage, bool> Match, HttpResponseMessage Response)> _expected = new();
+        // Every response the handler creates or is handed is tracked here and disposed in Dispose, so
+        // none leak (cs/local-not-disposed). HttpResponseMessage.Dispose is idempotent.
+        private readonly List<HttpResponseMessage> _owned = new();
         public List<HttpRequestMessage> Calls { get; } = new();
 
         public void Enqueue(Func<HttpRequestMessage, bool> match, HttpResponseMessage response)
-            => _expected.Enqueue((match, response));
+        {
+            _owned.Add(response);
+            _expected.Enqueue((match, response));
+        }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Calls.Add(request);
             if (_expected.Count == 0)
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                return Task.FromResult(Track(new HttpResponseMessage(HttpStatusCode.InternalServerError)
                 {
                     Content = new StringContent("Unexpected request: " + request.RequestUri),
-                });
+                }));
             }
             var (match, response) = _expected.Dequeue();
             return Task.FromResult(match(request)
                 ? response
-                : new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                : Track(new HttpResponseMessage(HttpStatusCode.InternalServerError)
                 {
                     Content = new StringContent("Mismatched request: " + request.RequestUri),
-                });
+                }));
+        }
+
+        private HttpResponseMessage Track(HttpResponseMessage response)
+        {
+            _owned.Add(response);
+            return response;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                foreach (var response in _owned)
+                {
+                    response.Dispose();
+                }
+
+                _owned.Clear();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

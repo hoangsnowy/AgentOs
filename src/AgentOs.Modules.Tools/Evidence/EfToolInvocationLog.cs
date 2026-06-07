@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using AgentOs.Domain.Tools;
 using AgentOs.Modules.Tools.Persistence;
 using AgentOs.Modules.Tools.Persistence.Entities;
+using AgentOs.SharedKernel.Persistence;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -20,11 +22,16 @@ internal sealed class EfToolInvocationLog : IToolInvocationLog
 {
     private readonly IServiceProvider _rootProvider;
     private readonly ILogger<EfToolInvocationLog> _logger;
+    private readonly INpgsqlConnectionFactory? _connectionFactory;
 
-    public EfToolInvocationLog(IServiceProvider rootProvider, ILogger<EfToolInvocationLog> logger)
+    public EfToolInvocationLog(
+        IServiceProvider rootProvider,
+        ILogger<EfToolInvocationLog> logger,
+        INpgsqlConnectionFactory? connectionFactory = null)
     {
         _rootProvider = rootProvider;
         _logger = logger;
+        _connectionFactory = connectionFactory;
     }
 
     public async Task AppendAsync(ToolInvocationEvidence entry, CancellationToken cancellationToken = default)
@@ -67,6 +74,11 @@ internal sealed class EfToolInvocationLog : IToolInvocationLog
             return Array.Empty<ToolInvocationEvidence>();
         }
 
+        if (_connectionFactory is not null)
+        {
+            return await ListRecentViaDapperAsync(tenantId, limit, cancellationToken).ConfigureAwait(false);
+        }
+
         await using var scope = _rootProvider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ToolsDbContext>();
         var rows = await db.ToolInvocations
@@ -75,6 +87,32 @@ internal sealed class EfToolInvocationLog : IToolInvocationLog
             .OrderByDescending(x => x.StartedUtc)
             .Take(Math.Max(1, limit))
             .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return rows.Select(x => new ToolInvocationEvidence(
+            x.CallId, x.ToolName, x.TenantId, x.RunId, x.Input, x.Output, x.IsError,
+            x.StartedUtc, x.FinishedUtc, x.SessionId)).ToList();
+    }
+
+    // Dapper fast-path: tool_invocations under the "tools" schema; PascalCase columns are quoted and
+    // map straight back onto the entity, then to the domain evidence record. The (TenantId, StartedUtc)
+    // index serves the filter + ordering.
+    private async Task<IReadOnlyList<ToolInvocationEvidence>> ListRecentViaDapperAsync(
+        string tenantId, int limit, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT "CallId", "ToolName", "TenantId", "RunId", "SessionId",
+                   "Input", "Output", "IsError", "StartedUtc", "FinishedUtc"
+            FROM tools.tool_invocations
+            WHERE "TenantId" = @tenantId
+            ORDER BY "StartedUtc" DESC
+            LIMIT @limit
+            """;
+
+        await using var conn = _connectionFactory!.Create();
+        await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<ToolInvocationEvidenceEntity>(
+            new CommandDefinition(sql, new { tenantId, limit = Math.Max(1, limit) }, cancellationToken: cancellationToken))
             .ConfigureAwait(false);
 
         return rows.Select(x => new ToolInvocationEvidence(

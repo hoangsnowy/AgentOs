@@ -14,9 +14,14 @@ namespace AgentOs.Modules.Llm;
 
 internal static class SdkChatClients
 {
-    /// <summary>Claude via Anthropic.SDK — its Messages endpoint implements <see cref="IChatClient"/>.</summary>
+    /// <summary>Claude via Anthropic.SDK — its Messages endpoint implements <see cref="IChatClient"/>.
+    /// Wrapped so the owning <see cref="AnthropicClient"/> is disposed with the chat client (the pool
+    /// owns the result for the process lifetime and disposes it on shutdown).</summary>
     public static IChatClient CreateClaude(string apiKey)
-        => new AnthropicClient(new APIAuthentication(apiKey)).Messages;
+    {
+        var client = new AnthropicClient(new APIAuthentication(apiKey));
+        return new OwningChatClient(client.Messages, client);
+    }
 
     /// <summary>Azure OpenAI via the official SDK, surfaced as <see cref="IChatClient"/>.</summary>
     public static IChatClient CreateAzure(string apiKey, string endpoint, string deployment)

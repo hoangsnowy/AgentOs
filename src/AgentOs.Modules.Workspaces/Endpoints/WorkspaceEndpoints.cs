@@ -16,6 +16,7 @@ using AgentOs.Modules.AppConfig;
 using AgentOs.Modules.Workspaces.Persistence;
 using AgentOs.Modules.Workspaces.Persistence.Entities;
 using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Persistence;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -42,9 +43,9 @@ internal static class WorkspaceEndpoints
         group.MapGet("/{id:guid}/context", ContextAsync);
     }
 
-    private static async Task<IResult> ListAsync(IWorkspaceRepository repo, CancellationToken ct)
+    private static async Task<IResult> ListAsync(IWorkspaceRepository repo, CancellationToken ct, int? limit = null, int? offset = null)
     {
-        var rows = await repo.ListAsync(ct).ConfigureAwait(false);
+        var rows = await repo.ListAsync(limit ?? Page.DefaultLimit, offset ?? 0, ct).ConfigureAwait(false);
         return Results.Ok(rows.Select(WorkspaceDto.From).ToList());
     }
 

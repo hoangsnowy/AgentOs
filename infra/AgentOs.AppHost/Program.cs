@@ -52,7 +52,7 @@ builder.AddProject<Projects.AgentOs_Api>("api")
     .WithReference(db).WaitFor(db)
     .WithReference(keycloak).WaitFor(keycloak)
     .WithEnvironment("Auth__Keycloak__Authority",
-        ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}/realms/agentic"))
+        ReferenceExpression.Create($"{keycloak.GetEndpoint("http").Property(EndpointProperty.Url)}/realms/agentic"))
     .WithEnvironment("Auth__Keycloak__Audience", "agentic-api")
     // Admin REST — /tenants and member-invite endpoints provision realm users via this.
     .WithEnvironment("Auth__Keycloak__Admin__BaseUrl", keycloak.GetEndpoint("http"))
@@ -87,7 +87,7 @@ builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null)
     .WithReference(db).WaitFor(db)
     .WithReference(keycloak).WaitFor(keycloak)
     .WithEnvironment("Auth__Keycloak__Authority",
-        ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}/realms/agentic"))
+        ReferenceExpression.Create($"{keycloak.GetEndpoint("http").Property(EndpointProperty.Url)}/realms/agentic"))
     .WithEnvironment("Auth__Keycloak__Audience", "agentic-api")
     .WithEnvironment("Auth__Keycloak__ClientId", "agentic-web")
     .WithEnvironment("Auth__Keycloak__ClientSecret", kcWebClientSecret)

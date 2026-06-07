@@ -9,6 +9,7 @@ using AgentOs.Modules.Workspaces.Endpoints;
 using AgentOs.Modules.Workspaces.Persistence;
 using AgentOs.Modules.Workspaces.Persistence.Repositories;
 using AgentOs.SharedKernel.Modularity;
+using AgentOs.SharedKernel.Persistence;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -35,6 +36,7 @@ public sealed class WorkspacesModule : IModule, IEndpointModule, IInitializableM
             services.AddDbContext<WorkspacesDbContext>(opt =>
                 opt.UseNpgsql(connectionString, npg =>
                     npg.MigrationsHistoryTable("__EFMigrationsHistory", schema: "workspaces")));
+            services.AddNpgsqlConnectionFactory(connectionString);
             services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
         }
         else

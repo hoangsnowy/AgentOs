@@ -10,6 +10,7 @@ using AgentOs.Modules.Workspaces;
 using AgentOs.Modules.Workspaces.Persistence;
 using AgentOs.Modules.Workspaces.Persistence.Entities;
 using NSubstitute;
+using NSubstitute.ReturnsExtensions;
 using Shouldly;
 using Xunit;
 
@@ -158,7 +159,7 @@ public sealed class WorkspaceConnectorTests
         var sut = Sut();
         var boardId = Guid.NewGuid();
         _repo.GetForTenantAsync("tenant-1", boardId, Arg.Any<CancellationToken>())
-            .Returns((WorkspaceEntity?)null);
+            .ReturnsNull();
 
         var result = await sut.AddRepoAsync("tenant-1", boardId, "octo-org", "api", null);
 

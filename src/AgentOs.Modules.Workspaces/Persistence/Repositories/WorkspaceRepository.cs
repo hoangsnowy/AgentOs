@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Workspaces.Persistence.Entities;
 using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgentOs.Modules.Workspaces.Persistence.Repositories;
@@ -24,11 +25,13 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
         _tenant = tenant;
     }
 
-    public async Task<IReadOnlyList<WorkspaceEntity>> ListAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<WorkspaceEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default)
     {
         return await _db.Workspaces
             .AsNoTracking()
             .OrderByDescending(w => w.CreatedAtUtc)
+            .Skip(Page.ClampOffset(offset))
+            .Take(Page.ClampLimit(limit))
             .ToListAsync(ct)
             .ConfigureAwait(false);
     }

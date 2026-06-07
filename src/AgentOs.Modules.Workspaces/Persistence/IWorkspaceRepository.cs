@@ -8,13 +8,15 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Workspaces.Persistence.Entities;
+using AgentOs.SharedKernel.Persistence;
 
 namespace AgentOs.Modules.Workspaces.Persistence;
 
 /// <summary>CRUD for connected boards + the repos under them, scoped to the current tenant.</summary>
 public interface IWorkspaceRepository
 {
-    Task<IReadOnlyList<WorkspaceEntity>> ListAsync(CancellationToken ct = default);
+    /// <summary>List the current tenant's boards, newest first, bounded by offset/limit pagination.</summary>
+    Task<IReadOnlyList<WorkspaceEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default);
     Task<WorkspaceEntity?> GetAsync(Guid id, CancellationToken ct = default);
     Task AddAsync(WorkspaceEntity workspace, CancellationToken ct = default);
     Task<bool> RemoveAsync(Guid id, CancellationToken ct = default);

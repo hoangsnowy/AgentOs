@@ -21,6 +21,17 @@ public sealed class LlmOptions
     /// </summary>
     public string? ForceProvider { get; set; }
 
+    /// <summary>
+    /// Optional inter-provider failover map: provider name → ordered fallback providers. When the primary
+    /// provider's client throws an <see cref="LlmException"/> (its provider-level failure signal — e.g.
+    /// every key is rate-limited, or no key is configured), the gateway transparently retries the same
+    /// request on the next provider in the list. Empty (default) keeps single-provider behavior. This sits
+    /// ABOVE each provider's own intra-provider key-pool failover. Example:
+    /// <c>"Llm:Fallbacks": { "Claude": ["AzureOpenAI"], "AzureOpenAI": ["Claude"] }</c>.
+    /// </summary>
+    public System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<string>> Fallbacks { get; set; }
+        = new(System.StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Claude (Anthropic) client configuration.</summary>
     public ClaudeOptions Claude { get; set; } = new();
 

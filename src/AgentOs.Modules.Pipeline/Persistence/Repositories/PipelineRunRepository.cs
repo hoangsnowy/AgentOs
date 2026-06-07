@@ -1,18 +1,26 @@
 // EF Core impl: saves PipelineResult (jsonb) + RunMetric rows, reads back + lists summaries.
 // Writes stamp TenantId from ITenantContext; reads are filtered by the DbContext's global query
-// filter so a request only ever sees its own tenant's runs.
+// filter so a request only ever sees its own tenant's runs. The cost summary additionally takes a
+// Dapper fast-path (server-side GROUP BY) when a real Npgsql connection is wired; the EF stream-fold
+// remains the fallback for the in-memory test provider / no-DB boot (where connectionFactory is null).
+using System.Data.Common;
 using System.Globalization;
 using System.Text.Json;
 using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Persistence;
 using AgentOs.Modules.Pipeline.Metrics;
 using AgentOs.Modules.Pipeline.Persistence;
 using AgentOs.Domain.Pipeline;
 using AgentOs.Modules.Pipeline.Persistence.Entities;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgentOs.Modules.Pipeline.Persistence.Repositories;
 
-internal sealed class PipelineRunRepository(PipelineDbContext db, ITenantContext tenant) : IPipelineRunRepository
+internal sealed class PipelineRunRepository(
+    PipelineDbContext db,
+    ITenantContext tenant,
+    INpgsqlConnectionFactory? connectionFactory = null) : IPipelineRunRepository
 {
     public async Task SaveAsync(PipelineRunRecord record, CancellationToken ct = default)
     {
@@ -123,6 +131,13 @@ internal sealed class PipelineRunRepository(PipelineDbContext db, ITenantContext
     public async Task<CostSummary> GetCostSummaryForTenantAsync(
         string tenantId, DateTimeOffset? since = null, CancellationToken ct = default)
     {
+        // Fast path: let Postgres do the aggregation in one round-trip instead of streaming every
+        // metric row to the app and folding it here. Only available when a real connection is wired.
+        if (connectionFactory is not null)
+        {
+            return await GetCostSummaryViaDapperAsync(tenantId, since, ct).ConfigureAwait(false);
+        }
+
         // Tenant-explicit: bypass the ITenantContext-driven global query filter (a Blazor circuit has
         // no HttpContext, so ITenantContext is blank) and scope to the tenant the caller passed in.
         var q = db.RunMetrics
@@ -213,5 +228,111 @@ internal sealed class PipelineRunRepository(PipelineDbContext db, ITenantContext
         }
 
         public readonly CostBucket ToBucket(string key) => new(key, CostUsd, TokensIn, TokensOut, Calls);
+    }
+
+    // ---- Dapper fast-path (server-side aggregation) ----
+
+    // run_metrics is the unqualified table under the default "pipeline" schema; columns keep their
+    // PascalCase property names (no snake_case convention), so they must be quoted in raw SQL. The
+    // @since param is cast to timestamptz so Postgres can type a null parameter in the IS NULL guard.
+    private const string CostWhere =
+        """WHERE "TenantId" = @tenantId AND (@since::timestamptz IS NULL OR "TimestampUtc" >= @since::timestamptz)""";
+
+    private async Task<CostSummary> GetCostSummaryViaDapperAsync(
+        string tenantId, DateTimeOffset? since, CancellationToken ct)
+    {
+        var parms = new { tenantId, since };
+
+        await using var conn = connectionFactory!.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+
+        var totalsSql = $"""
+            SELECT
+                COALESCE(SUM("CostUsd"), 0)   AS CostUsd,
+                COALESCE(SUM("TokensIn"), 0)::int  AS TokensIn,
+                COALESCE(SUM("TokensOut"), 0)::int AS TokensOut,
+                COUNT(*)::int                 AS Calls,
+                COUNT(DISTINCT "RunId")::int  AS RunCount
+            FROM pipeline.run_metrics
+            {CostWhere}
+            """;
+        var totals = await conn.QuerySingleAsync<TotalsRow>(
+            new CommandDefinition(totalsSql, parms, cancellationToken: ct)).ConfigureAwait(false);
+        if (totals.Calls == 0)
+        {
+            return CostSummary.Empty;
+        }
+
+        var byAgent = await GroupByColumnAsync(conn, "AgentName", parms, ct).ConfigureAwait(false);
+        var byProvider = await GroupByColumnAsync(conn, "Provider", parms, ct).ConfigureAwait(false);
+        var byModel = await GroupByColumnAsync(conn, "Model", parms, ct).ConfigureAwait(false);
+        var byDay = await GroupByDayAsync(conn, parms, ct).ConfigureAwait(false);
+
+        return new CostSummary(
+            totals.CostUsd, totals.TokensIn, totals.TokensOut, totals.Calls, totals.RunCount,
+            byAgent, byProvider, byModel, byDay);
+    }
+
+    private static async Task<List<CostBucket>> GroupByColumnAsync(
+        DbConnection conn, string column, object parms, CancellationToken ct)
+    {
+        // `column` is one of three compile-time constants below — never user input — so the
+        // interpolation is not a SQL-injection vector; the tenant/since values stay parameterized.
+        var sql = $"""
+            SELECT
+                "{column}"          AS Key,
+                SUM("CostUsd")      AS CostUsd,
+                SUM("TokensIn")::int  AS TokensIn,
+                SUM("TokensOut")::int AS TokensOut,
+                COUNT(*)::int       AS Calls
+            FROM pipeline.run_metrics
+            {CostWhere}
+            GROUP BY "{column}"
+            ORDER BY SUM("CostUsd") DESC, "{column}"
+            """;
+        var rows = await conn.QueryAsync<BucketRow>(
+            new CommandDefinition(sql, parms, cancellationToken: ct)).ConfigureAwait(false);
+        return [.. rows.Select(r => r.ToBucket())];
+    }
+
+    private static async Task<List<CostBucket>> GroupByDayAsync(
+        DbConnection conn, object parms, CancellationToken ct)
+    {
+        // Day bucket = UTC calendar day, matching the EF fold's TimestampUtc.UtcDateTime "yyyy-MM-dd".
+        var sql = $"""
+            SELECT
+                to_char("TimestampUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS Key,
+                SUM("CostUsd")      AS CostUsd,
+                SUM("TokensIn")::int  AS TokensIn,
+                SUM("TokensOut")::int AS TokensOut,
+                COUNT(*)::int       AS Calls
+            FROM pipeline.run_metrics
+            {CostWhere}
+            GROUP BY to_char("TimestampUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+            ORDER BY Key
+            """;
+        var rows = await conn.QueryAsync<BucketRow>(
+            new CommandDefinition(sql, parms, cancellationToken: ct)).ConfigureAwait(false);
+        return [.. rows.Select(r => r.ToBucket())];
+    }
+
+    private sealed class TotalsRow
+    {
+        public decimal CostUsd { get; init; }
+        public int TokensIn { get; init; }
+        public int TokensOut { get; init; }
+        public int Calls { get; init; }
+        public int RunCount { get; init; }
+    }
+
+    private sealed class BucketRow
+    {
+        public string Key { get; init; } = string.Empty;
+        public decimal CostUsd { get; init; }
+        public int TokensIn { get; init; }
+        public int TokensOut { get; init; }
+        public int Calls { get; init; }
+
+        public CostBucket ToBucket() => new(Key, CostUsd, TokensIn, TokensOut, Calls);
     }
 }

@@ -16,6 +16,7 @@ using AgentOs.Modules.Sessions.Pairing;
 using AgentOs.Modules.Sessions.Persistence;
 using AgentOs.Modules.Sessions.Persistence.Entities;
 using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Persistence;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -42,9 +43,9 @@ internal static class SessionEndpoints
 
     // ---- Sessions ----
 
-    private static async Task<IResult> ListSessionsAsync(ISessionRepository repo, CancellationToken ct)
+    private static async Task<IResult> ListSessionsAsync(ISessionRepository repo, CancellationToken ct, int? limit = null, int? offset = null)
     {
-        var rows = await repo.ListAsync(ct).ConfigureAwait(false);
+        var rows = await repo.ListAsync(limit ?? Page.DefaultLimit, offset ?? 0, ct).ConfigureAwait(false);
         return Results.Ok(rows.Select(SessionDto.From).ToList());
     }
 
@@ -91,9 +92,9 @@ internal static class SessionEndpoints
 
     // ---- Runners ----
 
-    private static async Task<IResult> ListRunnersAsync(IRunnerRepository repo, CancellationToken ct)
+    private static async Task<IResult> ListRunnersAsync(IRunnerRepository repo, CancellationToken ct, int? limit = null, int? offset = null)
     {
-        var rows = await repo.ListAsync(ct).ConfigureAwait(false);
+        var rows = await repo.ListAsync(limit ?? Page.DefaultLimit, offset ?? 0, ct).ConfigureAwait(false);
         return Results.Ok(rows.Select(RunnerDto.From).ToList());
     }
 

@@ -24,7 +24,7 @@ public sealed class KeycloakAdminClientTests
     [Fact]
     public async Task CreateUserAsync_HappyPath_LoginsCreatesGrantsRolesAndSendsEmail()
     {
-        var handler = new StubHandler();
+        using var handler = new StubHandler();
         // 1. Login
         handler.Enqueue(req =>
             req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.EndsWith("/realms/master/protocol/openid-connect/token"),
@@ -76,7 +76,7 @@ public sealed class KeycloakAdminClientTests
     [Fact]
     public async Task CreateUserAsync_TokenCached_BackToBackCallsLogInOnce()
     {
-        var handler = new StubHandler();
+        using var handler = new StubHandler();
         handler.Enqueue(_ => true, new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = JsonContent("{\"access_token\":\"tok-1\",\"expires_in\":300}"),
@@ -116,30 +116,58 @@ public sealed class KeycloakAdminClientTests
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly System.Collections.Generic.Queue<(System.Func<HttpRequestMessage, bool> Match, HttpResponseMessage Response)> _expected = new();
+        // Every response the handler creates or is handed is tracked here and disposed in Dispose, so
+        // none leak (cs/local-not-disposed). HttpResponseMessage.Dispose is idempotent, so the SUT
+        // disposing a sent response and this handler disposing it again is harmless.
+        private readonly System.Collections.Generic.List<HttpResponseMessage> _owned = new();
         public System.Collections.Generic.List<HttpRequestMessage> Calls { get; } = new();
 
         public void Enqueue(System.Func<HttpRequestMessage, bool> match, HttpResponseMessage response)
-            => _expected.Enqueue((match, response));
+        {
+            _owned.Add(response);
+            _expected.Enqueue((match, response));
+        }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Calls.Add(request);
             if (_expected.Count == 0)
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                return Task.FromResult(Track(new HttpResponseMessage(HttpStatusCode.InternalServerError)
                 {
                     Content = new StringContent("Unexpected request: " + request.RequestUri),
-                });
+                }));
             }
             var (match, response) = _expected.Dequeue();
             if (!match(request))
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                return Task.FromResult(Track(new HttpResponseMessage(HttpStatusCode.InternalServerError)
                 {
                     Content = new StringContent("Request did not match expectation: " + request.RequestUri),
-                });
+                }));
             }
             return Task.FromResult(response);
+        }
+
+        private HttpResponseMessage Track(HttpResponseMessage response)
+        {
+            _owned.Add(response);
+            return response;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                foreach (var response in _owned)
+                {
+                    response.Dispose();
+                }
+
+                _owned.Clear();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }
