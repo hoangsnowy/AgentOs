@@ -2,46 +2,100 @@
 
 Deployment is driven by **.NET Aspire + Azure Developer CLI (`azd`)**. The AppHost
 (`infra/AgentOs.AppHost`) is the single source of truth for the topology — `azd` provisions
-the whole app model (API + Web + managed Postgres + Container Apps env + ACR + managed identity)
-from it. No hand-written Bicep, no Dockerfile required. Topology details: [infra/README.md](../infra/README.md).
-
-There are two ways in: **(A)** deploy from your machine (quickest way to *try* it), and
-**(B)** GitHub Actions continuous delivery (auto-deploy when `main` goes green).
+the whole app model (API + Web + Keycloak + managed Postgres + Container Apps env + ACR) from it.
 
 ---
 
 ## Prerequisites
 
-- [Azure Developer CLI (`azd`)](https://aka.ms/azd) and the [Azure CLI (`az`)](https://aka.ms/azcli)
+- [Azure Developer CLI (`azd`)](https://aka.ms/azd) v1.9+ and [Azure CLI (`az`)](https://aka.ms/azcli)
 - .NET 10 SDK
-- An Azure subscription you can create resources in (the first `azd up` creates a resource group,
-  ACR, Container Apps environment, Log Analytics, a Postgres flexible server, and a managed identity)
+- Docker (azd builds container images locally before pushing to ACR)
+- Azure subscription with permission to create resource groups + role assignments (Owner or
+  Contributor + User Access Administrator — `azd` needs to assign roles to managed identities)
 
 ---
 
-## A. Deploy from your machine (try it now)
+## Keycloak storage: H2 vs Postgres
+
+**H2 (default — fine for dev/demo):**
+Keycloak starts with an embedded H2 database. The realm (`agentic`) and seed users (`operator`,
+`member`) are baked into the container image — they re-import automatically on every deploy.
+H2 data survives while the container is running; it resets on `azd up` (new container image).
+_Use this until you have real users signing up._
+
+**Postgres (production — follow `docs/keycloak-prod-runbook.md`):**
+User accounts created via the signup form survive across redeploys. Required when you have real
+users. Involves creating a `keycloak` database on the provisioned Postgres server and running a
+second `azd up` with the DB params set. See the runbook — it is intentionally a one-time
+manual step after the first provision.
+
+---
+
+## A. Deploy from your machine
+
+### A.1 — First deploy
 
 ```bash
-az login                       # or: azd auth login
-azd up                         # prompts: environment name, subscription, region → provisions + deploys
+az login                    # or: azd auth login
+azd env new agentos-prod    # choose a name; sets AZURE_ENV_NAME
+azd env set AZURE_LOCATION southeastasia  # or your preferred region
 ```
 
-`azd up` prints the **API** and **Web** URLs when it finishes. Re-deploy after code changes with
-`azd deploy` (or `azd up` again).
-
-Set the LLM keys (stored as Container App env / Key Vault secrets), then redeploy:
+Set the required secrets — never edit the dev defaults in `appsettings.json`:
 
 ```bash
-azd env set Llm__Claude__ApiKey     "sk-ant-..."
-azd env set Llm__AzureOpenAi__ApiKey   "..."
-azd env set Llm__AzureOpenAi__Endpoint "https://<resource>.openai.azure.com"
-azd deploy
+# Auth
+azd env set KeycloakAdminPassword    "$(openssl rand -base64 24)"
+azd env set KeycloakWebClientSecret  "$(openssl rand -base64 32)"
+
+# LLM keys (at least one provider)
+azd env set Llm__Claude__ApiKey         "sk-ant-..."
+azd env set Llm__AzureOpenAi__ApiKey    "..."
+azd env set Llm__AzureOpenAi__Endpoint  "https://<resource>.openai.azure.com"
 ```
 
-> The Web still boots without keys on a degraded path (`Auth:DevAutoLogin` + the no-op
-> repositories), so you can deploy first and add keys later.
+Then deploy:
 
-Tear everything down when done:
+```bash
+azd up   # provisions RG, ACR, ACA env, Postgres → builds + pushes images → deploys
+```
+
+`azd up` prints the **Web** and **API** URLs on completion.
+
+### A.2 — Patch Keycloak redirect URIs (required for login to work)
+
+The realm's `agentic-web` client has `redirectUris: https://localhost:5180/*` baked in. After
+provision you need to update it to the real ACA Web FQDN:
+
+```bash
+RG=$(azd env get-values | sed -n 's/^AZURE_RESOURCE_GROUP=//p' | tr -d '"')
+KC_FQDN=$(az containerapp show -n keycloak -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+WEB_FQDN=$(az containerapp show -n web -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+
+export KEYCLOAK_BASE_URL="https://$KC_FQDN"
+export WEB_BASE_URL="https://$WEB_FQDN"
+export KEYCLOAKADMINPASSWORD="$(azd env get-value KeycloakAdminPassword)"
+export KEYCLOAKADMINUSERNAME="$(azd env get-value KeycloakAdminUsername)"
+
+bash infra/hooks/postprovision.sh
+```
+
+### A.3 — Verify login works
+
+1. Open `https://<WEB_FQDN>` in a browser.
+2. Log in with `operator` / `operator` (seed password — `temporary: true`, so KC forces a reset).
+3. Set a new password → you land on the AgentOS desktop.
+
+### A.4 — Subsequent deploys
+
+```bash
+azd deploy        # re-build + re-push images only, no infra changes
+# or
+azd up            # provision + deploy (safe to re-run; Postgres and ACA env are idempotent)
+```
+
+Tear down when done:
 
 ```bash
 azd down --purge
@@ -49,106 +103,120 @@ azd down --purge
 
 ---
 
-## B. Continuous delivery (GitHub Actions)
+## B. GitHub Actions (CI → auto-deploy)
 
 The committed workflow [`.github/workflows/azd-deploy.yml`](../.github/workflows/azd-deploy.yml)
-runs `azd up` against your subscription. It triggers:
+runs `azd up` via OIDC (no client secrets stored in GitHub).
 
-- **automatically** after the **CI** workflow succeeds on `main` — *but only* when the repo
-  variable `AZURE_DEPLOY_ENABLED` is `true` (so `main` stays green before any Azure setup), and
-- **manually** any time via **Actions → Deploy (azd / Aspire) → Run workflow**.
+> **Auto-deploy is OFF by default.** The `on: workflow_dispatch` lets you trigger manually while you
+> finish setting up the federated credential. Once ready, enable auto-CD per the comment in the file.
 
-It authenticates with Azure over **OIDC** (no client secret stored in GitHub), runs `azd up`, then
-smoke-tests `GET /health`, `POST /auth/token`, and a tiny `POST /pipeline` run.
-
-### B.1 — Easiest: let `azd` wire the pipeline
-
-From a local clone already linked to the GitHub repo:
+### B.1 — One-time setup (easiest)
 
 ```bash
-azd pipeline config
+azd pipeline config   # creates OIDC app reg + federated credential + sets all GH secrets/vars
 ```
 
-This creates the OIDC app registration + federated credential, assigns the role, and sets the
-GitHub repo **secrets** and **variables** below for you. Then do **B.3** (enable the gate).
-
-### B.2 — Manual setup (if you don't run `azd pipeline config`)
+### B.2 — Manual setup (if `azd pipeline config` isn't available)
 
 ```bash
-# 1) App registration + service principal
 APP_ID=$(az ad app create --display-name "agentos-github" --query appId -o tsv)
 az ad sp create --id "$APP_ID"
 SUB_ID=$(az account show --query id -o tsv)
-
-# 2) Role — azd creates role assignments for the managed identity (ACR pull, Key Vault), so
-#    Contributor is NOT enough. Use Owner (or Contributor + User Access Administrator).
 az role assignment create --role Owner --assignee "$APP_ID" --scope "/subscriptions/$SUB_ID"
 
-# 3) Federated credential — allow this repo's workflows on main (OIDC, no secret)
+# Federated credential for the main branch
 az ad app federated-credential create --id "$APP_ID" --parameters '{
   "name": "github-main",
   "issuer": "https://token.actions.githubusercontent.com",
   "subject": "repo:hoangsnowy/AgentOs:ref:refs/heads/main",
   "audiences": ["api://AzureADTokenExchange"]
 }'
-
-echo "AZURE_CLIENT_ID       = $APP_ID"
-echo "AZURE_TENANT_ID       = $(az account show --query tenantId -o tsv)"
-echo "AZURE_SUBSCRIPTION_ID = $SUB_ID"
 ```
 
-Then set the repo **secrets** and **variables** (Settings → Secrets and variables → Actions, or
-via `gh`):
-
-| Kind | Name | Value |
-|---|---|---|
-| Secret | `AZURE_CLIENT_ID` | App ID from above |
-| Secret | `AZURE_TENANT_ID` | Tenant ID |
-| Secret | `AZURE_SUBSCRIPTION_ID` | Subscription ID |
-| Variable | `AZURE_ENV_NAME` | e.g. `agentos-dev` |
-| Variable | `AZURE_LOCATION` | e.g. `southeastasia` |
+Set GitHub repo secrets + variables:
 
 ```bash
-gh secret set AZURE_CLIENT_ID        --body "<app-id>"
-gh secret set AZURE_TENANT_ID        --body "<tenant-id>"
-gh secret set AZURE_SUBSCRIPTION_ID  --body "<sub-id>"
-gh variable set AZURE_ENV_NAME       --body "agentos-dev"
-gh variable set AZURE_LOCATION       --body "southeastasia"
-# Optional: a known operator password the /pipeline smoke step logs in with
-gh secret set AZD_OPERATOR_PASSWORD  --body "<password>"
+gh secret set AZURE_CLIENT_ID         --body "$APP_ID"
+gh secret set AZURE_TENANT_ID         --body "$(az account show --query tenantId -o tsv)"
+gh secret set AZURE_SUBSCRIPTION_ID   --body "$SUB_ID"
+gh variable set AZURE_ENV_NAME        --body "agentos-prod"
+gh variable set AZURE_LOCATION        --body "southeastasia"
+
+# AgentOS secrets — injected into azd env before each deploy
+gh secret set KEYCLOAKADMINPASSWORD    --body "$(openssl rand -base64 24)"
+gh secret set KEYCLOAKWEBCLIENTSECRET  --body "$(openssl rand -base64 32)"
+gh secret set LLM__CLAUDE__APIKEY      --body "sk-ant-..."
 ```
 
-### B.3 — Turn auto-deploy on
+### B.3 — Workflow: inject secrets before `azd up`
+
+The workflow needs a step before `azd up` to push secrets into the azd environment so they reach
+the containers. Add this step after `azd login`:
+
+```yaml
+- name: Inject secrets into azd env
+  run: |
+    azd env set KeycloakAdminPassword    "${{ secrets.KEYCLOAKADMINPASSWORD }}"
+    azd env set KeycloakWebClientSecret  "${{ secrets.KEYCLOAKWEBCLIENTSECRET }}"
+    azd env set Llm__Claude__ApiKey      "${{ secrets.LLM__CLAUDE__APIKEY }}"
+    # Optional KC Postgres (after first deploy — see docs/keycloak-prod-runbook.md)
+    if [ -n "${{ secrets.KEYCLOAKDBURL }}" ]; then
+      azd env set KeycloakDbUrl      "${{ secrets.KEYCLOAKDBURL }}"
+      azd env set KeycloakDbUsername "${{ secrets.KEYCLOAKDBUSERNAME }}"
+      azd env set KeycloakDbPassword "${{ secrets.KEYCLOAKDBPASSWORD }}"
+      azd env set KeycloakHostname   "${{ secrets.KEYCLOAKHOSTNAME }}"
+    fi
+```
+
+After `azd up`, patch the KC redirect URIs automatically:
+
+```yaml
+- name: Patch KC redirect URIs
+  run: |
+    RG=$(azd env get-values | sed -n 's/^AZURE_RESOURCE_GROUP=//p' | tr -d '"')
+    KC=$(az containerapp show -n keycloak -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+    WEB=$(az containerapp show -n web     -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+    export KEYCLOAK_BASE_URL="https://$KC"
+    export WEB_BASE_URL="https://$WEB"
+    export KEYCLOAKADMINPASSWORD="${{ secrets.KEYCLOAKADMINPASSWORD }}"
+    bash infra/hooks/postprovision.sh
+```
+
+### B.4 — Turn on auto-deploy
 
 ```bash
 gh variable set AZURE_DEPLOY_ENABLED --body true
 ```
 
-Until this is `true`, pushes to `main` will NOT auto-deploy (the deploy job is skipped). A manual
-**Run workflow** still works regardless, so you can try a one-off deploy before flipping it.
+Once set, every push to `main` that passes CI auto-deploys via the workflow.
 
-### B.4 — Try it
+---
 
-- **Manual:** Actions → *Deploy (azd / Aspire)* → **Run workflow** (on `main`).
-- **Automatic:** once `AZURE_DEPLOY_ENABLED=true`, merge to `main` → CI runs → on success the deploy
-  workflow runs `azd up` and smoke-tests the result.
+## Production hardening (KC Postgres + real SMTP)
+
+Follow [`docs/keycloak-prod-runbook.md`](keycloak-prod-runbook.md) for:
+
+- Rotating seed users / stripping `operator`+`member` from the public realm
+- KC Postgres (durable user accounts across redeploys)
+- KC stable hostname (`KC_HOSTNAME`)
+- Real SMTP (`Email__SmtpHost` / realm `smtpServer`)
+- Multi-replica Web (min 1 replica + Azure SignalR backplane)
 
 ---
 
 ## Operating the deployment
 
-Resource names come from your `AZURE_ENV_NAME`; `azd env get-values` lists URLs + names.
-
 ```bash
+azd env get-values           # lists all URLs, resource names, environment variables
+
 # Logs
-az containerapp logs show -n <api-app> -g <rg> --tail 100
+az containerapp logs show -n api -g <rg> --tail 100
+az containerapp logs show -n web -g <rg> --tail 100
 
-# Roll back to a previous revision (Container Apps keeps every revision)
-az containerapp revision list     -n <api-app> -g <rg> -o table
-az containerapp revision activate -n <api-app> -g <rg> --revision <name>
-
-# Cost: each LLM call is logged with its USD cost; query App Insights `traces`, or use the
-# in-app admin Cost view (Desktop → Cost) once runs exist.
+# Roll back (Container Apps keeps every revision)
+az containerapp revision list     -n api -g <rg> -o table
+az containerapp revision activate -n api -g <rg> --revision <name>
 ```
 
 ---
@@ -157,8 +225,10 @@ az containerapp revision activate -n <api-app> -g <rg> --revision <name>
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Deploy job didn't run on push to `main` | gate off | `gh variable set AZURE_DEPLOY_ENABLED --body true` |
-| `azd auth login` fails in CI | OIDC subject/role | Federated subject must match `repo:hoangsnowy/AgentOs:ref:refs/heads/main`; role must be Owner / +User Access Administrator |
-| `azd up` fails creating role assignments | SP lacks permission | Grant **Owner** or **User Access Administrator** (Contributor alone can't assign roles) |
-| Container App 503 after deploy | `/health` not ready | `az containerapp logs show …` — check startup + DB connection |
-| LLM call returns 401 in cloud | key not set | `azd env set Llm__Claude__ApiKey …` then `azd deploy` |
+| `Invalid redirect_uri` on login | KC client still points to localhost | Run `postprovision.sh` (A.2) |
+| `Correlation failed` on OIDC callback | DataProtection key mismatch | Both API+Web must share `SetApplicationName("AgentOS")` — already wired in `ServiceDefaults` |
+| 401 on API calls from Web | KC issuer mismatch | Set `KC_HOSTNAME` via `azd env set KeycloakHostname` then redeploy |
+| Pipeline 404 on Claude calls | Wrong model id | `Llm:DefaultModel` must be `claude-sonnet-4-6` — check `appsettings.json` |
+| Users lost after redeploy | KC on H2 (ephemeral) | Expected — follow KC Postgres runbook if you need persistent users |
+| Container 503 after deploy | `/health` startup not ready | `az containerapp logs show -n <app> -g <rg>` — check DB connection string |
+| `azd up` role assignment error | SP lacks permission | Grant Owner or Contributor + User Access Administrator |

@@ -7,6 +7,20 @@
 // `agentic-web` client redirectUris. MailHog catches all dev verification emails on UI port 8025;
 // Keycloak sends to it via the realm-level smtpServer config (host=mailhog port=1025).
 //
+// --- Cloud bootstrap (two-step) ---
+// Step 1: azd provision  → provisions Azure Postgres + Container Apps infrastructure.
+//         KC starts ephemeral (H2) on first deploy — app works but realm resets on restarts.
+// Step 2: Create a 'keycloak' database on the provisioned Postgres server, then:
+//         azd env set KEYCLOAKDBURL      "jdbc:postgresql://<host>:5432/keycloak?sslmode=require"
+//         azd env set KEYCLOAKDBUSERNAME "<admin-login>"
+//         azd env set KEYCLOAKDBPASSWORD "<password>"
+//         azd env set KEYCLOAKHOSTNAME   "https://keycloak.<env>.<region>.azurecontainerapps.io"
+//         azd env set KEYCLOAKADMINPASSWORD    "<strong-password>"
+//         azd env set KEYCLOAKWEBCLIENTSECRET  "<strong-secret>"
+//         azd env set SMTPHOST  "<smtp-relay-host>"
+//         azd env set SMTPPORT  "587"
+//         azd up  → KC now uses Postgres (durable) + stable hostname
+//
 // Secrets (Keycloak admin password + agentic-web client secret) are Aspire Parameters; their dev
 // defaults live in appsettings.json under "Parameters". Override per-environment via
 // `dotnet user-secrets`, `azd env set`, or environment variables — never edit the dev defaults.
@@ -15,79 +29,112 @@ using Aspire.Hosting;
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Run mode = local `dotnet run` (single-F5 dev stack). Publish mode = `azd`/manifest generation for the
-// cloud. Dev-only affordances (theme bind-mount, theme-cache disable, header-size hack, the Web's
-// Development environment pin) are gated to run mode so they never leak into the Container Apps deploy.
+// cloud. Dev-only affordances (theme bind-mount, MailHog, Web Development pin) are gated to run mode.
 var isPublish = builder.ExecutionContext.IsPublishMode;
 
-var kcAdminUsername = builder.AddParameter("KeycloakAdminUsername");
-var kcAdminPassword = builder.AddParameter("KeycloakAdminPassword", secret: true);
+// --- Auth parameters ---
+var kcAdminUsername   = builder.AddParameter("KeycloakAdminUsername");
+var kcAdminPassword   = builder.AddParameter("KeycloakAdminPassword", secret: true);
 var kcWebClientSecret = builder.AddParameter("KeycloakWebClientSecret", secret: true);
 
+// --- Cloud KC persistence + hostname (empty in dev; set via azd env set — see bootstrap comment above) ---
+var kcDbUrl      = builder.AddParameter("KeycloakDbUrl");
+var kcDbUsername = builder.AddParameter("KeycloakDbUsername");
+var kcDbPassword = builder.AddParameter("KeycloakDbPassword", secret: true);
+var kcHostname   = builder.AddParameter("KeycloakHostname");
+
+// --- Email (dev → MailHog localhost:1025; cloud → real SMTP via azd env set SMTPHOST / SMTPPORT) ---
+var smtpHost = builder.AddParameter("SmtpHost");
+var smtpPort = builder.AddParameter("SmtpPort");
+
+// --- App database (local: Docker container; cloud: Azure Postgres Flexible Server) ---
 var db = builder.AddAzurePostgresFlexibleServer("postgres")
     .RunAsContainer(c => c.WithDataVolume())
     .AddDatabase("DefaultConnection", databaseName: "agentos");
 
-// MailHog — dev SMTP catcher. Realm smtpServer points here; UI at http://localhost:8025 shows
-// every verification email Keycloak emits during signup. Container name "mailhog" doubles as the
-// hostname Keycloak resolves over the Aspire container network.
-var mailhog = builder.AddContainer("mailhog", "mailhog/mailhog")
-    .WithHttpEndpoint(port: 8025, targetPort: 8025, name: "ui")
-    .WithEndpoint(port: 1025, targetPort: 1025, name: "smtp", scheme: "tcp");
+// --- MailHog: dev SMTP catcher only — never ship to cloud ---
+IResourceBuilder<ContainerResource>? mailhog = null;
+if (!isPublish)
+{
+    mailhog = builder.AddContainer("mailhog", "mailhog/mailhog")
+        .WithHttpEndpoint(port: 8025, targetPort: 8025, name: "ui")
+        .WithEndpoint(port: 1025, targetPort: 1025, name: "smtp", scheme: "tcp");
+}
 
+// --- Keycloak ---
 var keycloak = builder.AddKeycloak("keycloak", port: 8080)
-    .WithDataVolume()
-    .WithRealmImport("../../infra/keycloak")
     .WithEnvironment("KC_BOOTSTRAP_ADMIN_USERNAME", kcAdminUsername)
-    .WithEnvironment("KC_BOOTSTRAP_ADMIN_PASSWORD", kcAdminPassword)
-    .WaitFor(mailhog);
+    .WithEnvironment("KC_BOOTSTRAP_ADMIN_PASSWORD", kcAdminPassword);
 
 if (!isPublish)
 {
+    // Local dev: H2 volume (persists between runs) + realm import via bind-mount + theme hot-reload.
+    // KC scans /opt/keycloak/themes/<name>/ for themes; bind-mount our source dir so CSS edits
+    // hot-reload without rebuilding the container. Dev cookie-jar pollution on localhost can exceed
+    // the Quarkus default max header size → HTTP 431; QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE fixes it.
     keycloak
-        // Custom AgentOs login/account theme — Breeze look matching the Web Studio. KC scans
-        // /opt/keycloak/themes/<name>/ for themes; bind-mount our source dir so edits to the CSS
-        // hot-reload without rebuilding the container. The host path does NOT exist in the Container
-        // Apps image, so this is run-mode only — bake the theme into a custom KC image for the cloud.
+        .WithDataVolume()
+        .WithRealmImport("../../infra/keycloak")
+        .WaitFor(mailhog!)
         .WithBindMount("../../infra/keycloak/themes/agentos", "/opt/keycloak/themes/agentos")
-        // Dev only: disable theme caching so CSS edits show up on reload (default is 24h cache).
         .WithEnvironment("KC_SPI_THEME_STATIC_MAX_AGE", "-1")
         .WithEnvironment("KC_SPI_THEME_CACHE_THEMES", "false")
         .WithEnvironment("KC_SPI_THEME_CACHE_TEMPLATES", "false")
-        // Dev only: localhost shares one cookie jar across EVERY dev app on the box, so the Cookie header
-        // sent to Keycloak can blow past Quarkus's default max header size → HTTP 431 on /auth. Raise the
-        // ceiling (a real Keycloak on its own domain never sees this pollution).
         .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE", "64K");
 }
 else
 {
-    // Behind the Container Apps TLS-terminating ingress, Keycloak must trust the X-Forwarded-* hop so it
-    // builds https issuer/redirect URLs. (Durable storage + a stable KC_HOSTNAME + a theme-baked image
-    // are the remaining prod-Keycloak steps — see docs/deploy-readiness-audit.md.)
-    keycloak.WithEnvironment("KC_PROXY", "edge");
+    // Cloud: custom image (infra/keycloak/Dockerfile) bakes realm JSON + theme into the image so
+    // bind-mounts aren't needed. KC_PROXY=edge trusts the ACA TLS-terminating ingress X-Forwarded-*
+    // headers. KC_HOSTNAME_STRICT=false lets KC auto-detect its public URL from requests on the first
+    // deploy (before KC_HOSTNAME is set); set KC_HOSTNAME once you have the stable ACA FQDN.
+    keycloak
+        .WithDockerfile("../../infra/keycloak")
+        .WithEnvironment("KC_PROXY", "edge")
+        .WithEnvironment("KC_HOSTNAME_STRICT", "false");
+
+    // Durable Postgres backend — only activate once KC DB params are set (step 2 of cloud bootstrap).
+    // Without these, KC starts with H2 (ephemeral) which is fine for the initial provision round.
+    var kcDbUrlValue = builder.Configuration["Parameters:KeycloakDbUrl"];
+    if (!string.IsNullOrEmpty(kcDbUrlValue))
+    {
+        keycloak
+            .WithEnvironment("KC_DB", "postgres")
+            .WithEnvironment("KC_DB_URL", kcDbUrl)
+            .WithEnvironment("KC_DB_USERNAME", kcDbUsername)
+            .WithEnvironment("KC_DB_PASSWORD", kcDbPassword);
+    }
+
+    // Stable public hostname — set after first provision so issuer + redirect_uri are consistent.
+    var kcHostnameValue = builder.Configuration["Parameters:KeycloakHostname"];
+    if (!string.IsNullOrEmpty(kcHostnameValue))
+    {
+        keycloak.WithEnvironment("KC_HOSTNAME", kcHostname);
+    }
 }
 
-builder.AddProject<Projects.AgentOs_Api>("api")
+// --- API ---
+var api = builder.AddProject<Projects.AgentOs_Api>("api")
     .WithReference(db).WaitFor(db)
     .WithReference(keycloak).WaitFor(keycloak)
     .WithEnvironment("Auth__Keycloak__Authority",
         ReferenceExpression.Create($"{keycloak.GetEndpoint("http").Property(EndpointProperty.Url)}/realms/agentic"))
     .WithEnvironment("Auth__Keycloak__Audience", "agentic-api")
-    // Admin REST — /tenants and member-invite endpoints provision realm users via this.
     .WithEnvironment("Auth__Keycloak__Admin__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("Auth__Keycloak__Admin__Realm", "agentic")
     .WithEnvironment("Auth__Keycloak__Admin__Username", kcAdminUsername)
     .WithEnvironment("Auth__Keycloak__Admin__Password", kcAdminPassword)
     .WithEnvironment("Auth__Keycloak__Admin__ClientId", "admin-cli")
-    // App-sent mail (MailKit) → MailHog in dev. Prod injects a real provider via secrets.
-    .WithEnvironment("Email__SmtpHost", "localhost")
-    .WithEnvironment("Email__SmtpPort", "1025")
     .WithEnvironment("Email__From", "noreply@agentic.local")
     .WithEnvironment("Email__FromName", "AgentOS")
-    .WaitFor(mailhog);
+    .WithEnvironment("Email__SmtpHost", smtpHost)
+    .WithEnvironment("Email__SmtpPort", smtpPort);
 
-// The Web must be reachable at EXACTLY https://localhost:5180 — that string is hard-wired into the
-// Keycloak realm's redirectUris, so any other scheme/port/origin breaks OIDC login. Make that binding
-// the single source of truth, with no possibility of a port clash:
+if (!isPublish) { api.WaitFor(mailhog!); }
+
+// The Web must be reachable at EXACTLY https://localhost:5180 in run mode — that string is hard-wired
+// into the Keycloak realm's redirectUris, so any other scheme/port/origin breaks OIDC login. Make that
+// binding the single source of truth, with no possibility of a port clash:
 //   • launchProfileName: null     — ignore launchSettings (its "http" profile pins http://localhost:5180,
 //                                    which otherwise wins and makes Kestrel serve plain HTTP → the
 //                                    browser gets ERR_SSL_PROTOCOL_ERROR and OIDC builds a http://
@@ -96,13 +143,9 @@ builder.AddProject<Projects.AgentOs_Api>("api")
 //                                    reverse-proxy in front), so nothing else contends for 5180 and the
 //                                    request origin the app sees IS https://localhost:5180 → the OIDC
 //                                    redirect_uri matches the realm with no forwarded-header juggling.
-// (Standalone `dotnet run --project src/AgentOs.Web` is unaffected — it still uses its own launchSettings.)
-builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null)
+var web = builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null)
     .WithHttpsEndpoint(port: 5180, targetPort: 5180, name: "https", isProxied: false)
-    // Development only locally (Keycloak is http, DevAutoLogin guard relaxed). In the cloud the Web must
-    // run Production so the prod exception handler + Always-secure cookie + ClientSecret guard engage.
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", isPublish ? "Production" : "Development")
-    // Full stack uses real Keycloak OIDC — turn OFF the standalone dev-run auto-login.
     .WithEnvironment("Auth__DevAutoLogin", "false")
     .WithReference(db).WaitFor(db)
     .WithReference(keycloak).WaitFor(keycloak)
@@ -111,17 +154,16 @@ builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null)
     .WithEnvironment("Auth__Keycloak__Audience", "agentic-api")
     .WithEnvironment("Auth__Keycloak__ClientId", "agentic-web")
     .WithEnvironment("Auth__Keycloak__ClientSecret", kcWebClientSecret)
-    // Web provisions Keycloak users for the public sign-up form, so it also needs admin creds.
     .WithEnvironment("Auth__Keycloak__Admin__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("Auth__Keycloak__Admin__Realm", "agentic")
     .WithEnvironment("Auth__Keycloak__Admin__Username", kcAdminUsername)
     .WithEnvironment("Auth__Keycloak__Admin__Password", kcAdminPassword)
     .WithEnvironment("Auth__Keycloak__Admin__ClientId", "admin-cli")
-    // App-sent mail (MailKit) → MailHog in dev. Prod injects a real provider via secrets.
-    .WithEnvironment("Email__SmtpHost", "localhost")
-    .WithEnvironment("Email__SmtpPort", "1025")
     .WithEnvironment("Email__From", "noreply@agentic.local")
     .WithEnvironment("Email__FromName", "AgentOS")
-    .WaitFor(mailhog);
+    .WithEnvironment("Email__SmtpHost", smtpHost)
+    .WithEnvironment("Email__SmtpPort", smtpPort);
+
+if (!isPublish) { web.WaitFor(mailhog!); }
 
 builder.Build().Run();

@@ -9,3 +9,10 @@ services:
     language: dotnet
     project: ./infra/AgentOs.AppHost/AgentOs.AppHost.csproj
     host: containerapp
+
+hooks:
+  postprovision:
+    shell: sh
+    run: ./infra/hooks/postprovision.sh
+    interactive: false
+    continueOnError: true
