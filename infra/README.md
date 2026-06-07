@@ -9,7 +9,7 @@ provisions everything from it:
 | Container Apps Environment + Log Analytics | implicit (Aspire) |
 | Azure Container Registry | implicit (image push) |
 | Container App: API | `AddProject("api")` |
-| Container App: Web (Agent Studio) | `AddProject("web")` |
+| Container App: Web (AgentOS desktop) | `AddProject("web")` |
 | Azure Database for PostgreSQL flexible | `AddAzurePostgresFlexibleServer("postgres")` |
 | Managed identity + role assignments | implicit (Aspire) |
 
@@ -30,13 +30,14 @@ azd up                 # prompts for env name + subscription + region, then prov
 ## LLM secrets
 
 ```bash
-azd env set Llm__Anthropic__ApiKey   "sk-ant-..."
-azd env set Llm__AzureOpenAI__ApiKey "..."
-azd env set Llm__AzureOpenAI__Endpoint "https://<resource>.openai.azure.com"
+azd env set Llm__Claude__ApiKey   "sk-ant-..."
+azd env set Llm__AzureOpenAi__ApiKey "..."
+azd env set Llm__AzureOpenAi__Endpoint "https://<resource>.openai.azure.com"
 azd deploy
 ```
 
-(The Web also runs offline in Demo mode without keys.)
+(The Web still boots without keys on a degraded path — `Auth:DevAutoLogin` + the no-op
+repositories — so you can deploy first and add keys later.)
 
 ## CI/CD (GitHub Actions)
 
@@ -57,8 +58,8 @@ azd auth login            # or just run the AppHost without Azure
 dotnet run --project infra/AgentOs.AppHost
 ```
 
-The AppHost runs Postgres as a local container + API + Web + the Aspire dashboard, with
-connection strings wired automatically.
+The AppHost runs Postgres + Keycloak + MailHog as local containers + API + Web + the Aspire
+dashboard, with connection strings and the OIDC authority wired automatically.
 
 ## Cleanup
 

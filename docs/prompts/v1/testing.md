@@ -1,6 +1,6 @@
 # TestingAgent Prompt — v1
 
-Version: **v1** · Source: `src/AgentOs.Application/Prompts/TestingPrompt.cs`
+Version: **v1** · Source: `src/AgentOs.Modules.Pipeline/Prompts/TestingPrompt.cs`
 
 ## System
 

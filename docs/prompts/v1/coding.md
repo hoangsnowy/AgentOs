@@ -1,6 +1,6 @@
 # CodingAgent Prompt — v1
 
-Version: **v1** · Source: `src/AgentOs.Application/Prompts/CodingPrompt.cs`
+Version: **v1** · Source: `src/AgentOs.Modules.Pipeline/Prompts/CodingPrompt.cs`
 
 ## System
 

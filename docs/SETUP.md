@@ -1,6 +1,6 @@
 # Setup & First Run
 
-A step-by-step guide to build, run, and push the `agentos` repo to GitHub.
+A step-by-step guide to build and run AgentOS locally.
 
 ## 1. Install the .NET 10 SDK
 
@@ -20,12 +20,12 @@ If the output has no line starting with `10.`, check `global.json` at the repo r
 From the `D:\LuanVan\prototype\` folder:
 
 ```bash
-dotnet restore AgentOs.sln
-dotnet build  AgentOs.sln --configuration Release
-dotnet test   AgentOs.sln --configuration Release
+dotnet restore AgentOs.slnx
+dotnet build  AgentOs.slnx --configuration Release
+dotnet test   AgentOs.slnx --configuration Release
 ```
 
-Phase 1 has only 1 smoke test; the expected result is `Passed: 1`.
+The suite is ~460 tests; all should pass.
 
 ## 3. Configure LLM secrets (local)
 
@@ -34,9 +34,9 @@ Use .NET User Secrets so keys are never committed:
 ```bash
 cd src/AgentOs.Api
 dotnet user-secrets init
-dotnet user-secrets set "Llm:Anthropic:ApiKey"  "sk-ant-..."
-dotnet user-secrets set "Llm:AzureOpenAI:ApiKey" "..."
-dotnet user-secrets set "Llm:AzureOpenAI:Endpoint" "https://<resource>.openai.azure.com"
+dotnet user-secrets set "Llm:Claude:ApiKey"  "sk-ant-..."
+dotnet user-secrets set "Llm:AzureOpenAi:ApiKey" "..."
+dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://<resource>.openai.azure.com"
 ```
 
 Secrets are stored in `%APPDATA%\Microsoft\UserSecrets\<UserSecretsId>\secrets.json`, **not in the repo**.
@@ -54,25 +54,7 @@ Browse to:
 - Scalar API Reference (UI): <https://localhost:5080/scalar/v1>
 - OpenAPI spec (JSON): <https://localhost:5080/openapi/v1.json>
 
-## 5. Push to GitHub
-
-The first time (in the `D:\LuanVan\prototype\` folder):
-
-```bash
-git init
-git add .
-git commit -m "chore: phase 1 — initial scaffold (.NET 10 solution + CI)"
-git branch -M main
-
-# Create the repo on GitHub (via the web or the gh CLI):
-#   gh repo create agentos --public --description "A .NET-native multi-agent AI platform for the SDLC"
-git remote add origin https://github.com/<your-username>/agentos.git
-git push -u origin main
-```
-
-Check the **Actions** tab on GitHub — the CI workflow `.github/workflows/ci.yml` will run automatically the first time.
-
-## 6. Configure GitHub Actions secrets (for CI to call the LLM)
+## 5. Configure GitHub Actions secrets (for CI to call the LLM)
 
 In GitHub: **Settings → Secrets and variables → Actions → New repository secret**
 
@@ -84,7 +66,7 @@ In GitHub: **Settings → Secrets and variables → Actions → New repository s
 
 The CI workflow reads these secrets for the experimental tests that call a real LLM.
 
-## 7. Branch protection (recommended)
+## 6. Branch protection (recommended)
 
 **Settings → Branches → Add rule:** `main`
 
@@ -92,7 +74,7 @@ The CI workflow reads these secrets for the experimental tests that call a real 
 - ☑ Require status checks to pass before merging — select `Build & Test`
 - ☑ Require linear history (rebase / squash merge only)
 
-## 8. One-shot local dev — Aspire AppHost (Postgres + Keycloak + API + Web)
+## 7. One-shot local dev — Aspire AppHost (Postgres + Keycloak + MailHog + API + Web)
 
 `AgentOs.AppHost` is an Aspire AppHost: one `dotnet run` brings up every dev dependency in
 containers (Postgres + Keycloak) and starts the API + Blazor Web alongside them, with connection
@@ -106,7 +88,7 @@ dotnet run --project infra/AgentOs.AppHost
 Open the Aspire dashboard URL printed in the console for live logs, traces, and the resource
 graph (api, web, postgres, keycloak). Data volumes persist across restarts.
 
-**Keycloak (Epic D — multi-tenant auth)** auto-imports the `agentic` realm from
+**Keycloak (multi-tenant auth)** auto-imports the `agentic` realm from
 `infra/keycloak/agentic-realm.json` on first start:
 
 - Admin console: the URL Aspire prints for the `keycloak` resource (admin / admin)
@@ -116,7 +98,7 @@ graph (api, web, postgres, keycloak). Data volumes persist across restarts.
 
 `Auth__Mode=keycloak` + `Auth__Keycloak__Authority` are injected by the AppHost, so the API runs
 as an OIDC resource server out of the box. If you run the API directly (without the AppHost),
-set `Auth:Mode=operator` (the Phase-8 HS256 path) or point `Auth:Keycloak:Authority` at any
+set `Auth:Mode=operator` (the HS256 path) or point `Auth:Keycloak:Authority` at any
 reachable Keycloak realm.
 
 Production runs Keycloak with an external DB and `start` (not `start-dev`); for that, point the

@@ -1,4 +1,4 @@
-# AgentOs
+# AgentOS
 
 > A **modular .NET agentic platform** for software-delivery workflows. A central orchestrator
 > coordinates specialist agents — Requirements → Code → Tests → QA — over a provider-agnostic
@@ -10,23 +10,35 @@
 ![C#](https://img.shields.io/badge/C%23-14-239120)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-AgentOs turns a plain-English user story into reviewed, test-backed C# scaffolding. Five agents
+AgentOS turns a plain-English user story into reviewed, test-backed C# scaffolding. Five agents
 collaborate under a central orchestrator; a QA agent scores requirement–code–test consistency and
 loops until convergence or an iteration cap. The platform itself is a modular monolith — each
 feature (LLM gateway, pipeline runtime, identity, tenants, settings store, integrations, remote
 agent transport) is a self-contained `IModule` with its own DI surface, EF Core context, and
 Postgres schema, so any one of them can later ship as a standalone NuGet package.
 
-> **Status:** pre-1.0, actively developed on `refactor/modular-monolith`. The core pipeline,
-> gateway, modular runtime, and multi-tenant identity are working; public surfaces may shift
-> before `v1.0`.
+> **Status:** pre-1.0. The core pipeline, gateway, modular runtime, and multi-tenant identity are
+> working; public surfaces may shift before `v1.0`.
 
-**Contents:** [Why AgentOs](#why-agentos) · [Concepts](#concepts) · [Architecture](#architecture) ·
+**Contents:** [Why AgentOS](#why-agentos) · [Concepts](#concepts) · [Architecture](#architecture) ·
 [Quick start](#quick-start) · [Modules](#modules) · [LLM gateway](#llm-gateway) ·
 [Configuration](#configuration) · [Multi-tenant](#multi-tenant) · [API](#api) ·
 [Extending](#extending) · [Deploy](#deploy) · [Contributing](#contributing)
 
-## Why AgentOs
+### Which doc do I read for X?
+
+| I want to… | Read |
+|---|---|
+| Understand AgentOS / architecture | [README.md](README.md) |
+| Set up & run locally | [docs/SETUP.md](docs/SETUP.md) |
+| Deploy to Azure | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) + [infra/README.md](infra/README.md) |
+| Contribute / conventions | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| UI / design system | [docs/design/design-system.md](docs/design/design-system.md) |
+| Agent prompts | [docs/prompts/v1/*.md](docs/prompts/v1/) |
+| Where the product is headed | [ROADMAP.md](ROADMAP.md) |
+| Report a vulnerability | [SECURITY.md](SECURITY.md) |
+
+## Why AgentOS
 
 - **Modular by construction.** Every feature is an `IModule` discovered by reflection. Hosts wire
   the whole platform with a single `services.AddModulesFromAssemblies(cfg, …)` call; no module
@@ -69,15 +81,18 @@ src/
 ├── AgentOs.Modules.Identity/   # JwtAuth + DefaultTenantContext + HttpTenantContext + /auth
 ├── AgentOs.Modules.Tenants/    # Keycloak admin + TenantsDbContext (schema: tenants) + /tenants
 ├── AgentOs.Modules.Integration/# GitHub PR + dotnet build verifier (+ BuildVerifierTool)
+├── AgentOs.Modules.Workspaces/ # Connected source workspaces + WorkspacesDbContext (schema: workspaces)
+├── AgentOs.Modules.Sessions/   # Remote-runner registry + pairing + SessionsDbContext (schema: sessions)
 ├── AgentOs.Modules.Tools/      # ITool contract + IToolRegistry + IToolPolicy + IToolInvocationLog
 ├── AgentOs.Modules.Mcp/        # MCP client — connects to external MCP servers, registers their tools
 ├── AgentOs.Modules.RemoteAgent/# SignalR hub + transport + RemoteAgentLlmClient
 ├── AgentOs.Api/                # ASP.NET Core minimal API (+ Scalar UI). Composition root only.
-├── AgentOs.Web/                # Blazor Server "Agent Studio". Composition root only.
-├── AgentOs.AppHost/            # .NET Aspire orchestration
+├── AgentOs.Web/                # Blazor Server AgentOS desktop. Composition root only.
 ├── AgentOs.RemoteAgent/        # Standalone IDE-side agent (dev machine)
 └── AgentOs.ServiceDefaults/    # OpenTelemetry, health checks, HTTP resilience
-tests/                          # xUnit (~180 unit/integration) + Playwright E2E
+infra/
+└── AgentOs.AppHost/            # .NET Aspire orchestration
+tests/                          # xUnit (~460 unit/integration) + Playwright E2E
 ```
 
 Module dependency rule: a module references **Domain + SharedKernel only**. Cross-module
@@ -97,8 +112,8 @@ inside `SendAsync`. Every invocation passes through `IToolPolicy` (gate) and `IT
 `AgentOs.Modules.Mcp` connects to upstream **MCP servers** at startup and registers their tools
 under the prefix `{server}.{tool}` — local and remote tools live in the same registry. The Api
 host also serves **MCP itself** at `/mcp` (Streamable HTTP), exposing `run_pipeline`, `list_runs`,
-and `get_run` so any MCP host (Claude Desktop, VS Code, custom orchestrator) can drive AgentOs.
-End result: a tool mesh where AgentOs is both an MCP consumer and an MCP provider.
+and `get_run` so any MCP host (Claude Desktop, VS Code, custom orchestrator) can drive AgentOS.
+End result: a tool mesh where AgentOS is both an MCP consumer and an MCP provider.
 
 **Pipeline dataflow:**
 
@@ -121,7 +136,7 @@ required for live runs.
 
 ```bash
 git clone https://github.com/hoangsnowy/AgentOs.git
-cd agentos
+cd AgentOs
 
 dotnet restore AgentOs.slnx
 dotnet build   AgentOs.slnx -c Release
@@ -140,18 +155,11 @@ Or run the whole stack — Aspire wires Postgres + Keycloak + Api + Web and forw
 dotnet run --project infra/AgentOs.AppHost
 ```
 
-Drive the end-to-end pipeline:
-
-```bash
-TOKEN=$(curl -s -X POST https://localhost:5080/auth/token \
-  -H "Content-Type: application/json" \
-  -d '{"user":"operator","password":"operator"}' | jq -r .token)
-
-curl -X POST https://localhost:5080/pipeline \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"userStory":"An admin can create, view, edit and delete products; users browse by category.","nMax":3}'
-```
+Drive the end-to-end pipeline from the **AgentOS desktop**: on the Aspire stack the Web is at
+`https://localhost:5180`; sign in with the seeded `operator` / `operator` credentials (a
+cookie session via `/account/login`), open the Pipeline app, and run a user story. The API
+endpoints below are bearer-protected — the Web obtains the token for you; for a scripted call
+against the API, attach a Keycloak-issued bearer token from the realm.
 
 > The pair `RemoteAgent` provider can dispatch LLM calls to a dev-machine agent at zero API cost
 > when a remote agent is paired (see [Modules](#modules)).
@@ -163,9 +171,11 @@ curl -X POST https://localhost:5080/pipeline \
 | **AppConfig** | `config` | `/settings*` | Encrypted KV (`Microsoft.AspNetCore.DataProtection`). Per-tenant. |
 | **Llm** | — | `/llm/test` (Api shell) | Gateway, keyed `ILlmClient` per provider, multi-key pool with 429 failover. |
 | **Pipeline** | `pipeline` | `/pipeline`, `/pipeline/stream`, `/requirement`, `/code`, `/test`, `/qa`, `/runs*` | Agents + orchestrator + run history (jsonb artifact). |
-| **Identity** | — | `/auth/token` | JWT bearer (HS256 operator / RS256 Keycloak). Tenant policies (`Operator`, `Admin`, `Member`). |
+| **Identity** | — | — | `ITenantContext` (claims-based) + `Admin`/`Member` policies. The auth scheme is host-specific (Api = Keycloak JWT bearer; Web = cookie + OIDC). |
 | **Tenants** | `tenants` | `/tenants/me`, `/tenants`, `/tenants/{id}/members` | Tenant registry + Keycloak admin REST client for provisioning. |
 | **Integration** | — | — | `IGitHubPrService` + `IBuildVerifier`. Used by the Pipeline orchestrator. |
+| **Workspaces** | `workspaces` | `/workspaces*` | Connected source workspaces (repo/token registry) + `IWorkspaceConnector`. |
+| **Sessions** | `sessions` | `/sessions*`, `/runners*` | Remote-runner registry + pairing handshake + live session-run feed. |
 | **RemoteAgent** | — | `/hubs/remote-agent` (SignalR) | Dispatches LLM calls to a paired dev-machine agent (zero API tokens). |
 
 ## LLM gateway
@@ -266,7 +276,7 @@ export Persistence__RequireDatabase=false      # bash
 
 | `Auth:Mode` | Tenant context | Token | Provisioning |
 |---|---|---|---|
-| `operator` (default) | `DefaultTenantContext` → tenant `"default"`, role `admin` | HS256 from `/auth/token` | n/a (one pseudo-tenant) |
+| `operator` (default) | `DefaultTenantContext` → tenant `"default"`, role `admin` | cookie session via the Web `/account/login` (operator password) | n/a (one pseudo-tenant) |
 | `keycloak` | `HttpTenantContext` → reads `tenant` claim + realm roles | RS256 validated against Keycloak JWKS | `POST /tenants` provisions a tenant + admin user via `IKeycloakAdminClient` |
 
 The Aspire AppHost runs Keycloak with an auto-imported `agentic` realm (`infra/keycloak/`), so a
@@ -279,13 +289,14 @@ the tenant id; reads only see your own.
 ## API
 
 All `/pipeline*`, `/requirement`, `/code`, `/test`, `/qa`, `/runs*`, `/settings*`, and `/tenants*`
-endpoints require a JWT bearer token. `POST /auth/token` exchanges operator credentials for one
-(operator mode); Keycloak mode expects an RS256 token in the `Authorization` header. `/health` and
-`/` are public.
+endpoints require an authenticated principal. The API host validates a Keycloak-issued bearer
+token in the `Authorization` header; the Web host authenticates the operator via a cookie session
+(`GET /account/login` → operator password / OIDC). `/health` and `/` are public.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/auth/token` | none | Exchange operator credentials for a JWT |
+| `GET`  | `/account/login` | none | Start an operator/OIDC sign-in (Web host) |
+| `GET`  | `/account/logout` | any | Sign out (Web host) |
 | `GET`  | `/tenants/me` | any | Resolved tenant + user + roles for the current request |
 | `GET`  | `/tenants` | Admin | List every tenant |
 | `POST` | `/tenants` | Admin | Provision a tenant + admin user (Keycloak) |
@@ -331,6 +342,15 @@ implementation, DI registration, and xUnit stubs.
      --output-dir Persistence/Migrations --context XDbContext
    ```
 
+### Add a plugin
+
+For an extension that ships *outside* the solution, implement `IAgentOsPlugin`
+(`src/AgentOs.SharedKernel/Plugins/`) — a runtime-discovered module loaded from an assembly dropped
+in the host's `plugins/` folder, with no compile-time reference. A plugin has the same DI surface as
+a first-party module, so it can contribute a tool, an LLM provider, and/or a desktop window. Use the
+bundled `plugin-scaffold` skill (`/plugin-scaffold {Name}`); see `samples/AgentOs.Plugins.Sample`
+for a working example.
+
 ## Deploy
 
 ```bash
@@ -349,8 +369,8 @@ Issues and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the de
 - Style: `Nullable` + `TreatWarningsAsErrors` are on across the solution.
 - Commits: [Conventional Commits](https://www.conventionalcommits.org/).
 - The repo ships project-specific Claude Code skills under [`.claude/skills/`](.claude/skills/)
-  (`agent-scaffold`, `prompt-tune`, `cost-report`) — they load automatically
-  when you open the project root.
+  (`agent-scaffold`, `prompt-tune`, `cost-report`, `design-review`, `plugin-scaffold`) — they load
+  automatically when you open the project root.
 
 ## License
 

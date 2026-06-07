@@ -1,4 +1,4 @@
-# Contributing to agentos
+# Contributing to AgentOS
 
 Thanks for your interest in contributing! This project is a .NET-native multi-agent platform
 for the software development lifecycle. Issues and pull requests are welcome.
@@ -7,10 +7,10 @@ for the software development lifecycle. Issues and pull requests are welcome.
 
 ```bash
 git clone https://github.com/hoangsnowy/AgentOs.git
-cd agentos
-dotnet restore AgentOs.sln
-dotnet build   AgentOs.sln -c Release
-dotnet test    AgentOs.sln -c Release
+cd AgentOs
+dotnet restore AgentOs.slnx
+dotnet build   AgentOs.slnx -c Release
+dotnet test    AgentOs.slnx -c Release
 ```
 
 Prerequisites: the **.NET 10 SDK** (pinned via `global.json`). No API keys are required —
@@ -31,9 +31,10 @@ unit + integration tests rely on NSubstitute, no live API keys required. See
 - **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) in English
   (`feat(llm): …`, `fix(ui): …`, `docs: …`, `chore(deps): …`).
 - **Tests**: xUnit v3 + Shouldly + NSubstitute. Name `MethodName_StateUnderTest_ExpectedBehavior`.
-- **Architecture**: Clean Architecture — dependencies point inward
-  (`Api`/`Web` → `Infrastructure` → `Application` → `Domain`). Don't add a reference that
-  reverses that direction.
+- **Architecture**: modular monolith. Each feature is an `AgentOs.Modules.*` class library that
+  references `AgentOs.Domain` + `AgentOs.SharedKernel` only; cross-module references are explicit
+  and minimal. The hosts (`Api`, `Web`) reference every module and wire them. Don't add a
+  module-to-module reference that isn't strictly needed.
 - **LLM access**: agents depend on `ILlmClient`, never on a vendor SDK directly. A new provider
   is a new `ILlmClient` + a `LlmClientFactory` case.
 - **Language**: code, comments, and docs are English.

@@ -1,6 +1,8 @@
-# Project skills — AgentOs
+# Project skills — AgentOS
 
 Custom skills shipped with the repo. Loaded automatically by every Claude Code session opened in this project.
+
+`.claude/skills` is the single source for these skills — the old `.agents/skills` mirror has been removed.
 
 | Skill | Trigger | When |
 |---|---|---|

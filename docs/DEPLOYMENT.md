@@ -32,13 +32,14 @@ azd up                         # prompts: environment name, subscription, region
 Set the LLM keys (stored as Container App env / Key Vault secrets), then redeploy:
 
 ```bash
-azd env set Llm__Anthropic__ApiKey     "sk-ant-..."
-azd env set Llm__AzureOpenAI__ApiKey   "..."
-azd env set Llm__AzureOpenAI__Endpoint "https://<resource>.openai.azure.com"
+azd env set Llm__Claude__ApiKey     "sk-ant-..."
+azd env set Llm__AzureOpenAi__ApiKey   "..."
+azd env set Llm__AzureOpenAi__Endpoint "https://<resource>.openai.azure.com"
 azd deploy
 ```
 
-> The Web also runs offline (Demo mode) with no keys, so you can deploy first and add keys later.
+> The Web still boots without keys on a degraded path (`Auth:DevAutoLogin` + the no-op
+> repositories), so you can deploy first and add keys later.
 
 Tear everything down when done:
 
@@ -160,4 +161,4 @@ az containerapp revision activate -n <api-app> -g <rg> --revision <name>
 | `azd auth login` fails in CI | OIDC subject/role | Federated subject must match `repo:hoangsnowy/AgentOs:ref:refs/heads/main`; role must be Owner / +User Access Administrator |
 | `azd up` fails creating role assignments | SP lacks permission | Grant **Owner** or **User Access Administrator** (Contributor alone can't assign roles) |
 | Container App 503 after deploy | `/health` not ready | `az containerapp logs show …` — check startup + DB connection |
-| LLM call returns 401 in cloud | key not set | `azd env set Llm__Anthropic__ApiKey …` then `azd deploy` |
+| LLM call returns 401 in cloud | key not set | `azd env set Llm__Claude__ApiKey …` then `azd deploy` |
