@@ -14,6 +14,7 @@ using AgentOs.Modules.Pipeline.Pipeline;
 using AgentOs.Modules.Pipeline.Validation;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Modularity;
+using AgentOs.SharedKernel.Persistence;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -64,6 +65,7 @@ public sealed class PipelineModule : IModule, IEndpointModule, IInitializableMod
             services.AddDbContext<PipelineDbContext>(opt =>
                 opt.UseNpgsql(connectionString, npg =>
                     npg.MigrationsHistoryTable("__EFMigrationsHistory", schema: "pipeline")));
+            services.AddNpgsqlConnectionFactory(connectionString);
             services.AddScoped<IPipelineRunRepository, PipelineRunRepository>();
             services.AddScoped<IOrchestrationRepository, OrchestrationRepository>();
         }

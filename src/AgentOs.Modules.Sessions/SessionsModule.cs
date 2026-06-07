@@ -15,6 +15,7 @@ using AgentOs.Modules.Sessions.Pairing;
 using AgentOs.Modules.Sessions.Persistence;
 using AgentOs.Modules.Sessions.Persistence.Repositories;
 using AgentOs.SharedKernel.Modularity;
+using AgentOs.SharedKernel.Persistence;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -49,6 +50,7 @@ public sealed class SessionsModule : IModule, IEndpointModule, IInitializableMod
             services.AddDbContext<SessionsDbContext>(opt =>
                 opt.UseNpgsql(connectionString, npg =>
                     npg.MigrationsHistoryTable("__EFMigrationsHistory", schema: "sessions")));
+            services.AddNpgsqlConnectionFactory(connectionString);
             services.AddScoped<IRunnerRepository, RunnerRepository>();
             services.AddScoped<ISessionRepository, SessionRepository>();
             services.AddScoped<IRunnerDirectory, EfRunnerDirectory>();

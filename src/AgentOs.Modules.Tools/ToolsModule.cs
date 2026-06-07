@@ -12,6 +12,7 @@ using AgentOs.Modules.Tools.Persistence;
 using AgentOs.Modules.Tools.Policy;
 using AgentOs.Modules.Tools.Registry;
 using AgentOs.SharedKernel.Modularity;
+using AgentOs.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,6 +46,7 @@ public sealed class ToolsModule : IModule, IInitializableModule
             services.AddDbContext<ToolsDbContext>(opt =>
                 opt.UseNpgsql(connectionString, npg =>
                     npg.MigrationsHistoryTable("__EFMigrationsHistory", schema: "tools")));
+            services.AddNpgsqlConnectionFactory(connectionString);
             services.TryAddSingleton<EfToolInvocationLog>();
             services.TryAddSingleton<IToolInvocationLog>(sp =>
                 new BufferedToolInvocationLog(sp.GetRequiredService<EfToolInvocationLog>()));
