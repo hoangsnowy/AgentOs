@@ -27,11 +27,14 @@ public sealed class ToolsModule : IModule, IInitializableModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<IToolRegistry, InMemoryToolRegistry>();
-        // Per-tenant tool allowlist read from AppConfig — default-permissive until an admin turns on
-        // enforcement in the Policy app. IAppConfigStore is optional so this degrades to permissive when
-        // no config store is wired (unit tests / no-DB standalone).
+        // Per-tenant tool allowlist read from AppConfig. Default-permissive until an admin turns on
+        // enforcement in the Policy app — UNLESS `Tools:EnforceByDefault` is true, which flips the global
+        // posture to fail-closed (deny unless a tenant has an explicit allowlist). Production should set it.
+        // IAppConfigStore is optional so this degrades to permissive when no config store is wired
+        // (unit tests / no-DB standalone), regardless of the default.
+        var enforceByDefault = configuration.GetValue("Tools:EnforceByDefault", false);
         services.TryAddSingleton<IToolPolicy>(sp => new Policy.AppConfigToolPolicy(
-            sp.GetService<AgentOs.Modules.AppConfig.IAppConfigStore>()));
+            sp.GetService<AgentOs.Modules.AppConfig.IAppConfigStore>(), enforceByDefault));
         services.TryAddSingleton<IToolPolicyService, Policy.ToolPolicyService>();
 
         // Evidence sink: durable EF-backed when a DB is configured, else the in-memory ring buffer

@@ -22,8 +22,13 @@ internal sealed class AppConfigToolPolicy : IToolPolicy
     internal const string AllowlistKey = "tools/allowlist";
 
     private readonly IAppConfigStore? _config;
+    private readonly bool _enforceByDefault;
 
-    public AppConfigToolPolicy(IAppConfigStore? config) => _config = config;
+    public AppConfigToolPolicy(IAppConfigStore? config, bool enforceByDefault = false)
+    {
+        _config = config;
+        _enforceByDefault = enforceByDefault;
+    }
 
     public async Task<ToolPolicyDecision> EvaluateAsync(
         ToolInvocationRequest request,
@@ -38,10 +43,15 @@ internal sealed class AppConfigToolPolicy : IToolPolicy
 
         var tenant = string.IsNullOrWhiteSpace(request.TenantId) ? ITenantContext.DefaultTenantId : request.TenantId;
 
+        // Per-tenant enforce flag wins; when unset, fall back to the global default. Global on + no
+        // per-tenant allowlist ⇒ deny (fail-closed).
         var enforce = await _config.GetForTenantAsync(tenant, EnforceKey, cancellationToken).ConfigureAwait(false);
-        if (!string.Equals(enforce, "true", StringComparison.OrdinalIgnoreCase))
+        var enforcing = string.IsNullOrWhiteSpace(enforce)
+            ? _enforceByDefault
+            : string.Equals(enforce, "true", StringComparison.OrdinalIgnoreCase);
+        if (!enforcing)
         {
-            return ToolPolicyDecision.Allow; // enforcement off → permissive default
+            return ToolPolicyDecision.Allow; // enforcement off → permissive
         }
 
         var raw = await _config.GetForTenantAsync(tenant, AllowlistKey, cancellationToken).ConfigureAwait(false) ?? string.Empty;

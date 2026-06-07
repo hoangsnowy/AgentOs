@@ -188,9 +188,10 @@ app.MapGet("/alive", () => Results.Ok(new { status = "Alive", utc = DateTime.Utc
 
 app.MapModuleEndpoints();
 
-// Epic E4 — MCP HTTP endpoint at /mcp. Streamable HTTP per spec; authenticated when the JWT
-// middleware above is active.
-app.MapMcp("/mcp");
+// Epic E4 — MCP HTTP endpoint at /mcp. Streamable HTTP per spec. RequireAuthorization so an
+// anonymous caller can't drive the full 5-agent LLM pipeline (uncapped spend) or read another
+// tenant's runs — every sibling REST route is gated, this one must be too.
+app.MapMcp("/mcp").RequireAuthorization();
 
 // Settings "Test connection" — probe the configured provider with a minimal call.
 app.MapPost("/llm/test", async (ILlmClientFactory factory, IConfiguration cfg, CancellationToken ct) =>

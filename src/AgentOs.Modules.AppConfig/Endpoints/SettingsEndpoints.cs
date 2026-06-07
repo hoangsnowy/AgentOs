@@ -29,7 +29,7 @@ internal static class SettingsEndpoints
         .WithName("SettingsList")
         .WithSummary("Read every key beneath a prefix (Llm, Auth, Github, …)")
         .WithTags("Settings")
-        .RequireAuthorization();
+        .RequireAuthorization("Admin");
 
         app.MapPost("/settings", async (SetEntryRequest body, IAppConfigStore store, CancellationToken ct) =>
         {
@@ -39,7 +39,7 @@ internal static class SettingsEndpoints
         .WithName("SettingsSet")
         .WithSummary("Set a single key (overwrite if present)")
         .WithTags("Settings")
-        .RequireAuthorization();
+        .RequireAuthorization("Admin");
 
         app.MapDelete("/settings/{key}", async (string key, IAppConfigStore store, CancellationToken ct) =>
         {
@@ -49,7 +49,7 @@ internal static class SettingsEndpoints
         .WithName("SettingsDelete")
         .WithSummary("Delete a key")
         .WithTags("Settings")
-        .RequireAuthorization();
+        .RequireAuthorization("Admin");
 
         return app;
     }

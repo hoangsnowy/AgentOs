@@ -309,10 +309,18 @@ AgentOs.Modules.Sessions.Endpoints.PairingEndpoints.MapPairingEndpoints(app);
 // OIDC challenge / sign-out — buttons in the UI hit these endpoints. /signin-oidc and
 // /signout-callback-oidc are owned by the OIDC middleware. In dev-auto-login mode there are no
 // Cookie/OIDC schemes, so these become simple redirects (the dev user is always signed in).
+// Only follow a returnUrl that is a local path (starts with a single '/'), never an absolute or
+// protocol-relative URL — otherwise /account/login?returnUrl=https://evil is an open redirect.
+static string SafeLocalReturn(string? url) =>
+    !string.IsNullOrEmpty(url) && url.StartsWith('/') && !url.StartsWith("//", StringComparison.Ordinal)
+        && !url.StartsWith("/\\", StringComparison.Ordinal)
+            ? url
+            : "/";
+
 if (devAutoLogin)
 {
     app.MapGet("/account/login", (string? returnUrl) =>
-        Results.Redirect(string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl));
+        Results.Redirect(SafeLocalReturn(returnUrl)));
     app.MapGet("/account/logout", () => Results.Redirect("/"));
 
     // Dev-only "View as": narrow the auto-login principal's roles to preview the member (or admin)
@@ -342,7 +350,7 @@ else
 {
     app.MapGet("/account/login", (string? returnUrl) =>
         Results.Challenge(
-            new AuthenticationProperties { RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl },
+            new AuthenticationProperties { RedirectUri = SafeLocalReturn(returnUrl) },
             new[] { OpenIdConnectDefaults.AuthenticationScheme }));
 
     app.MapGet("/account/logout", () =>
