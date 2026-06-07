@@ -10,6 +10,7 @@ using AgentOs.Modules.Integration;
 using AgentOs.Modules.Llm;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using NSubstitute.ReturnsExtensions;
 using Shouldly;
 using Xunit;
 
@@ -21,7 +22,7 @@ public sealed class GitHubPrServiceTests
     public async Task OpenPrAsync_MissingPat_ThrowsWithClearMessage()
     {
         var overrides = Substitute.For<IRuntimeOverrides>();
-        overrides.GitHubPat.Returns((string?)null);
+        overrides.GitHubPat.ReturnsNull();
         overrides.GitHubRepoOwner.Returns("hoangsnowy");
         overrides.GitHubRepoName.Returns("AgentOs");
 
@@ -37,7 +38,7 @@ public sealed class GitHubPrServiceTests
     {
         var overrides = Substitute.For<IRuntimeOverrides>();
         overrides.GitHubPat.Returns("ghp_x");
-        overrides.GitHubRepoOwner.Returns((string?)null);
+        overrides.GitHubRepoOwner.ReturnsNull();
         overrides.GitHubRepoName.Returns("   ");
 
         var svc = new GitHubPrService(overrides, NullLogger<GitHubPrService>.Instance);
