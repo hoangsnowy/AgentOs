@@ -3,6 +3,25 @@
 Multi-agent review: 10 dimensions → 80 raw findings → 42 adversarially confirmed, 1 refuted,
 37 backlog. Build green (0 warn / 0 err), tests 470 pass / 5 skipped (live-LLM).
 
+## Fix status (branch `feat/deploy-hardening`)
+
+**Batch 1 (make Pipeline run) — SHIPPED:** model id `claude-sonnet-4`/`claude-sonnet-4-20250514` →
+`claude-sonnet-4-6` (AgentsOptions, LlmOptions, both appsettings); `Math.Max(1, …)` iteration clamp
+in both orchestrators; Web Claude `Version` → `ApiVersion`.
+
+**Batch 2 (security) — SHIPPED:** `/mcp` `.RequireAuthorization()`; `/settings` → `Admin` policy +
+Settings app `AdminOnly`; tenant-match guards on `POST /tenants/{id}/invitations` + `/members`;
+open-redirect `SafeLocalReturn` on `/account/login`; config-gated fail-closed tool policy
+(`Tools:EnforceByDefault`, default off).
+
+**Batch 4 (multi-tenant) — PARTIAL:** `EfAppConfigStore` prefers `AmbientIdentity.Current` for the
+ambient tenant + `PipelineStudio` pushes the circuit's tenant/member around the run (fixes #12 LLM-key
++ key reads). **Still open** (need full-stack verify): run-history repo tenant stamping,
+`OrchestrationStore` singleton cache, `AuthSession` identity from null HttpContext.
+
+**Still NOT done (other open items):** #10 build_verifier RCE sandbox; backlog SSRF (workspace connect),
+member can revoke another's runner/session, LLM-gateway edge bugs, observability backend.
+
 ## Batch 3 (cloud hardening) — status
 
 **Shipped + verified** (build 0/0, 470 tests pass, Aspire publish-manifest checked):
