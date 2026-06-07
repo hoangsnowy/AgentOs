@@ -36,7 +36,9 @@ builder.Logging.AddSimpleConsole(options =>
 });
 
 builder.Services.AddOpenApi();
-builder.Services.AddDataProtection();
+// Durable, shared key ring (Postgres-backed when configured) — survives restart/scale + decrypts across
+// the Api ↔ Web hosts. Replaces a bare AddDataProtection() (in-memory, per-host).
+builder.AddAgentOsDataProtection();
 
 // S2 — per-tenant request rate limiting. An in-flight throttle on the request pipeline, INDEPENDENT
 // of the month-to-date BudgetGuard (which is post-hoc and cannot bound a burst). Partitioned by the
@@ -121,6 +123,10 @@ var app = builder.Build();
 
 await app.Services.InitializeModulesAsync();
 
+// FIRST middleware: honour X-Forwarded-Proto/For from the Container Apps ingress so auth + link
+// generation see the original https scheme + client IP.
+app.UseAgentOsForwardedHeaders();
+
 app.UseResponseCompression();
 
 app.UseAuthentication();
@@ -182,9 +188,10 @@ app.MapGet("/alive", () => Results.Ok(new { status = "Alive", utc = DateTime.Utc
 
 app.MapModuleEndpoints();
 
-// Epic E4 — MCP HTTP endpoint at /mcp. Streamable HTTP per spec; authenticated when the JWT
-// middleware above is active.
-app.MapMcp("/mcp");
+// Epic E4 — MCP HTTP endpoint at /mcp. Streamable HTTP per spec. RequireAuthorization so an
+// anonymous caller can't drive the full 5-agent LLM pipeline (uncapped spend) or read another
+// tenant's runs — every sibling REST route is gated, this one must be too.
+app.MapMcp("/mcp").RequireAuthorization();
 
 // Settings "Test connection" — probe the configured provider with a minimal call.
 app.MapPost("/llm/test", async (ILlmClientFactory factory, IConfiguration cfg, CancellationToken ct) =>

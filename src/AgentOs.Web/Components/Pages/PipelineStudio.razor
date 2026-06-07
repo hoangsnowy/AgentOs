@@ -422,6 +422,7 @@
     // Workspace PR target (the unified repo/token source). Empty board selection = Settings-token fallback.
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     private string _tenantId = string.Empty;
+    private string? _userId;
     private List<AgentOs.Modules.Workspaces.Persistence.Entities.WorkspaceEntity> _boards = [];
     private List<AgentOs.Modules.Workspaces.Persistence.Entities.WorkspaceRepoEntity> _repos = [];
     private string? _selBoardId;
@@ -432,6 +433,7 @@
         if (AuthState is null) { return; }
         var user = (await AuthState).User;
         _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
+        _userId = user.FindFirst("sub")?.Value;
         if (string.IsNullOrEmpty(_tenantId)) { return; }
         try
         {
@@ -577,6 +579,14 @@
         try
         {
             var story = new UserStory(_description, _nmax, "en-US");
+            // The in-process pipeline runs the orchestrator in a Task.Run with no HttpContext, so the
+            // request-scoped ITenantContext resolves blank (DefaultTenantId) — cross-tenant LLM-key use +
+            // run history/cost all commingled under `default`. Seed the circuit's real tenant + member as
+            // the ambient identity; it flows into that Task.Run via the captured ExecutionContext. No-op in
+            // standalone dev-auto-login (empty tenant claim), where there is only one pseudo-tenant.
+            using IDisposable? _identity = string.IsNullOrEmpty(_tenantId)
+                ? null
+                : AgentOs.SharedKernel.Identity.AmbientIdentity.Push(_tenantId, _userId);
             await foreach (var evt in Pipeline.StreamAsync(story, _cts.Token))
             {
                 switch (evt.Kind)

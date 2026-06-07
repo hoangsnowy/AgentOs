@@ -50,6 +50,9 @@
 
     <!-- Phase 8.4b — encrypt app_config values at rest -->
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="10.0.8" />
+    <!-- Durable, shared DataProtection key ring (persisted to Postgres) so encrypted tenant secrets +
+         auth/OIDC cookies survive restart/scale and decrypt across the Api + Web hosts. -->
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.8" />
 
     <!-- API host: OpenAPI + Scalar + App Insights -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />

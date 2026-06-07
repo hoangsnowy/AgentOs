@@ -52,5 +52,13 @@ public sealed class AppConfigModule : IModule, IEndpointModule, IInitializableMo
         {
             await db.Database.MigrateAsync(ct).ConfigureAwait(false);
         }
+
+        // The shared DataProtection key ring (registered by AddAgentOsDataProtection on the host) lives in
+        // the same `config` schema; migrate it here so the keys table exists before the first protect call.
+        var dpDb = scope.ServiceProvider.GetService<DataProtectionDbContext>();
+        if (dpDb is not null)
+        {
+            await dpDb.Database.MigrateAsync(ct).ConfigureAwait(false);
+        }
     }
 }

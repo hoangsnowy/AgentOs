@@ -40,7 +40,7 @@ public sealed class EfAppConfigStore : IAppConfigStore
     public async ValueTask<string?> GetAsync(string key, CancellationToken cancellationToken = default)
     {
         await using var scope = _rootProvider.CreateAsyncScope();
-        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
+        var tenantId = ResolveTenant(scope.ServiceProvider);
         var cacheKey = CacheKey(tenantId, key);
         if (_cache.TryGetValue(cacheKey, out var hit) && hit.FetchedUtc + CacheTtl > DateTime.UtcNow)
         {
@@ -128,15 +128,25 @@ public sealed class EfAppConfigStore : IAppConfigStore
 
     private string ResolveTenant()
     {
+        if (AmbientIdentity.Current?.TenantId is { Length: > 0 } ambient) { return ambient; }
         using var scope = _rootProvider.CreateScope();
         return scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
     }
+
+    // The ambient identity (seeded by background Task.Run work that has no HttpContext — e.g. the
+    // in-process pipeline run or a Spine session) is the override of last resort; otherwise the
+    // request-scoped ITenantContext. Without this, a circuit's fire-and-forget run reads/writes the
+    // `default` tenant's keys instead of the signed-in member's.
+    private static string ResolveTenant(IServiceProvider scopedProvider)
+        => AmbientIdentity.Current?.TenantId is { Length: > 0 } ambient
+            ? ambient
+            : scopedProvider.GetRequiredService<ITenantContext>().TenantId;
 
     /// <inheritdoc />
     public async ValueTask<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken = default)
     {
         await using var scope = _rootProvider.CreateAsyncScope();
-        var tenantId = scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId;
+        var tenantId = ResolveTenant(scope.ServiceProvider);
         var db = scope.ServiceProvider.GetRequiredService<AppConfigDbContext>();
         var keys = await db.AppConfig.AsNoTracking()
             .Where(x => x.TenantId == tenantId && x.Key.StartsWith(prefix))

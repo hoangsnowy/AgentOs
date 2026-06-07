@@ -63,7 +63,9 @@ public sealed class MafWorkflowOrchestrator : IOrchestratorAgent
         ArgumentNullException.ThrowIfNull(story);
         story.Validate();
 
-        var maxIterations = Math.Min(story.NMax, _options.MaxIterations);
+        // Clamp to >= 1 (see PipelineOrchestrator): a non-positive value would skip every iteration and
+        // leave Code/Tests null behind the non-nullable PipelineResult contract.
+        var maxIterations = Math.Max(1, Math.Min(story.NMax, _options.MaxIterations));
         var ctx = new PipelineState(story, maxIterations);
 
         var requirementEx = new RequirementExecutor(_requirement, _progress);

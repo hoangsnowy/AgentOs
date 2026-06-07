@@ -134,6 +134,12 @@ internal static class TenantEndpoints
             HttpContext http,
             CancellationToken ct) =>
         {
+            // Tenant-scoped: an Admin can only mint invitations for their OWN tenant (the realm `admin`
+            // role is realm-wide, so without this an admin of tenant A could provision into tenant B).
+            if (!string.Equals(ctx.TenantId, tenantId, StringComparison.Ordinal))
+            {
+                return Results.Forbid();
+            }
             var role = string.IsNullOrWhiteSpace(body.Role) ? "member" : body.Role;
             if (role is not ("admin" or "member"))
             {
@@ -370,6 +376,10 @@ internal static class TenantEndpoints
             HttpContext http,
             CancellationToken ct) =>
         {
+            if (!string.Equals(ctx.TenantId, tenantId, StringComparison.Ordinal))
+            {
+                return Results.Forbid();
+            }
             if (string.IsNullOrWhiteSpace(body.Username))
             {
                 return Results.BadRequest(new { error = "username is required" });

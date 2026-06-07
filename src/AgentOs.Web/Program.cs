@@ -40,7 +40,10 @@ builder.Logging.AddSimpleConsole(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddDataProtection();
+// Durable, shared key ring (Postgres-backed when configured) — without it the OIDC correlation/nonce
+// cookies + the auth cookie + encrypted tenant secrets break on every restart/scale and don't decrypt
+// across the Api ↔ Web hosts. Replaces a bare AddDataProtection() (in-memory, per-host).
+builder.AddAgentOsDataProtection();
 
 // Response compression — Brotli + Gzip for dynamic responses (the initial Razor document, /health,
 // any non-static endpoint). NOTE: static assets are ALREADY compressed at build time by
@@ -197,6 +200,10 @@ AppCatalog.RegisterPluginApps(app.Services.GetServices<PluginAppDescriptor>().Se
     new DesktopApp(d.Key, d.Title, d.Icon, d.Caption, "Plugins", d.Width, d.Height, Pinned: true,
         AdminOnly: d.AdminOnly, ComponentType: d.ComponentType)));
 
+// FIRST middleware: honour X-Forwarded-Proto/For from the Container Apps ingress. Critical for the Web
+// — the OIDC redirect_uri + secure-cookie decisions depend on the request being seen as https.
+app.UseAgentOsForwardedHeaders();
+
 // Early in the pipeline so it wraps every downstream response. Skips assets MapStaticAssets already
 // served pre-compressed (their Content-Encoding is set), so there is no double-compression.
 app.UseResponseCompression();
@@ -302,10 +309,18 @@ AgentOs.Modules.Sessions.Endpoints.PairingEndpoints.MapPairingEndpoints(app);
 // OIDC challenge / sign-out — buttons in the UI hit these endpoints. /signin-oidc and
 // /signout-callback-oidc are owned by the OIDC middleware. In dev-auto-login mode there are no
 // Cookie/OIDC schemes, so these become simple redirects (the dev user is always signed in).
+// Only follow a returnUrl that is a local path (starts with a single '/'), never an absolute or
+// protocol-relative URL — otherwise /account/login?returnUrl=https://evil is an open redirect.
+static string SafeLocalReturn(string? url) =>
+    !string.IsNullOrEmpty(url) && url.StartsWith('/') && !url.StartsWith("//", StringComparison.Ordinal)
+        && !url.StartsWith("/\\", StringComparison.Ordinal)
+            ? url
+            : "/";
+
 if (devAutoLogin)
 {
     app.MapGet("/account/login", (string? returnUrl) =>
-        Results.Redirect(string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl));
+        Results.Redirect(SafeLocalReturn(returnUrl)));
     app.MapGet("/account/logout", () => Results.Redirect("/"));
 
     // Dev-only "View as": narrow the auto-login principal's roles to preview the member (or admin)
@@ -335,7 +350,7 @@ else
 {
     app.MapGet("/account/login", (string? returnUrl) =>
         Results.Challenge(
-            new AuthenticationProperties { RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl },
+            new AuthenticationProperties { RedirectUri = SafeLocalReturn(returnUrl) },
             new[] { OpenIdConnectDefaults.AuthenticationScheme }));
 
     app.MapGet("/account/logout", () =>
