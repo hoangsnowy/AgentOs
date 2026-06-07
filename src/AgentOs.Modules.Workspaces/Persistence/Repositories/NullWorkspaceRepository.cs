@@ -6,12 +6,13 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Workspaces.Persistence.Entities;
+using AgentOs.SharedKernel.Persistence;
 
 namespace AgentOs.Modules.Workspaces.Persistence.Repositories;
 
 internal sealed class NullWorkspaceRepository : IWorkspaceRepository
 {
-    public Task<IReadOnlyList<WorkspaceEntity>> ListAsync(CancellationToken ct = default)
+    public Task<IReadOnlyList<WorkspaceEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<WorkspaceEntity>>(Array.Empty<WorkspaceEntity>());
 
     public Task<WorkspaceEntity?> GetAsync(Guid id, CancellationToken ct = default)

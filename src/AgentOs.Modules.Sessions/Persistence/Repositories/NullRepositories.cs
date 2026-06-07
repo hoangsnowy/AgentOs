@@ -8,12 +8,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Sessions;
 using AgentOs.Modules.Sessions.Persistence.Entities;
+using AgentOs.SharedKernel.Persistence;
 
 namespace AgentOs.Modules.Sessions.Persistence.Repositories;
 
 internal sealed class NullRunnerRepository : IRunnerRepository
 {
-    public Task<IReadOnlyList<RunnerEntity>> ListAsync(CancellationToken ct = default) =>
+    public Task<IReadOnlyList<RunnerEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<RunnerEntity>>(Array.Empty<RunnerEntity>());
 
     public Task<RunnerEntity?> GetAsync(Guid id, CancellationToken ct = default) =>
@@ -35,7 +36,7 @@ internal sealed class NullRunnerRepository : IRunnerRepository
 
 internal sealed class NullSessionRepository : ISessionRepository
 {
-    public Task<IReadOnlyList<RemoteSessionEntity>> ListAsync(CancellationToken ct = default) =>
+    public Task<IReadOnlyList<RemoteSessionEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<RemoteSessionEntity>>(Array.Empty<RemoteSessionEntity>());
 
     public Task<RemoteSessionEntity?> GetAsync(Guid id, CancellationToken ct = default) =>

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Sessions.Persistence.Entities;
 using AgentOs.SharedKernel.Identity;
+using AgentOs.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgentOs.Modules.Sessions.Persistence.Repositories;
@@ -23,11 +24,13 @@ internal sealed class SessionRepository : ISessionRepository
         _tenant = tenant;
     }
 
-    public async Task<IReadOnlyList<RemoteSessionEntity>> ListAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<RemoteSessionEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default)
     {
         return await _db.Sessions
             .AsNoTracking()
             .OrderByDescending(s => s.CreatedAtUtc)
+            .Skip(Page.ClampOffset(offset))
+            .Take(Page.ClampLimit(limit))
             .ToListAsync(ct)
             .ConfigureAwait(false);
     }
