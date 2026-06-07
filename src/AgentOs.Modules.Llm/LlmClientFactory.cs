@@ -4,8 +4,10 @@
 // ForceProvider (Settings UI) and the LlmOptions.ForceProvider config value.
 
 using System;
+using System.Collections.Generic;
 using AgentOs.Domain.Llm;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace AgentOs.Modules.Llm;
@@ -40,13 +42,70 @@ public sealed class LlmClientFactory : ILlmClientFactory
             throw new ArgumentException("Provider name must not be empty.", nameof(providerName));
         }
 
+        var primary = ResolveRequired(effective, providerName);
+
+        // No fallbacks declared → return the bare client, identical to the pre-failover behavior.
+        var fallbacks = ResolveFallbacks(effective);
+        if (fallbacks.Count == 0)
+        {
+            return primary;
+        }
+
+        var chain = new List<ILlmClient>(1 + fallbacks.Count) { primary };
+        chain.AddRange(fallbacks);
+        return new FailoverLlmClient(chain, _services.GetRequiredService<ILogger<FailoverLlmClient>>());
+    }
+
+    // The primary must resolve — a missing primary is a hard misconfiguration.
+    private ILlmClient ResolveRequired(string effective, string requested)
+    {
         var key = NormalizeKey(effective);
-        var client = _services.GetKeyedService<ILlmClient>(key)
+        return _services.GetKeyedService<ILlmClient>(key)
             ?? throw new LlmException(
-                $"LLM provider '{providerName}' (resolved to '{key}') is not registered. "
+                $"LLM provider '{requested}' (resolved to '{key}') is not registered. "
                 + "Built-in: Claude | AzureOpenAI | MAF | RemoteAgent. "
                 + "A plugin provider must register a keyed ILlmClient under this exact name.");
-        return client;
+    }
+
+    // Resolves the configured fallback providers for the effective primary as RAW keyed clients (never via
+    // Create — that would recurse into failover composition). Unknown/duplicate/self entries are skipped so
+    // a stray fallback name degrades gracefully rather than breaking an otherwise-healthy primary.
+    private List<ILlmClient> ResolveFallbacks(string effectivePrimary)
+    {
+        var result = new List<ILlmClient>();
+        if (_options.Fallbacks is not { Count: > 0 } map)
+        {
+            return result;
+        }
+
+        var primaryKey = NormalizeKey(effectivePrimary);
+        if (!map.TryGetValue(effectivePrimary, out var names) && !map.TryGetValue(primaryKey, out names))
+        {
+            return result;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal) { primaryKey };
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            var key = NormalizeKey(name);
+            if (!seen.Add(key))
+            {
+                continue;
+            }
+
+            var client = _services.GetKeyedService<ILlmClient>(key);
+            if (client is not null)
+            {
+                result.Add(client);
+            }
+        }
+
+        return result;
     }
 
     // Maps known aliases to their canonical built-in key. An UNKNOWN name falls through to the trimmed

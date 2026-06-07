@@ -90,13 +90,60 @@ public class LlmClientFactoryTests
         factory.CreateDefault().Provider.ShouldBe("Echo");
     }
 
+    [Fact]
+    public async Task Create_WithFallbackConfig_ComposesChain_AndFailsOverWhenPrimaryThrows()
+    {
+        // Llm:Fallbacks maps the (plugin) primary "P1" to fallback "P2". The factory must compose a
+        // FailoverLlmClient that reports the primary but routes the call to P2 once P1 throws.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new System.Collections.Generic.Dictionary<string, string?>
+            {
+                ["Llm:Provider"] = "P1",
+                ["Llm:Fallbacks:P1:0"] = "P2",
+            })
+            .Build();
+        services.AddModulesFromAssemblies(config, typeof(LlmModule).Assembly, typeof(AgentOs.Modules.AppConfig.AppConfigModule).Assembly);
+        services.AddKeyedSingleton<ILlmClient>("P1", (_, _) => new ThrowingClient("P1"));
+        services.AddKeyedSingleton<ILlmClient>("P2", (_, _) => new EchoClient("P2"));
+        var factory = services.BuildServiceProvider().GetRequiredService<ILlmClientFactory>();
+
+        var client = factory.Create("P1");
+        client.Provider.ShouldBe("P1"); // reports the primary
+
+        var resp = await client.SendAsync(new LlmRequest("s", "u", "m", 0.0, 10));
+        resp.Provider.ShouldBe("P2"); // failed over to the fallback
+    }
+
+    [Fact]
+    public void Create_WithoutFallbackConfig_ReturnsBareClient()
+    {
+        var sp = BuildServices("Claude");
+        var factory = sp.GetRequiredService<ILlmClientFactory>();
+
+        // No Llm:Fallbacks configured → the resolved client is the provider's own client, not a wrapper.
+        factory.Create("Claude").ShouldBeOfType<PooledChatLlmClient>();
+    }
+
+    private sealed class ThrowingClient(string provider) : ILlmClient
+    {
+        public string Provider { get; } = provider;
+
+        public System.Threading.Tasks.Task<LlmResponse> SendAsync(
+            LlmRequest request, System.Threading.CancellationToken cancellationToken = default)
+            => throw new LlmException($"{Provider} exhausted", Provider);
+    }
+
     private sealed class EchoClient : ILlmClient
     {
-        public string Provider => "Echo";
+        public EchoClient(string provider = "Echo") => Provider = provider;
+
+        public string Provider { get; }
 
         public System.Threading.Tasks.Task<LlmResponse> SendAsync(
             LlmRequest request, System.Threading.CancellationToken cancellationToken = default)
             => System.Threading.Tasks.Task.FromResult(
-                new LlmResponse(string.Empty, 0, 0, 0m, System.TimeSpan.Zero, "echo-model", "Echo"));
+                new LlmResponse(string.Empty, 0, 0, 0m, System.TimeSpan.Zero, "echo-model", Provider));
     }
 }
