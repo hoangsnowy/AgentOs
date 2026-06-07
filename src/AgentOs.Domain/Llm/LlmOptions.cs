@@ -55,8 +55,8 @@ public sealed class ClaudeOptions
     /// <summary>Base URL of the Anthropic API.</summary>
     public string Endpoint { get; set; } = "https://api.anthropic.com";
 
-    /// <summary>Default model (for example <c>claude-sonnet-4-20250514</c>).</summary>
-    public string Model { get; set; } = "claude-sonnet-4-20250514";
+    /// <summary>Default model (for example <c>claude-sonnet-4-6</c>).</summary>
+    public string Model { get; set; } = "claude-sonnet-4-6";
 
     /// <summary>The <c>anthropic-version</c> header.</summary>
     public string ApiVersion { get; set; } = "2023-06-01";

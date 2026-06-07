@@ -73,7 +73,9 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
         System.ArgumentNullException.ThrowIfNull(story);
         story.Validate();
 
-        var maxIterations = System.Math.Min(story.NMax, _options.MaxIterations);
+        // Clamp to >= 1: a non-positive NMax or MaxIterations would skip the loop entirely, leaving
+        // Code/Tests null behind the non-nullable PipelineResult contract (NRE in any consumer).
+        var maxIterations = System.Math.Max(1, System.Math.Min(story.NMax, _options.MaxIterations));
         _logger.LogInformation(
             "Pipeline start: story={Title}, maxIter={Max}",
             LogSafe.Scrub(Truncate(story.Description, 60)), maxIterations);
