@@ -1,10 +1,11 @@
-// AgentOs.Infrastructure/Agents/QaAgent.cs
-// Phase 4 — IQaAgent impl. Assesses requirement-code-test consistency.
+// Phase 4 — IQaAgent impl. Assesses requirement-code-test consistency; drives the orchestrator's QA loop.
+// The LLM-call / parse / metrics / error skeleton lives in LlmAgentBase. QA has no JSON schema, so it
+// skips schema validation (no validator) and deserializes the raw content directly.
 
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.Metrics;
 using AgentOs.Modules.Pipeline.Prompts;
 using AgentOs.Domain;
@@ -19,16 +20,8 @@ using Microsoft.Extensions.Options;
 namespace AgentOs.Modules.Pipeline.Agents;
 
 /// <summary>QA — assesses requirement-code-test consistency. Drives the orchestrator's QA loop.</summary>
-public sealed class QaAgent : IQaAgent
+public sealed class QaAgent : LlmAgentBase, IQaAgent
 {
-    private const string AgentName = nameof(QaAgent);
-
-    private readonly ILlmClient _llm;
-    private readonly IMetricsCollector _collector;
-    private readonly AgentOptions _options;
-    private readonly ILogger<QaAgent> _logger;
-    private readonly IPromptOverrides? _prompts;
-
     /// <summary>Initializes.</summary>
     public QaAgent(
         ILlmClientFactory factory,
@@ -36,18 +29,25 @@ public sealed class QaAgent : IQaAgent
         IMetricsCollector collector,
         ILogger<QaAgent> logger,
         IPromptOverrides? prompts = null)
+        : base(factory, Slice(options), collector, logger, validator: null, prompts)
     {
-        System.ArgumentNullException.ThrowIfNull(factory);
-        System.ArgumentNullException.ThrowIfNull(options);
-        _options = options.Value.Qa;
-        _llm = factory.Create(_options.Provider);
-        _collector = collector ?? throw new System.ArgumentNullException(nameof(collector));
-        _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
-        _prompts = prompts;
     }
 
+    private static AgentOptions Slice(IOptions<AgentsOptions> options)
+    {
+        System.ArgumentNullException.ThrowIfNull(options);
+        return options.Value.Qa;
+    }
+
+    protected override string PromptKey => "Qa";
+
+    protected override string DefaultSystemPrompt => QaPrompt.System;
+
+    // QA emits a bare JSON object; deserialize the content as-is (no schema, no fence-extraction step).
+    protected override string ExtractPayload(string content) => content;
+
     /// <inheritdoc />
-    public async Task<QaReport> RunAsync(
+    public Task<QaReport> RunAsync(
         RequirementSpec spec,
         CodeArtifact code,
         TestArtifact tests,
@@ -56,47 +56,28 @@ public sealed class QaAgent : IQaAgent
         System.ArgumentNullException.ThrowIfNull(spec);
         System.ArgumentNullException.ThrowIfNull(code);
         System.ArgumentNullException.ThrowIfNull(tests);
-
-        var systemPrompt = _prompts is null
-            ? QaPrompt.System
-            : await _prompts.ResolveAsync("Qa", QaPrompt.System, cancellationToken).ConfigureAwait(false);
-
-        var request = new LlmRequest(
-            SystemPrompt: systemPrompt,
-            UserPrompt: QaPrompt.RenderUser(spec, code, tests),
-            Model: _options.Model,
-            Temperature: _options.Temperature,
-            MaxTokens: _options.MaxTokens);
-
-        var response = await _llm.SendAsync(request, cancellationToken).ConfigureAwait(false);
-
-        try
-        {
-            var dto = JsonExtractor.Deserialize<QaReportDto>(response.Content, AgentName);
-            dto.Validate(AgentName);
-
-            var metrics = MetricsMapper.From(response);
-            _collector.Add(RunMetricFactory.From(response, AgentName, success: true, errorMessage: null));
-
-            _logger.LogInformation(
-                "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms — score={Score} consistent={Consistent} issues={Issues}",
-                AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
-                metrics.Latency.TotalMilliseconds, dto.Score, dto.IsConsistent, dto.Issues?.Count ?? 0);
-
-            return new QaReport(
-                Score: dto.Score,
-                IsConsistent: dto.IsConsistent,
-                IterationNeeded: dto.IterationNeeded,
-                Issues: (dto.Issues ?? []).Select(i => new QaIssue(i.Severity!, i.Category!, i.Description!, i.Location)).ToArray(),
-                Recommendations: dto.Recommendations ?? [],
-                Metrics: metrics);
-        }
-        catch (LlmException ex)
-        {
-            _collector.Add(RunMetricFactory.From(response, AgentName, success: false, errorMessage: ex.Message));
-            throw;
-        }
+        return ExecuteAsync<QaReportDto, QaReport>(
+            QaPrompt.RenderUser(spec, code, tests),
+            dto => dto.Validate(AgentName),
+            Map,
+            LogSuccess,
+            cancellationToken);
     }
+
+    private static QaReport Map(QaReportDto dto, AgentMetrics metrics)
+        => new(
+            Score: dto.Score,
+            IsConsistent: dto.IsConsistent,
+            IterationNeeded: dto.IterationNeeded,
+            Issues: (dto.Issues ?? []).Select(i => new QaIssue(i.Severity!, i.Category!, i.Description!, i.Location)).ToArray(),
+            Recommendations: dto.Recommendations ?? [],
+            Metrics: metrics);
+
+    private void LogSuccess(AgentMetrics metrics, QaReportDto dto)
+        => Logger.LogInformation(
+            "{Agent} done: {InTok}→{OutTok} tokens, ${Cost} USD, {Ms}ms — score={Score} consistent={Consistent} issues={Issues}",
+            AgentName, metrics.InputTokens, metrics.OutputTokens, metrics.CostUsd,
+            metrics.Latency.TotalMilliseconds, dto.Score, dto.IsConsistent, dto.Issues?.Count ?? 0);
 
     // ---- DTOs ----
     private sealed class QaReportDto
