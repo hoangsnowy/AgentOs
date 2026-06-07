@@ -35,6 +35,7 @@ Postgres schema, so any one of them can later ship as a standalone NuGet package
 | Contribute / conventions | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | UI / design system | [docs/design/design-system.md](docs/design/design-system.md) |
 | Agent prompts | [docs/prompts/v1/*.md](docs/prompts/v1/) |
+| Where the product is headed | [ROADMAP.md](ROADMAP.md) |
 | Report a vulnerability | [SECURITY.md](SECURITY.md) |
 
 ## Why AgentOS
