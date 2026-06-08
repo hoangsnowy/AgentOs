@@ -18,6 +18,7 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
     private readonly IMetricsCollector _metrics;
     private readonly IBudgetGuard _budgetGuard;
     private readonly TimeProvider _clock;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<PersistingOrchestratorAgent> _logger;
 
     public PersistingOrchestratorAgent(
@@ -26,6 +27,7 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
         IMetricsCollector metrics,
         IBudgetGuard budgetGuard,
         TimeProvider clock,
+        ITenantContext tenantContext,
         ILogger<PersistingOrchestratorAgent> logger)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
@@ -33,13 +35,18 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _budgetGuard = budgetGuard ?? throw new ArgumentNullException(nameof(budgetGuard));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<PipelineResult> RunAsync(UserStory story, CancellationToken cancellationToken = default)
     {
         // Run-level budget gate: protect the whole (expensive) pipeline run with one spend check.
-        var tenantId = AmbientIdentity.Current?.TenantId ?? ITenantContext.DefaultTenantId;
+        // Ambient identity (background Task.Run) wins; the request-scoped ITenantContext is the fallback
+        // — never a hardcoded `default`, which would bill a low-budget tenant's run against `default`.
+        var tenantId = AmbientIdentity.Current?.TenantId is { Length: > 0 } ambient
+            ? ambient
+            : _tenantContext.TenantId;
         var budget = await _budgetGuard.EvaluateAsync(tenantId, cancellationToken).ConfigureAwait(false);
         if (budget is { State: BudgetState.Exceeded, EnforceOn: true })
         {

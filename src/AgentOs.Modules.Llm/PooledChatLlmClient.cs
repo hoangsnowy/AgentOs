@@ -77,7 +77,10 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
         var keys = _keyProvider();
         if (keys.Count == 0)
         {
-            throw new LlmException($"{Provider}: no API key configured.", Provider);
+            throw new LlmException(
+                $"No {Provider} API key configured for your workspace. Open Settings → API keys and add your " +
+                $"{Provider} key (or ask a workspace admin). Keys are stored per-tenant and used only by your workspace.",
+                Provider);
         }
 
         var messages = new List<ChatMessage>(2);
