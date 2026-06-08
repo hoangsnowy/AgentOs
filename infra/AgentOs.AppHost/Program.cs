@@ -25,6 +25,7 @@
 // defaults live in appsettings.json under "Parameters". Override per-environment via
 // `dotnet user-secrets`, `azd env set`, or environment variables — never edit the dev defaults.
 using Aspire.Hosting;
+using Aspire.Hosting.ApplicationModel;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -117,8 +118,7 @@ else
 var api = builder.AddProject<Projects.AgentOs_Api>("api")
     .WithReference(db).WaitFor(db)
     .WithReference(keycloak).WaitFor(keycloak)
-    .WithEnvironment("Auth__Keycloak__Authority",
-        ReferenceExpression.Create($"{keycloak.GetEndpoint("http").Property(EndpointProperty.Url)}/realms/agentic"))
+    .WithEnvironment("Auth__Keycloak__Authority", RealmAuthority(keycloak.GetEndpoint("http")))
     .WithEnvironment("Auth__Keycloak__Audience", "agentic-api")
     .WithEnvironment("Auth__Keycloak__Admin__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("Auth__Keycloak__Admin__Realm", "agentic")
@@ -149,8 +149,7 @@ var web = builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: nul
     .WithEnvironment("Auth__DevAutoLogin", "false")
     .WithReference(db).WaitFor(db)
     .WithReference(keycloak).WaitFor(keycloak)
-    .WithEnvironment("Auth__Keycloak__Authority",
-        ReferenceExpression.Create($"{keycloak.GetEndpoint("http").Property(EndpointProperty.Url)}/realms/agentic"))
+    .WithEnvironment("Auth__Keycloak__Authority", RealmAuthority(keycloak.GetEndpoint("http")))
     .WithEnvironment("Auth__Keycloak__Audience", "agentic-api")
     .WithEnvironment("Auth__Keycloak__ClientId", "agentic-web")
     .WithEnvironment("Auth__Keycloak__ClientSecret", kcWebClientSecret)
@@ -167,3 +166,14 @@ var web = builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: nul
 if (!isPublish) { web.WaitFor(mailhog!); }
 
 builder.Build().Run();
+
+// Build the Keycloak realm authority (<kc-url>/realms/agentic) as a deferred ReferenceExpression.
+// Uses the explicit builder (AppendFormatted + AppendLiteral) rather than an interpolated string so the
+// endpoint URL is captured as an IValueProvider — not stringified via Object.ToString() (cs/call-to-object-tostring).
+static ReferenceExpression RealmAuthority(EndpointReference http)
+{
+    var b = new ReferenceExpressionBuilder();
+    b.AppendFormatted(http.Property(EndpointProperty.Url));
+    b.AppendLiteral("/realms/agentic");
+    return b.Build();
+}
