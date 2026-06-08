@@ -80,18 +80,27 @@ public sealed class LlmModule : IModule
         services.AddTransient<ILlmClient>(sp => sp.GetRequiredService<ILlmClientFactory>().CreateDefault());
     }
 
+    // Tenant-isolated key resolution. When the current tenant has configured ITS OWN key(s) via the
+    // Settings UI (stored per-tenant in app_config), use ONLY those — the shared appsettings/env platform
+    // key is NEVER appended, so tenant A can never silently spend on the platform key (or tenant B's).
+    // The platform key is a dev/demo fallback used ONLY when the tenant has no key of its own.
     private static List<string> ClaudeKeyPool(ClaudeOptions opts, IRuntimeOverrides ov)
-        => Pool(ov.AnthropicApiKey, ov.AnthropicApiKeys.Concat(opts.ApiKeys), opts.ApiKey);
+    {
+        var tenantKeys = Collect(ov.AnthropicApiKey, ov.AnthropicApiKeys);
+        return tenantKeys.Count > 0 ? tenantKeys : Collect(opts.ApiKey, opts.ApiKeys);
+    }
 
     private static List<string> AzureKeyPool(AzureOpenAiOptions opts, IRuntimeOverrides ov)
-        => Pool(ov.AzureApiKey, ov.AzureApiKeys.Concat(opts.ApiKeys), opts.ApiKey);
+    {
+        var tenantKeys = Collect(ov.AzureApiKey, ov.AzureApiKeys);
+        return tenantKeys.Count > 0 ? tenantKeys : Collect(opts.ApiKey, opts.ApiKeys);
+    }
 
-    private static List<string> Pool(string? overrideKey, IEnumerable<string> pool, string singleKey)
+    private static List<string> Collect(string? singleKey, IEnumerable<string> pool)
     {
         var keys = new List<string>();
-        if (!string.IsNullOrWhiteSpace(overrideKey)) { keys.Add(overrideKey!); }
+        if (!string.IsNullOrWhiteSpace(singleKey)) { keys.Add(singleKey!); }
         keys.AddRange(pool.Where(k => !string.IsNullOrWhiteSpace(k)));
-        if (!string.IsNullOrWhiteSpace(singleKey)) { keys.Add(singleKey); }
         return keys.Distinct(StringComparer.Ordinal).ToList();
     }
 }

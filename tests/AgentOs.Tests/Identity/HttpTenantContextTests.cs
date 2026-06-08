@@ -23,6 +23,16 @@ public sealed class HttpTenantContextTests
     }
 
     [Fact]
+    public void TenantId_AuthenticatedButNoClaim_FailsClosedEmpty()
+    {
+        // A signed-in principal with no tenant claim must NOT inherit the shared `default` tenant.
+        var identity = new ClaimsIdentity(new[] { new Claim("sub", "user-1") }, authenticationType: "test");
+        var ctx = NewContext(new ClaimsPrincipal(identity));
+        ctx.IsAuthenticated.ShouldBeTrue();
+        ctx.TenantId.ShouldBe(string.Empty);
+    }
+
+    [Fact]
     public void TenantId_FromClaim_ReadsValue()
     {
         var identity = new ClaimsIdentity(new[]

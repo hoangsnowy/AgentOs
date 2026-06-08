@@ -74,10 +74,10 @@ else
         {
             var state = await AuthState;
             _isAdmin = state.User.IsInRole("admin");
-            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
+            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : string.Empty;
         }
         _resolved = true;
-        if (_isAdmin) { await LoadAsync(); }
+        if (_isAdmin && _tenantId.Length > 0) { await LoadAsync(); }
     }
 
     private async Task LoadAsync()
