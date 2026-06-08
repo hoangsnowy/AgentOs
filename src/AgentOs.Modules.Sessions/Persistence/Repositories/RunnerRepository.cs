@@ -1,7 +1,8 @@
-// Runner repository. Reads run as Dapper SQL when a raw connection is wired (INpgsqlConnectionFactory),
-// else EF fallback. EF owns writes. TENANT SAFETY: the EF global query filter does not apply on the
-// Dapper path, so every Dapper read carries an explicit `WHERE "TenantId" = @tenantId`. Columns are
-// PascalCase (quoted); table is sessions.runners.
+// Runner repository. Reads run as Dapper SQL over a raw connection (Dapper-only — no EF read fallback);
+// EF owns writes. The real repo is registered only with a connection string (else NullRunnerRepository),
+// so the factory is always present in production; a null factory throws. TENANT SAFETY: the EF global
+// query filter does not apply on the Dapper path, so every read carries an explicit
+// `WHERE "TenantId" = @tenantId`. Columns are PascalCase (quoted); table is sessions.runners.
 
 using System;
 using System.Collections.Generic;
@@ -29,21 +30,13 @@ internal sealed class RunnerRepository : IRunnerRepository
         _conn = conn;
     }
 
+    private INpgsqlConnectionFactory Conn =>
+        _conn ?? throw new InvalidOperationException("RunnerRepository reads require a database connection (Dapper-only; no EF fallback).");
+
     public async Task<IReadOnlyList<RunnerEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default)
     {
         var lim = Page.ClampLimit(limit);
         var off = Page.ClampOffset(offset);
-        if (_conn is null)
-        {
-            return await _db.Runners
-                .AsNoTracking()
-                .OrderByDescending(r => r.CreatedAtUtc)
-                .Skip(off)
-                .Take(lim)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
-        }
-
         const string sql = """
             SELECT * FROM sessions.runners
             WHERE "TenantId" = @tenantId
@@ -55,16 +48,8 @@ internal sealed class RunnerRepository : IRunnerRepository
 
     public async Task<RunnerEntity?> GetAsync(Guid id, CancellationToken ct = default)
     {
-        if (_conn is null)
-        {
-            return await _db.Runners
-                .AsNoTracking()
-                .FirstOrDefaultAsync(r => r.Id == id, ct)
-                .ConfigureAwait(false);
-        }
-
         const string sql = """SELECT * FROM sessions.runners WHERE "Id" = @id AND "TenantId" = @tenantId""";
-        await using var conn = _conn.Create();
+        await using var conn = Conn.Create();
         await conn.OpenAsync(ct).ConfigureAwait(false);
         return await conn.QueryFirstOrDefaultAsync<RunnerEntity>(
             new CommandDefinition(sql, new { id, tenantId = _tenant.TenantId }, cancellationToken: ct)).ConfigureAwait(false);
@@ -92,17 +77,6 @@ internal sealed class RunnerRepository : IRunnerRepository
 
     public async Task<IReadOnlyList<RunnerEntity>> ListForTenantAsync(string tenantId, CancellationToken ct = default)
     {
-        if (_conn is null)
-        {
-            return await _db.Runners
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .Where(r => r.TenantId == tenantId)
-                .OrderByDescending(r => r.CreatedAtUtc)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
-        }
-
         const string sql = """
             SELECT * FROM sessions.runners
             WHERE "TenantId" = @tenantId
@@ -113,7 +87,7 @@ internal sealed class RunnerRepository : IRunnerRepository
 
     private async Task<IReadOnlyList<RunnerEntity>> QueryRunnersAsync(string sql, object parms, CancellationToken ct)
     {
-        await using var conn = _conn!.Create();
+        await using var conn = Conn.Create();
         await conn.OpenAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<RunnerEntity>(
             new CommandDefinition(sql, parms, cancellationToken: ct)).ConfigureAwait(false);

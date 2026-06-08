@@ -1,9 +1,10 @@
-// Workspace repository. Reads run as hand-tuned Dapper SQL over a raw connection when one is wired
-// (INpgsqlConnectionFactory) and fall back to EF when it is null (CI / EF in-memory / no-DB boot).
-// EF still owns writes + change-tracking. TENANT SAFETY: the EF global query filter is NOT in play on
-// the Dapper path, so EVERY Dapper read carries an explicit `WHERE "TenantId" = @tenantId` — ambient
-// reads resolve the tenant from ITenantContext, the *ForTenant overloads take it as a parameter.
-// Columns are PascalCase (no snake_case convention), so SQL quotes them; tables are snake_case.
+// Workspace repository. Reads run as hand-tuned Dapper SQL over a raw connection (Dapper-only — no EF
+// read fallback). EF still owns writes + change-tracking. The real repo is registered ONLY when a
+// connection string is configured (else the module swaps in NullWorkspaceRepository), so the factory is
+// always present in production; a null factory throws rather than silently degrading. TENANT SAFETY:
+// the EF global query filter is NOT in play on the Dapper path, so EVERY read carries an explicit
+// `WHERE "TenantId" = @tenantId` — ambient reads resolve the tenant from ITenantContext, the *ForTenant
+// overloads take it as a parameter. Columns are PascalCase (quoted); tables are snake_case.
 
 using System;
 using System.Collections.Generic;
@@ -31,21 +32,13 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
         _conn = conn;
     }
 
+    private INpgsqlConnectionFactory Conn =>
+        _conn ?? throw new InvalidOperationException("WorkspaceRepository reads require a database connection (Dapper-only; no EF fallback).");
+
     public async Task<IReadOnlyList<WorkspaceEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default)
     {
         var lim = Page.ClampLimit(limit);
         var off = Page.ClampOffset(offset);
-        if (_conn is null)
-        {
-            return await _db.Workspaces
-                .AsNoTracking()
-                .OrderByDescending(w => w.CreatedAtUtc)
-                .Skip(off)
-                .Take(lim)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
-        }
-
         const string sql = """
             SELECT * FROM workspaces.workspaces
             WHERE "TenantId" = @tenantId
@@ -57,14 +50,6 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
 
     public async Task<WorkspaceEntity?> GetAsync(Guid id, CancellationToken ct = default)
     {
-        if (_conn is null)
-        {
-            return await _db.Workspaces
-                .AsNoTracking()
-                .FirstOrDefaultAsync(w => w.Id == id, ct)
-                .ConfigureAwait(false);
-        }
-
         const string sql = """SELECT * FROM workspaces.workspaces WHERE "Id" = @id AND "TenantId" = @tenantId""";
         return await QuerySingleAsync(sql, new { id, tenantId = _tenant.TenantId }, ct).ConfigureAwait(false);
     }
@@ -79,17 +64,6 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
 
     public async Task<IReadOnlyList<WorkspaceEntity>> ListForTenantAsync(string tenantId, CancellationToken ct = default)
     {
-        if (_conn is null)
-        {
-            return await _db.Workspaces
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .Where(w => w.TenantId == tenantId)
-                .OrderByDescending(w => w.CreatedAtUtc)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
-        }
-
         const string sql = """
             SELECT * FROM workspaces.workspaces
             WHERE "TenantId" = @tenantId
@@ -100,15 +74,6 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
 
     public async Task<WorkspaceEntity?> GetForTenantAsync(string tenantId, Guid id, CancellationToken ct = default)
     {
-        if (_conn is null)
-        {
-            return await _db.Workspaces
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(w => w.TenantId == tenantId && w.Id == id, ct)
-                .ConfigureAwait(false);
-        }
-
         const string sql = """SELECT * FROM workspaces.workspaces WHERE "TenantId" = @tenantId AND "Id" = @id""";
         return await QuerySingleAsync(sql, new { tenantId, id }, ct).ConfigureAwait(false);
     }
@@ -136,23 +101,12 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
 
     public async Task<IReadOnlyList<WorkspaceRepoEntity>> ListReposForTenantAsync(string tenantId, Guid workspaceId, CancellationToken ct = default)
     {
-        if (_conn is null)
-        {
-            return await _db.WorkspaceRepos
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .Where(r => r.TenantId == tenantId && r.WorkspaceId == workspaceId)
-                .OrderBy(r => r.AddedAtUtc)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
-        }
-
         const string sql = """
             SELECT * FROM workspaces.workspace_repos
             WHERE "TenantId" = @tenantId AND "WorkspaceId" = @workspaceId
             ORDER BY "AddedAtUtc"
             """;
-        await using var conn = _conn.Create();
+        await using var conn = Conn.Create();
         await conn.OpenAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<WorkspaceRepoEntity>(
             new CommandDefinition(sql, new { tenantId, workspaceId }, cancellationToken: ct)).ConfigureAwait(false);
@@ -184,7 +138,7 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
     // ── Dapper read helpers (tenant-scoped by the caller's SQL) ───────────────────────────────────
     private async Task<IReadOnlyList<WorkspaceEntity>> QueryListAsync(string sql, object parms, CancellationToken ct)
     {
-        await using var conn = _conn!.Create();
+        await using var conn = Conn.Create();
         await conn.OpenAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<WorkspaceEntity>(
             new CommandDefinition(sql, parms, cancellationToken: ct)).ConfigureAwait(false);
@@ -193,7 +147,7 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
 
     private async Task<WorkspaceEntity?> QuerySingleAsync(string sql, object parms, CancellationToken ct)
     {
-        await using var conn = _conn!.Create();
+        await using var conn = Conn.Create();
         await conn.OpenAsync(ct).ConfigureAwait(false);
         return await conn.QueryFirstOrDefaultAsync<WorkspaceEntity>(
             new CommandDefinition(sql, parms, cancellationToken: ct)).ConfigureAwait(false);
