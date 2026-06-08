@@ -86,7 +86,7 @@ public sealed class PooledChatLlmClientToolsTests
         return new PooledChatLlmClient(
             provider: "TestProvider",
             clientFactory: (_, _) => chat,
-            keyProvider: () => new List<string> { "k1" },
+            keyProvider: _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string> { "k1" }),
             router: router,
             isRateLimited: _ => false,
             retryAfter: _ => null,

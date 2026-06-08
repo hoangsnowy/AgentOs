@@ -26,11 +26,13 @@ public sealed class BuildVerifier : IBuildVerifier
     public const int MaxOutputBytes = 8 * 1024;
 
     private readonly ILogger<BuildVerifier> _logger;
+    private readonly BuildVerifierOptions _options;
 
-    /// <summary>Initializes the verifier with a logger.</summary>
-    public BuildVerifier(ILogger<BuildVerifier> logger)
+    /// <summary>Initializes the verifier with a logger and the enable/disable gate.</summary>
+    public BuildVerifier(ILogger<BuildVerifier> logger, BuildVerifierOptions options)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
     /// <inheritdoc />
@@ -54,6 +56,17 @@ public sealed class BuildVerifier : IBuildVerifier
     public async Task<BuildVerifyResult> VerifyFilesAsync(IEnumerable<BuildVerifyFile> files, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(files);
+
+        // Gate: refuse to run a build (which executes arbitrary MSBuild tasks from LLM-generated projects)
+        // when disabled — the default outside Development until a sandboxed runner exists.
+        if (!_options.Enabled)
+        {
+            _logger.LogWarning("Build verification is disabled on this host (Integration:BuildVerifier:Enabled=false); refusing to run `dotnet build`.");
+            return new BuildVerifyResult(false, -1,
+                "Build verification is disabled on this host. It runs untrusted generated code and is off by "
+                + "default outside Development; enable Integration:BuildVerifier:Enabled only where builds are sandboxed.",
+                0);
+        }
 
         var workDir = Path.Join(Path.GetTempPath(), "agentic-sdlc-build-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(workDir);
@@ -108,13 +121,22 @@ public sealed class BuildVerifier : IBuildVerifier
             var psi = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = "build --nologo -v q",
+                // --no-incremental keeps the build self-contained; node reuse off so no MSBuild worker
+                // survives the scratch dir. (True isolation needs a sandboxed runner — this is defense in depth.)
+                Arguments = "build --nologo -v q --no-incremental -nodeReuse:false",
                 WorkingDirectory = workDir,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
+            // Harden the child environment: opt out of telemetry/first-run, kill node reuse, and force the
+            // working dir as HOME so a malicious build can't read the server's user profile / NuGet creds.
+            psi.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+            psi.Environment["DOTNET_NOLOGO"] = "1";
+            psi.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
+            psi.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+            psi.Environment["DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER"] = "1";
 
             using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start dotnet build process.");
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);

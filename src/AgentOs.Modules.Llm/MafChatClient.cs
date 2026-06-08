@@ -3,6 +3,7 @@
 
 using System;
 using System.ClientModel;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -21,6 +22,12 @@ namespace AgentOs.Modules.Llm;
 /// <summary>Azure OpenAI client via the official SDK + Microsoft.Extensions.AI <see cref="IChatClient"/>.</summary>
 public sealed class MafChatClient : ILlmClient
 {
+    // One AzureOpenAIClient per (endpoint, key) for the process lifetime — the SDK client is thread-safe
+    // and reusable (like HttpClient), so building one per request churns sockets/handlers. Mirrors the
+    // one-client-per-key pooling in PooledChatLlmClient. Static so it survives the keyed-transient
+    // registration of MafChatClient.
+    private static readonly ConcurrentDictionary<string, AzureOpenAIClient> ClientCache = new(StringComparer.Ordinal);
+
     private readonly AzureOpenAiOptions _options;
     private readonly ILogger<MafChatClient> _logger;
 
@@ -49,7 +56,7 @@ public sealed class MafChatClient : ILlmClient
         }
 
         var deployment = string.IsNullOrWhiteSpace(_options.Model) ? request.Model : _options.Model;
-        var azure = new AzureOpenAIClient(new Uri(_options.Endpoint), new ApiKeyCredential(_options.ApiKey));
+        var azure = GetOrCreateClient(_options.Endpoint, _options.ApiKey);
         IChatClient chat = azure.GetChatClient(deployment).AsIChatClient();
 
         var messages = new List<ChatMessage>(2);
@@ -100,4 +107,11 @@ public sealed class MafChatClient : ILlmClient
             Model: deployment,
             Provider: Provider);
     }
+
+    // Returns a cached AzureOpenAIClient for the (endpoint, key) pair, building one on first use. Internal
+    // for the reuse test (InternalsVisibleTo "AgentOs.Tests"); callers must validate endpoint/key first.
+    internal static AzureOpenAIClient GetOrCreateClient(string endpoint, string apiKey) =>
+        ClientCache.GetOrAdd(
+            $"{endpoint}|{apiKey}",
+            _ => new AzureOpenAIClient(new Uri(endpoint), new ApiKeyCredential(apiKey)));
 }

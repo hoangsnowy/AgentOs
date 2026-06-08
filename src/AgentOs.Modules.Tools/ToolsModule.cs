@@ -27,12 +27,13 @@ public sealed class ToolsModule : IModule, IInitializableModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<IToolRegistry, InMemoryToolRegistry>();
-        // Per-tenant tool allowlist read from AppConfig. Default-permissive until an admin turns on
-        // enforcement in the Policy app — UNLESS `Tools:EnforceByDefault` is true, which flips the global
-        // posture to fail-closed (deny unless a tenant has an explicit allowlist). Production should set it.
-        // IAppConfigStore is optional so this degrades to permissive when no config store is wired
-        // (unit tests / no-DB standalone), regardless of the default.
-        var enforceByDefault = configuration.GetValue("Tools:EnforceByDefault", false);
+        // Per-tenant tool allowlist read from AppConfig. Default-permissive in Development until an admin
+        // turns on enforcement in the Policy app, but FAIL-CLOSED BY DEFAULT IN PRODUCTION (deny unless a
+        // tenant has an explicit allowlist) so an untrusted tenant cannot invoke an un-vetted tool out of
+        // the box. `Tools:EnforceByDefault` overrides the env-derived default either way. IAppConfigStore is
+        // optional, so this still degrades to permissive when no config store is wired (no-DB standalone),
+        // regardless of the default — there is nothing to enforce against.
+        var enforceByDefault = configuration.GetValue("Tools:EnforceByDefault", ModuleEnvironment.IsProduction(configuration));
         services.TryAddSingleton<IToolPolicy>(sp => new Policy.AppConfigToolPolicy(
             sp.GetService<AgentOs.Modules.AppConfig.IAppConfigStore>(), enforceByDefault));
         services.TryAddSingleton<IToolPolicyService, Policy.ToolPolicyService>();

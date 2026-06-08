@@ -28,6 +28,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+// Fail-fast if a committed dev-default secret (Keycloak admin password / web client secret) is still in
+// effect outside Development — those values are public (in git) and must never authenticate a real deploy.
+AgentOs.SharedKernel.Security.DevSecretGuard.EnsureNoDevDefaults(builder.Configuration, builder.Environment.EnvironmentName);
+
 builder.Logging.AddSimpleConsole(options =>
 {
     options.IncludeScopes = true;

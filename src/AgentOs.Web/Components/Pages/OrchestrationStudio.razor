@@ -9,6 +9,7 @@
 @using AgentOs.Domain.Llm
 @using AgentOs.Modules.Llm
 @using AgentOs.Modules.Pipeline.GraphExecution
+@using Microsoft.AspNetCore.Components.Authorization
 @inject OrchestrationStore Store
 @inject GraphRunnerService GraphRunner
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
@@ -183,6 +184,11 @@
     private readonly Dictionary<string, StepNodeModel> _nodeModels = new(StringComparer.Ordinal);
     private StepNodeModel? _selected;
 
+    // Orchestrations are tenant-scoped. A circuit has no HttpContext, so read the tenant from the signed-in
+    // principal and pass it explicitly to the (singleton) store — never rely on ambient ITenantContext here.
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string _tenantId = string.Empty;
+
     private int _bottomTab = 2;
     private bool _bottomOpen;          // collapsed by default — gives canvas full height
     private string _runInput = string.Empty;
@@ -201,15 +207,24 @@
         StepType.IfElse, StepType.Switch, StepType.Print, StepType.End,
     ];
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        _all = Store.All().ToList();
-        _graph = _all.FirstOrDefault() ?? Store.Create("5-Agent SDLC Pipeline");
+        _tenantId = await ResolveTenantAsync();
+        _all = Store.All(_tenantId).ToList();
+        _graph = _all.FirstOrDefault() ?? Store.Create(_tenantId, "5-Agent SDLC Pipeline");
         if (_all.Count == 0)
         {
-            _all = Store.All().ToList();
+            _all = Store.All(_tenantId).ToList();
         }
         BuildDiagram();
+    }
+
+    // Tenant from the circuit's authenticated principal (empty when anonymous / standalone dev login).
+    private async Task<string> ResolveTenantAsync()
+    {
+        if (AuthState is null) { return string.Empty; }
+        var user = (await AuthState).User;
+        return user.FindFirst("tenant")?.Value ?? string.Empty;
     }
 
     // Theme + wallpaper now live in System -> Appearance; this studio no longer keeps a
@@ -268,7 +283,7 @@
     private void OnSelectGraph(ChangeEventArgs e)
     {
         var id = e.Value?.ToString();
-        var g = id is null ? null : Store.Get(id);
+        var g = id is null ? null : Store.Get(_tenantId, id);
         if (g is not null)
         {
             _graph = g;
@@ -279,8 +294,8 @@
 
     private void NewGraph()
     {
-        _graph = Store.Create();
-        _all = Store.All().ToList();
+        _graph = Store.Create(_tenantId);
+        _all = Store.All(_tenantId).ToList();
         _runLog.Clear();
         BuildDiagram();
     }
@@ -381,27 +396,27 @@
     private void Save()
     {
         SyncFromCanvas();
-        Store.Save(_graph);
-        _all = Store.All().ToList();
+        Store.Save(_tenantId, _graph);
+        _all = Store.All(_tenantId).ToList();
         Log("💾 Workflow saved.");
     }
 
     private void Duplicate()
     {
         SyncFromCanvas();
-        Store.Save(_graph);
-        var clone = Store.Duplicate(_graph.Id);
+        Store.Save(_tenantId, _graph);
+        var clone = Store.Duplicate(_tenantId, _graph.Id);
         _graph = clone;
-        _all = Store.All().ToList();
+        _all = Store.All(_tenantId).ToList();
         BuildDiagram();
     }
 
     private void DeleteGraph()
     {
-        Store.Delete(_graph.Id);
-        _all = Store.All().ToList();
-        _graph = _all.FirstOrDefault() ?? Store.Create();
-        _all = Store.All().ToList();
+        Store.Delete(_tenantId, _graph.Id);
+        _all = Store.All(_tenantId).ToList();
+        _graph = _all.FirstOrDefault() ?? Store.Create(_tenantId);
+        _all = Store.All(_tenantId).ToList();
         _runLog.Clear();
         BuildDiagram();
     }

@@ -14,6 +14,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using AgentOs.Modules.AppConfig;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -64,6 +66,32 @@ public sealed class RuntimeOverrides : IRuntimeOverrides
     {
         get => ParseKeys(Read(KeyAzureKeys));
         set => Write(KeyAzureKeys, value is null ? null : string.Join('\n', value));
+    }
+
+    public ValueTask<IReadOnlyList<string>> GetAnthropicApiKeysAsync(CancellationToken cancellationToken = default)
+        => GetMergedKeysAsync(KeyAnthropicKey, KeyAnthropicKeys, cancellationToken);
+
+    public ValueTask<IReadOnlyList<string>> GetAzureApiKeysAsync(CancellationToken cancellationToken = default)
+        => GetMergedKeysAsync(KeyAzureKey, KeyAzureKeys, cancellationToken);
+
+    // Async read of (single key + key pool), merged + de-duped — no sync-over-async bridge, so the LLM
+    // hot path never blocks a threadpool thread on a cache-miss. Mirrors the sync getters' merge shape.
+    private async ValueTask<IReadOnlyList<string>> GetMergedKeysAsync(string singleKeyName, string poolKeyName, CancellationToken cancellationToken)
+    {
+        await using var scope = _rootProvider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetService<IAppConfigStore>();
+        if (store is null) { return Array.Empty<string>(); }
+        var single = await store.GetAsync(singleKeyName, cancellationToken).ConfigureAwait(false);
+        var poolRaw = await store.GetAsync(poolKeyName, cancellationToken).ConfigureAwait(false);
+        return Merge(single, ParseKeys(poolRaw));
+    }
+
+    private static List<string> Merge(string? singleKey, IEnumerable<string> pool)
+    {
+        var keys = new List<string>();
+        if (!string.IsNullOrWhiteSpace(singleKey)) { keys.Add(singleKey!); }
+        keys.AddRange(pool.Where(k => !string.IsNullOrWhiteSpace(k)));
+        return keys.Distinct(StringComparer.Ordinal).ToList();
     }
 
     private string? Read(string key)

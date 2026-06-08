@@ -47,7 +47,7 @@ public class PooledChatLlmClientTests
         var map = new Dictionary<string, IChatClient> { ["k1"] = RateLimitedClient(), ["k2"] = OkClient("ok") };
 
         var client = new PooledChatLlmClient(
-            "P", (key, _) => map[key], () => new List<string> { "k1", "k2" }, router,
+            "P", (key, _) => map[key], _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string> { "k1", "k2" }), router,
             ex => ex is RateLimitEx, _ => null, NullLogger.Instance, TimeSpan.FromMilliseconds(1));
 
         var result = await client.SendAsync(new LlmRequest("s", "u", "m"));
@@ -61,7 +61,7 @@ public class PooledChatLlmClientTests
         var limited = RateLimitedClient();
 
         var client = new PooledChatLlmClient(
-            "P", (_, _) => limited, () => new List<string> { "k1", "k2" }, router,
+            "P", (_, _) => limited, _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string> { "k1", "k2" }), router,
             ex => ex is RateLimitEx, _ => null, NullLogger.Instance, TimeSpan.FromMilliseconds(1));
 
         await Should.ThrowAsync<LlmException>(() => client.SendAsync(new LlmRequest("s", "u", "m")));
@@ -72,7 +72,7 @@ public class PooledChatLlmClientTests
     {
         var router = new ApiKeyRouter(TimeProvider.System);
         var client = new PooledChatLlmClient(
-            "P", (_, _) => OkClient("x"), () => new List<string>(), router,
+            "P", (_, _) => OkClient("x"), _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string>()), router,
             _ => false, _ => null, NullLogger.Instance);
 
         await Should.ThrowAsync<LlmException>(() => client.SendAsync(new LlmRequest("s", "u", "m")));

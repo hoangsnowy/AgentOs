@@ -65,7 +65,7 @@ internal sealed class RunnerRepository : IRunnerRepository
 
     public async Task<bool> SetStatusAsync(Guid id, string status, CancellationToken ct = default)
     {
-        var row = await _db.Runners.FirstOrDefaultAsync(r => r.Id == id, ct).ConfigureAwait(false);
+        var row = await _db.Runners.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == _tenant.TenantId, ct).ConfigureAwait(false);
         if (row is null)
         {
             return false;

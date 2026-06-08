@@ -19,6 +19,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Workspaces;
+using AgentOs.SharedKernel.Security;
 
 namespace AgentOs.Modules.Integration.Sources;
 
@@ -31,7 +32,9 @@ internal static class GitHubProjectsClient
     // while allowing a few pages for a real board.
     private const int MaxItems = 200;
 
-    private static readonly HttpClient Http = new();
+    // GraphQL endpoint host is tenant-supplied (GitHub Enterprise) → SSRF-hardened handler refuses
+    // private/loopback/link-local targets (incl. via DNS + redirects).
+    private static readonly HttpClient Http = new(SsrfGuard.CreateHardenedHandler());
 
     private const string UserBoardsQuery = """
         query($login:String!){ user(login:$login){ projectsV2(first:50){ nodes{ id number title } } } }

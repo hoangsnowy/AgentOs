@@ -4,6 +4,10 @@
 // GitHubPrService stay synchronous; the impl bridges to the async store with a per-call DI
 // scope and the store's own 15s cache.
 
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace AgentOs.Modules.Llm;
 
 /// <summary>Tenant-scoped runtime overrides for the LLM gateway + GitHub integration. Implementations
@@ -11,6 +15,15 @@ namespace AgentOs.Modules.Llm;
 /// tenant (resolved from <c>ITenantContext</c>).</summary>
 public interface IRuntimeOverrides
 {
+    /// <summary>The merged Anthropic key pool (single key + pool), read without blocking a threadpool
+    /// thread. Use this on the LLM hot path instead of the sync <see cref="AnthropicApiKey"/> /
+    /// <see cref="AnthropicApiKeys"/> getters, which bridge sync-over-async to the backing store.</summary>
+    ValueTask<IReadOnlyList<string>> GetAnthropicApiKeysAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The merged Azure OpenAI key pool (single key + pool), read without blocking a threadpool
+    /// thread. The async counterpart to <see cref="AzureApiKey"/> / <see cref="AzureApiKeys"/>.</summary>
+    ValueTask<IReadOnlyList<string>> GetAzureApiKeysAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Overrides <c>Llm:ForceProvider</c>. When set, every agent uses this provider.</summary>
     string? ForceProvider { get; set; }
 

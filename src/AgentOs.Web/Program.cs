@@ -72,6 +72,10 @@ if (devAutoLogin && !builder.Environment.IsDevelopment())
         "Auth:DevAutoLogin must never be enabled outside Development — it authenticates every request as a fixed user.");
 }
 
+// Fail-fast if a committed dev-default secret (admin password, web client secret) is still in effect
+// outside Development — those values are public and must never authenticate a real deployment.
+AgentOs.SharedKernel.Security.DevSecretGuard.EnsureNoDevDefaults(builder.Configuration, builder.Environment.EnvironmentName);
+
 // Surface dev-mode to the UI so dev-only affordances (the "View as" role-preview menu) render only
 // when auto-login is active, never under real Keycloak auth.
 builder.Services.AddSingleton(new AgentOs.Web.Services.DevModeState(devAutoLogin));

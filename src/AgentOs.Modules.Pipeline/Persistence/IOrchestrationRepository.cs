@@ -12,6 +12,15 @@ public interface IOrchestrationRepository
     Task UpsertAsync(OrchestrationRecord record, CancellationToken ct = default);
 
     Task DeleteAsync(string id, CancellationToken ct = default);
+
+    // Tenant-EXPLICIT overloads. A Blazor circuit dispatches persistence on a Task.Run threadpool thread
+    // that has no HttpContext, so the ambient ITenantContext would resolve to the default tenant — these
+    // take the tenant from the signed-in principal instead, keeping orchestrations isolated per tenant.
+    Task<IReadOnlyList<OrchestrationRecord>> ListForTenantAsync(string tenantId, CancellationToken ct = default);
+
+    Task UpsertForTenantAsync(string tenantId, OrchestrationRecord record, CancellationToken ct = default);
+
+    Task DeleteForTenantAsync(string tenantId, string id, CancellationToken ct = default);
 }
 
 /// <summary>A single orchestration graph (DefinitionJson = full graph serialized by the Web layer).</summary>

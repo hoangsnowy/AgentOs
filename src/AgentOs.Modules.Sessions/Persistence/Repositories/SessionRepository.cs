@@ -65,7 +65,7 @@ internal sealed class SessionRepository : ISessionRepository
 
     public async Task<bool> CloseAsync(Guid id, DateTimeOffset closedAtUtc, CancellationToken ct = default)
     {
-        var row = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == id, ct).ConfigureAwait(false);
+        var row = await _db.Sessions.FirstOrDefaultAsync(s => s.Id == id && s.TenantId == _tenant.TenantId, ct).ConfigureAwait(false);
         if (row is null)
         {
             return false;

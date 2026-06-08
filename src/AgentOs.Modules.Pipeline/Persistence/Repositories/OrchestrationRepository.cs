@@ -17,8 +17,12 @@ internal sealed class OrchestrationRepository(PipelineDbContext db, ITenantConte
     private INpgsqlConnectionFactory Conn =>
         conn ?? throw new System.InvalidOperationException("OrchestrationRepository reads require a database connection (Dapper-only; no EF fallback).");
 
-    public async Task<IReadOnlyList<OrchestrationRecord>> ListAsync(CancellationToken ct = default)
+    public Task<IReadOnlyList<OrchestrationRecord>> ListAsync(CancellationToken ct = default)
+        => ListForTenantAsync(tenant.TenantId, ct);
+
+    public async Task<IReadOnlyList<OrchestrationRecord>> ListForTenantAsync(string tenantId, CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrEmpty(tenantId);
         const string sql = """
             SELECT "Id", "Name", "Description", "DefinitionJson", "UpdatedAtUtc"
             FROM pipeline.orchestrations
@@ -28,7 +32,7 @@ internal sealed class OrchestrationRepository(PipelineDbContext db, ITenantConte
         await using var c = Conn.Create();
         await c.OpenAsync(ct).ConfigureAwait(false);
         var rows = await c.QueryAsync<OrchestrationRecord>(
-            new CommandDefinition(sql, new { tenantId = tenant.TenantId }, cancellationToken: ct)).ConfigureAwait(false);
+            new CommandDefinition(sql, new { tenantId }, cancellationToken: ct)).ConfigureAwait(false);
         return rows.AsList();
     }
 
@@ -45,16 +49,23 @@ internal sealed class OrchestrationRepository(PipelineDbContext db, ITenantConte
             new CommandDefinition(sql, new { id, tenantId = tenant.TenantId }, cancellationToken: ct)).ConfigureAwait(false);
     }
 
-    public async Task UpsertAsync(OrchestrationRecord record, CancellationToken ct = default)
+    public Task UpsertAsync(OrchestrationRecord record, CancellationToken ct = default)
+        => UpsertForTenantAsync(tenant.TenantId, record, ct);
+
+    public async Task UpsertForTenantAsync(string tenantId, OrchestrationRecord record, CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrEmpty(tenantId);
         ArgumentNullException.ThrowIfNull(record);
-        var existing = await db.Orchestrations.FirstOrDefaultAsync(x => x.Id == record.Id, ct);
+        // IgnoreQueryFilters + explicit TenantId predicate: the global filter reads ITenantContext, which is
+        // wrong on a circuit's Task.Run thread (no HttpContext) — gate on the explicit tenant instead.
+        var existing = await db.Orchestrations.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == record.Id && x.TenantId == tenantId, ct);
         if (existing is null)
         {
             db.Orchestrations.Add(new OrchestrationEntity
             {
                 Id = record.Id,
-                TenantId = tenant.TenantId,
+                TenantId = tenantId,
                 Name = record.Name,
                 Description = record.Description,
                 DefinitionJson = record.DefinitionJson,
@@ -72,9 +83,14 @@ internal sealed class OrchestrationRepository(PipelineDbContext db, ITenantConte
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task DeleteAsync(string id, CancellationToken ct = default)
+    public Task DeleteAsync(string id, CancellationToken ct = default)
+        => DeleteForTenantAsync(tenant.TenantId, id, ct);
+
+    public async Task DeleteForTenantAsync(string tenantId, string id, CancellationToken ct = default)
     {
-        var e = await db.Orchestrations.FirstOrDefaultAsync(x => x.Id == id, ct);
+        ArgumentException.ThrowIfNullOrEmpty(tenantId);
+        var e = await db.Orchestrations.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
         if (e is not null)
         {
             db.Orchestrations.Remove(e);

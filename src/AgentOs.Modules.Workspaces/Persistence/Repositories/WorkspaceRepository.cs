@@ -87,7 +87,7 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
 
     public async Task<bool> RemoveAsync(Guid id, CancellationToken ct = default)
     {
-        var row = await _db.Workspaces.FirstOrDefaultAsync(w => w.Id == id, ct).ConfigureAwait(false);
+        var row = await _db.Workspaces.FirstOrDefaultAsync(w => w.Id == id && w.TenantId == _tenant.TenantId, ct).ConfigureAwait(false);
         if (row is null)
         {
             return false;
