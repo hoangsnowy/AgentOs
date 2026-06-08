@@ -638,12 +638,9 @@
         }
     }
 
-    // Guarded against the teardown race: the using-local may have disposed the CTS already.
-    private void Cancel()
-    {
-        try { _cts?.Cancel(); }
-        catch (ObjectDisposedException) { }
-    }
+    // RunAsync's finally nulls _cts BEFORE its using-local disposes the CTS, and the Blazor circuit is
+    // single-threaded — so a non-null _cts here is always a live (un-disposed) source. No guard needed.
+    private void Cancel() => _cts?.Cancel();
 
     private void ApplyEvent(PipelineProgressEvent e)
     {
@@ -728,8 +725,9 @@
 
     public void Dispose()
     {
-        // Cancel an in-flight run on teardown; RunAsync's using-local disposes the CTS as it unwinds.
-        try { _cts?.Cancel(); }
-        catch (ObjectDisposedException) { }
+        // Cancel an in-flight run on teardown → RunAsync unwinds and its using-local disposes the CTS.
+        // _cts is non-null only while a run is live (finally nulls it before the using disposes), so this
+        // never touches a disposed source.
+        _cts?.Cancel();
     }
 }
