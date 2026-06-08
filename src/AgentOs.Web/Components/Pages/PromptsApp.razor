@@ -60,10 +60,10 @@ else
         {
             var state = await AuthState;
             _isAdmin = state.User.IsInRole("admin");
-            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
+            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : string.Empty;
         }
         _resolved = true;
-        if (_isAdmin) { await LoadAllAsync(); }
+        if (_isAdmin && _tenantId.Length > 0) { await LoadAllAsync(); }
     }
 
     private string CurrentText(PromptEntry entry) => _text.TryGetValue(entry.Key, out var v) ? v : entry.DefaultPrompt;

@@ -65,6 +65,7 @@ public static class AgentsServiceCollectionExtensions
                 sp.GetRequiredService<IMetricsCollector>(),
                 sp.GetRequiredService<AgentOs.Domain.Cost.IBudgetGuard>(),
                 sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<AgentOs.SharedKernel.Identity.ITenantContext>(),
                 sp.GetRequiredService<ILogger<PersistingOrchestratorAgent>>());
         });
 

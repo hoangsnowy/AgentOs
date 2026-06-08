@@ -23,6 +23,10 @@ else if (!_isAdmin)
 {
     <div class="login-error">Admin role required. Your account is a member of <code>@_tenantId</code> without admin rights.</div>
 }
+else if (_tenantId.Length == 0)
+{
+    <div class="login-error">No workspace (tenant) on your sign-in token. Re-authenticate; member management is unavailable without a tenant.</div>
+}
 else
 {
     <header class="page-head">
@@ -176,12 +180,14 @@ else
             var state = await AuthState;
             var user = state.User;
             _isAdmin = user.IsInRole("admin");
-            _tenantId = user.FindFirst("tenant")?.Value ?? "default";
+            // No silent `default`: a signed-in principal with no tenant claim is a malformed token, not a
+            // licence to manage the default tenant's members. Empty → the admin gate below blocks the UI.
+            _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
             _myUserId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         }
         _resolved = true;
 
-        if (_isAdmin)
+        if (_isAdmin && _tenantId.Length > 0)
         {
             await LoadMembersAsync();
         }

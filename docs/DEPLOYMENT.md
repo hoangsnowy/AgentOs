@@ -45,15 +45,20 @@ azd env set AZURE_LOCATION southeastasia  # or your preferred region
 Set the required secrets — never edit the dev defaults in `appsettings.json`:
 
 ```bash
-# Auth
+# Auth (required)
 azd env set KeycloakAdminPassword    "$(openssl rand -base64 24)"
 azd env set KeycloakWebClientSecret  "$(openssl rand -base64 32)"
-
-# LLM keys (at least one provider)
-azd env set Llm__Claude__ApiKey         "sk-ant-..."
-azd env set Llm__AzureOpenAi__ApiKey    "..."
-azd env set Llm__AzureOpenAi__Endpoint  "https://<resource>.openai.azure.com"
 ```
+
+**LLM keys are per-tenant, not a deploy secret.** AgentOS is bring-your-own-key: each workspace
+(tenant) admin enters their own Claude / Azure OpenAI key in the running app (**Settings → API keys**),
+stored encrypted per-tenant. You do **not** need to set a platform-wide LLM key to deploy — see
+[Per-tenant LLM keys](#per-tenant-llm-keys) below.
+
+> Optional, dev/demo only: setting `azd env set Llm__Claude__ApiKey "sk-ant-..."` installs a single
+> shared platform key used **only as a fallback for tenants that have configured none**. For a real
+> multi-tenant deploy leave it unset so every tenant must bring its own key (no shared spend, no
+> cross-tenant key exposure).
 
 Then deploy:
 
@@ -159,7 +164,11 @@ the containers. Add this step after `azd login`:
   run: |
     azd env set KeycloakAdminPassword    "${{ secrets.KEYCLOAKADMINPASSWORD }}"
     azd env set KeycloakWebClientSecret  "${{ secrets.KEYCLOAKWEBCLIENTSECRET }}"
-    azd env set Llm__Claude__ApiKey      "${{ secrets.LLM__CLAUDE__APIKEY }}"
+    # LLM keys are per-tenant (set in-app via Settings → API keys). Only set a shared platform
+    # fallback for a dev/demo deploy — leave unset for a real BYO-key multi-tenant deploy.
+    if [ -n "${{ secrets.LLM__CLAUDE__APIKEY }}" ]; then
+      azd env set Llm__Claude__ApiKey    "${{ secrets.LLM__CLAUDE__APIKEY }}"
+    fi
     # Optional KC Postgres (after first deploy — see docs/keycloak-prod-runbook.md)
     if [ -n "${{ secrets.KEYCLOAKDBURL }}" ]; then
       azd env set KeycloakDbUrl      "${{ secrets.KEYCLOAKDBURL }}"
@@ -192,6 +201,26 @@ gh variable set AZURE_DEPLOY_ENABLED --body true
 Once set, every push to `main` that passes CI auto-deploys via the workflow.
 
 ---
+
+## Per-tenant LLM keys
+
+AgentOS is **bring-your-own-key (BYO)**, isolated per tenant — there is no required shared platform key.
+
+**How a workspace sets its key:**
+1. Sign in as a tenant **admin** (the `admin` realm role).
+2. Open **Settings** (desktop) → **API keys** tab.
+3. Paste the Anthropic / Azure OpenAI key + endpoint → **Save**.
+
+The key is encrypted (DataProtection) and stored in `config.app_config`, keyed by `(TenantId, "Llm:Claude:ApiKey")`. It is durable across restarts and used **only** by that tenant's pipeline runs.
+
+**Resolution + isolation guarantees:**
+- When a tenant has its own key, **only that key** is used — the shared `appsettings`/env platform key is never appended, so one tenant can never spend on another's (or the platform's) key.
+- The platform key (if set) is a fallback **only** for tenants that have configured none.
+- A tenant with **no** key configured and no platform fallback gets a clear error ("No `<provider>` API key configured for your workspace…") pointing to Settings — never a silent run on someone else's key.
+- The pipeline runs the orchestrator on a background thread; the caller's tenant is carried via `AmbientIdentity`, so key lookup, prompt overrides, budget, and run-history all resolve the signed-in tenant (never `default`).
+- Settings is **admin-gated** in the component itself (not just hidden in the catalog) and writes are scoped to the signed-in tenant.
+
+**Operator checklist:** deploy with no LLM key set → hand each tenant admin the Web URL → they self-serve their key in Settings. Verify isolation by signing in as two tenants and confirming each sees only its own key state.
 
 ## Production hardening (KC Postgres + real SMTP)
 

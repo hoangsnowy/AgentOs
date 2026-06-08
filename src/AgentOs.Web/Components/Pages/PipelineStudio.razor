@@ -573,8 +573,10 @@
         }
         ResetState();
         _running = true;
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
+        // Fresh per-run CTS as a using-local so disposal is guaranteed on every exit path; the field just
+        // references it so Cancel()/Dispose() can stop an in-flight run.
+        using var cts = new CancellationTokenSource();
+        _cts = cts;
 
         try
         {
@@ -587,7 +589,7 @@
             using IDisposable? _identity = string.IsNullOrEmpty(_tenantId)
                 ? null
                 : AgentOs.SharedKernel.Identity.AmbientIdentity.Push(_tenantId, _userId);
-            await foreach (var evt in Pipeline.StreamAsync(story, _cts.Token))
+            await foreach (var evt in Pipeline.StreamAsync(story, cts.Token))
             {
                 switch (evt.Kind)
                 {
@@ -631,12 +633,13 @@
         finally
         {
             _running = false;
-            _cts?.Dispose();
-            _cts = null;
+            _cts = null;   // the using-local disposes the CTS itself
             await InvokeAsync(StateHasChanged);
         }
     }
 
+    // RunAsync's finally nulls _cts BEFORE its using-local disposes the CTS, and the Blazor circuit is
+    // single-threaded — so a non-null _cts here is always a live (un-disposed) source. No guard needed.
     private void Cancel() => _cts?.Cancel();
 
     private void ApplyEvent(PipelineProgressEvent e)
@@ -722,6 +725,9 @@
 
     public void Dispose()
     {
-        _cts?.Dispose();
+        // Cancel an in-flight run on teardown → RunAsync unwinds and its using-local disposes the CTS.
+        // _cts is non-null only while a run is live (finally nulls it before the using disposes), so this
+        // never touches a disposed source.
+        _cts?.Cancel();
     }
 }

@@ -41,7 +41,17 @@ internal sealed class AppConfigToolPolicy : IToolPolicy
             return ToolPolicyDecision.Allow; // no config store wired → permissive
         }
 
-        var tenant = string.IsNullOrWhiteSpace(request.TenantId) ? ITenantContext.DefaultTenantId : request.TenantId;
+        // Fail closed on a blank tenant: never resolve the shared `default` tenant's allowlist for a
+        // request that carries no tenant (a malformed token / off-box call). When enforcement is the
+        // platform default, deny; otherwise stay permissive for the dev / no-DB path.
+        if (string.IsNullOrWhiteSpace(request.TenantId))
+        {
+            return _enforceByDefault
+                ? ToolPolicyDecision.Deny("Tool call carries no tenant; refusing under fail-closed policy.")
+                : ToolPolicyDecision.Allow;
+        }
+
+        var tenant = request.TenantId;
 
         // Per-tenant enforce flag wins; when unset, fall back to the global default. Global on + no
         // per-tenant allowlist ⇒ deny (fail-closed).

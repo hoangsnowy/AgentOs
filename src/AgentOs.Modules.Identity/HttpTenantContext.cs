@@ -20,8 +20,23 @@ public sealed class HttpTenantContext : ITenantContext
     private ClaimsPrincipal? User => _accessor.HttpContext?.User;
 
     /// <inheritdoc />
-    public string TenantId =>
-        User?.FindFirst("tenant")?.Value is { Length: > 0 } tenant ? tenant : ITenantContext.DefaultTenantId;
+    /// <remarks>
+    /// Fail-closed for a real signed-in principal: an authenticated Keycloak user is always issued a
+    /// <c>tenant</c> claim by the realm, so a missing claim means a misconfigured token, NOT "use the
+    /// shared default tenant". Returning <see cref="ITenantContext.DefaultTenantId"/> there would let
+    /// such a token read/write the <c>default</c> tenant's data (cross-tenant leak). Instead return
+    /// empty — tenant-scoped reads then match no rows and writes throw (<c>SetForTenantAsync</c> rejects
+    /// empty). The default is kept ONLY for the unauthenticated/anonymous case.
+    /// </remarks>
+    public string TenantId
+    {
+        get
+        {
+            var user = User;
+            if (user?.FindFirst("tenant")?.Value is { Length: > 0 } tenant) { return tenant; }
+            return user?.Identity?.IsAuthenticated == true ? string.Empty : ITenantContext.DefaultTenantId;
+        }
+    }
 
     /// <inheritdoc />
     public string? UserId => User?.FindFirst("sub")?.Value;

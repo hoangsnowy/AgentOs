@@ -1,5 +1,8 @@
-// EF-backed session repository. The DbContext global query filter enforces tenant isolation on reads;
-// AddAsync stamps TenantId from ITenantContext so writes can't escape the tenant.
+// Session repository. Reads run as Dapper SQL over a raw connection (Dapper-only — no EF read fallback);
+// EF owns writes + status updates. The real repo is registered only with a connection string (else the
+// no-op repo), so the factory is always present in production; a null factory throws. TENANT SAFETY: the
+// EF global query filter does not apply on the Dapper path, so every read carries an explicit
+// `WHERE "TenantId" = @tenantId`. Columns are PascalCase (quoted); tables are sessions.sessions + session_repos.
 
 using System;
 using System.Collections.Generic;
@@ -9,6 +12,7 @@ using System.Threading.Tasks;
 using AgentOs.Modules.Sessions.Persistence.Entities;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Persistence;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgentOs.Modules.Sessions.Persistence.Repositories;
@@ -17,30 +21,38 @@ internal sealed class SessionRepository : ISessionRepository
 {
     private readonly SessionsDbContext _db;
     private readonly ITenantContext _tenant;
+    private readonly INpgsqlConnectionFactory? _conn;
 
-    public SessionRepository(SessionsDbContext db, ITenantContext tenant)
+    public SessionRepository(SessionsDbContext db, ITenantContext tenant, INpgsqlConnectionFactory? conn = null)
     {
         _db = db;
         _tenant = tenant;
+        _conn = conn;
     }
+
+    private INpgsqlConnectionFactory Conn =>
+        _conn ?? throw new InvalidOperationException("SessionRepository reads require a database connection (Dapper-only; no EF fallback).");
 
     public async Task<IReadOnlyList<RemoteSessionEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default)
     {
-        return await _db.Sessions
-            .AsNoTracking()
-            .OrderByDescending(s => s.CreatedAtUtc)
-            .Skip(Page.ClampOffset(offset))
-            .Take(Page.ClampLimit(limit))
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        var lim = Page.ClampLimit(limit);
+        var off = Page.ClampOffset(offset);
+        const string sql = """
+            SELECT * FROM sessions.sessions
+            WHERE "TenantId" = @tenantId
+            ORDER BY "CreatedAtUtc" DESC
+            LIMIT @lim OFFSET @off
+            """;
+        return await QuerySessionsAsync(sql, new { tenantId = _tenant.TenantId, lim, off }, ct).ConfigureAwait(false);
     }
 
     public async Task<RemoteSessionEntity?> GetAsync(Guid id, CancellationToken ct = default)
     {
-        return await _db.Sessions
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == id, ct)
-            .ConfigureAwait(false);
+        const string sql = """SELECT * FROM sessions.sessions WHERE "Id" = @id AND "TenantId" = @tenantId""";
+        await using var conn = Conn.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        return await conn.QueryFirstOrDefaultAsync<RemoteSessionEntity>(
+            new CommandDefinition(sql, new { id, tenantId = _tenant.TenantId }, cancellationToken: ct)).ConfigureAwait(false);
     }
 
     public async Task AddAsync(RemoteSessionEntity session, CancellationToken ct = default)
@@ -66,13 +78,21 @@ internal sealed class SessionRepository : ISessionRepository
 
     public async Task<IReadOnlyList<RemoteSessionEntity>> ListForTenantAsync(string tenantId, CancellationToken ct = default)
     {
-        return await _db.Sessions
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(s => s.TenantId == tenantId)
-            .OrderByDescending(s => s.CreatedAtUtc)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        const string sql = """
+            SELECT * FROM sessions.sessions
+            WHERE "TenantId" = @tenantId
+            ORDER BY "CreatedAtUtc" DESC
+            """;
+        return await QuerySessionsAsync(sql, new { tenantId }, ct).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<RemoteSessionEntity>> QuerySessionsAsync(string sql, object parms, CancellationToken ct)
+    {
+        await using var conn = Conn.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<RemoteSessionEntity>(
+            new CommandDefinition(sql, parms, cancellationToken: ct)).ConfigureAwait(false);
+        return rows.AsList();
     }
 
     public async Task AddForTenantAsync(RemoteSessionEntity session, CancellationToken ct = default)
@@ -121,23 +141,27 @@ internal sealed class SessionRepository : ISessionRepository
 
     public async Task<IReadOnlyList<SessionRepoEntity>> ListReposForTenantAsync(string tenantId, Guid sessionId, CancellationToken ct = default)
     {
-        return await _db.SessionRepos
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(r => r.TenantId == tenantId && r.SessionId == sessionId)
-            .OrderBy(r => r.Owner).ThenBy(r => r.Repo)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        const string sql = """
+            SELECT * FROM sessions.session_repos
+            WHERE "TenantId" = @tenantId AND "SessionId" = @sessionId
+            ORDER BY "Owner", "Repo"
+            """;
+        return await QueryReposAsync(sql, new { tenantId, sessionId }, ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<SessionRepoEntity>> ListAllReposForTenantAsync(string tenantId, CancellationToken ct = default)
     {
-        return await _db.SessionRepos
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(r => r.TenantId == tenantId)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        const string sql = """SELECT * FROM sessions.session_repos WHERE "TenantId" = @tenantId""";
+        return await QueryReposAsync(sql, new { tenantId }, ct).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<SessionRepoEntity>> QueryReposAsync(string sql, object parms, CancellationToken ct)
+    {
+        await using var conn = Conn.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SessionRepoEntity>(
+            new CommandDefinition(sql, parms, cancellationToken: ct)).ConfigureAwait(false);
+        return rows.AsList();
     }
 
     public async Task AddRepoForTenantAsync(SessionRepoEntity repo, CancellationToken ct = default)

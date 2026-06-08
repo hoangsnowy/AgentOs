@@ -13,6 +13,7 @@ using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.Pipeline;
 using AgentOs.Domain.Pipeline;
 using AgentOs.Domain.Requirements;
+using AgentOs.SharedKernel.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -54,8 +55,23 @@ public sealed class InProcessPipelineClient : IPipelineClient
         holder.SetSink(new ChannelProgressSink(channel));
         var orchestrator = scope.ServiceProvider.GetRequiredService<IOrchestratorAgent>();
 
+        // Capture the caller's tenant NOW, while the request/circuit context is still live. The
+        // orchestrator runs on a Task.Run threadpool thread with no HttpContext, so the request-scoped
+        // ITenantContext (HttpTenantContext) would resolve blank there — every per-tenant LLM key, prompt
+        // override, budget check + run-history stamp would silently collapse to `default`. Prefer an
+        // ambient identity already pushed by the caller (the Web circuit's PipelineStudio); fall back to
+        // the request-scoped ITenantContext (the API /pipeline path, which has a live HttpContext here).
+        var tenantCtx = scope.ServiceProvider.GetService<ITenantContext>();
+        var tenantId = AmbientIdentity.Current?.TenantId is { Length: > 0 } ambient
+            ? ambient
+            : tenantCtx?.TenantId ?? ITenantContext.DefaultTenantId;
+        var userId = AmbientIdentity.Current?.UserId ?? tenantCtx?.UserId;
+
         var runTask = Task.Run<(PipelineResult? Result, Exception? Error)>(async () =>
         {
+            // Re-assert the tenant on this threadpool branch so EfAppConfigStore / RuntimeOverrides /
+            // PersistingOrchestratorAgent resolve the calling tenant, not `default`.
+            using var _identity = AmbientIdentity.Push(tenantId, userId);
             try
             {
                 var result = await orchestrator.RunAsync(story, cancellationToken).ConfigureAwait(false);

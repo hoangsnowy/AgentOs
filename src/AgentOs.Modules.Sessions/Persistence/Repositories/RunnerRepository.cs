@@ -1,5 +1,8 @@
-// EF-backed runner repository. The DbContext global query filter enforces tenant isolation on reads;
-// AddAsync stamps TenantId from ITenantContext so writes can't escape the tenant.
+// Runner repository. Reads run as Dapper SQL over a raw connection (Dapper-only — no EF read fallback);
+// EF owns writes. The real repo is registered only with a connection string (else NullRunnerRepository),
+// so the factory is always present in production; a null factory throws. TENANT SAFETY: the EF global
+// query filter does not apply on the Dapper path, so every read carries an explicit
+// `WHERE "TenantId" = @tenantId`. Columns are PascalCase (quoted); table is sessions.runners.
 
 using System;
 using System.Collections.Generic;
@@ -9,6 +12,7 @@ using System.Threading.Tasks;
 using AgentOs.Modules.Sessions.Persistence.Entities;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Persistence;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgentOs.Modules.Sessions.Persistence.Repositories;
@@ -17,30 +21,38 @@ internal sealed class RunnerRepository : IRunnerRepository
 {
     private readonly SessionsDbContext _db;
     private readonly ITenantContext _tenant;
+    private readonly INpgsqlConnectionFactory? _conn;
 
-    public RunnerRepository(SessionsDbContext db, ITenantContext tenant)
+    public RunnerRepository(SessionsDbContext db, ITenantContext tenant, INpgsqlConnectionFactory? conn = null)
     {
         _db = db;
         _tenant = tenant;
+        _conn = conn;
     }
+
+    private INpgsqlConnectionFactory Conn =>
+        _conn ?? throw new InvalidOperationException("RunnerRepository reads require a database connection (Dapper-only; no EF fallback).");
 
     public async Task<IReadOnlyList<RunnerEntity>> ListAsync(int limit = Page.DefaultLimit, int offset = 0, CancellationToken ct = default)
     {
-        return await _db.Runners
-            .AsNoTracking()
-            .OrderByDescending(r => r.CreatedAtUtc)
-            .Skip(Page.ClampOffset(offset))
-            .Take(Page.ClampLimit(limit))
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        var lim = Page.ClampLimit(limit);
+        var off = Page.ClampOffset(offset);
+        const string sql = """
+            SELECT * FROM sessions.runners
+            WHERE "TenantId" = @tenantId
+            ORDER BY "CreatedAtUtc" DESC
+            LIMIT @lim OFFSET @off
+            """;
+        return await QueryRunnersAsync(sql, new { tenantId = _tenant.TenantId, lim, off }, ct).ConfigureAwait(false);
     }
 
     public async Task<RunnerEntity?> GetAsync(Guid id, CancellationToken ct = default)
     {
-        return await _db.Runners
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == id, ct)
-            .ConfigureAwait(false);
+        const string sql = """SELECT * FROM sessions.runners WHERE "Id" = @id AND "TenantId" = @tenantId""";
+        await using var conn = Conn.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        return await conn.QueryFirstOrDefaultAsync<RunnerEntity>(
+            new CommandDefinition(sql, new { id, tenantId = _tenant.TenantId }, cancellationToken: ct)).ConfigureAwait(false);
     }
 
     public async Task AddAsync(RunnerEntity runner, CancellationToken ct = default)
@@ -65,13 +77,21 @@ internal sealed class RunnerRepository : IRunnerRepository
 
     public async Task<IReadOnlyList<RunnerEntity>> ListForTenantAsync(string tenantId, CancellationToken ct = default)
     {
-        return await _db.Runners
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(r => r.TenantId == tenantId)
-            .OrderByDescending(r => r.CreatedAtUtc)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        const string sql = """
+            SELECT * FROM sessions.runners
+            WHERE "TenantId" = @tenantId
+            ORDER BY "CreatedAtUtc" DESC
+            """;
+        return await QueryRunnersAsync(sql, new { tenantId }, ct).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<RunnerEntity>> QueryRunnersAsync(string sql, object parms, CancellationToken ct)
+    {
+        await using var conn = Conn.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<RunnerEntity>(
+            new CommandDefinition(sql, parms, cancellationToken: ct)).ConfigureAwait(false);
+        return rows.AsList();
     }
 
     public async Task AddForTenantAsync(RunnerEntity runner, CancellationToken ct = default)

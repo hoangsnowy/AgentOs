@@ -1,7 +1,10 @@
 @using System.Net.Http.Json
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @using AgentOs.Modules.Llm
 @using AgentOs.Modules.AppConfig
 @using AgentOs.Domain.Llm
+@using AgentOs.SharedKernel.Identity
 @using AgentOs.Web.Services
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject IRuntimeOverrides Overrides
@@ -10,6 +13,16 @@
 @inject ILlmClientFactory LlmFactory
 @inject AuthSession Auth
 
+@if (!_resolved)
+{
+    <Spinner />
+}
+else if (!_isAdmin)
+{
+    <div class="login-error">Admin role required. Settings (LLM keys, providers, GitHub) is tenant-admin only. Your account is a member of <code>@_tenantId</code> without admin rights.</div>
+}
+else
+{
 <div class="prefs">
     <aside class="prefs-side">
         <div class="prefs-side-head">Settings</div>
@@ -84,7 +97,7 @@
             case "keys":
                 <div class="prefs-section">
                     <h2 class="prefs-h">API keys</h2>
-                    <p class="prefs-sub">In-memory overrides — live for this process. Permanent values go in user-secrets.</p>
+                    <p class="prefs-sub">Your workspace's own keys — encrypted + stored per-tenant. Used only by <code>@_tenantId</code>; other tenants never see or spend them. Leave blank to fall back to the platform key (dev/demo only).</p>
                 </div>
                 <div class="prefs-row">
                     <div class="prefs-label"><strong>Anthropic API key</strong></div>
@@ -145,7 +158,7 @@
                 </div>
                 <ul class="prefs-list">
                     <li><strong>Pipeline results</strong>: in-memory unless <code>ConnectionStrings:DefaultConnection</code> is set → Postgres tables <code>pipeline_runs</code> / <code>run_metrics</code> / <code>orchestrations</code>.</li>
-                    <li><strong>API keys</strong>: persistent values live in <code>dotnet user-secrets</code> (dev) or environment variables (prod). Runtime overrides on the "API keys" tab are in-memory only.</li>
+                    <li><strong>API keys</strong>: keys you enter on the "API keys" tab are encrypted (DataProtection) and stored <strong>per-tenant</strong> in <code>config.app_config</code> — durable across restarts, isolated to your workspace. The platform-wide key in <code>appsettings</code>/env is only a dev/demo fallback when a tenant sets none.</li>
                     <li><strong>Generated code / tests</strong>: returned inline in the pipeline response. Use the <em>Verify build</em> card on the Pipeline app to compile them in a temp dir.</li>
                     <li><strong>GitHub PR</strong>: <em>Open PR</em> on the Pipeline app commits the generated files + opens a PR against the repo configured on the GitHub tab.</li>
                 </ul>
@@ -160,9 +173,16 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
         }
     </div>
 </div>
+}
 
 @code {
     private string _tab = "status";
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private bool _resolved;
+    private bool _isAdmin;
+    private string _tenantId = string.Empty;
+    private string? _userId;
 
     private string _forceProvider = "";
     private string _anthropicKey = "";
@@ -186,21 +206,44 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     private bool _testOk;
     private string? _testResult;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        // Resolve tenant + admin from the circuit's AuthenticationState — a Blazor interactive-Server
+        // component has no HttpContext, so ITenantContext can't be used here (it would resolve `default`).
+        if (AuthState is not null)
+        {
+            var user = (await AuthState).User;
+            _isAdmin = user.IsInRole("admin");
+            _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
+            _userId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+        _resolved = true;
+        if (!_isAdmin) { return; }
+
         _apiBase = Config["Api:BaseUrl"];
         _dbConnected = !string.IsNullOrWhiteSpace(Config.GetConnectionString("DefaultConnection"));
 
-        // In-process: seed from the live overrides. Split: re-seeded from the API below.
-        _forceProvider = Overrides.ForceProvider ?? "";
-        _anthropicKey = Overrides.AnthropicApiKey ?? "";
-        _azureKey = Overrides.AzureApiKey ?? "";
-        _azureEndpoint = Overrides.AzureEndpoint ?? "";
-        _githubPat = Overrides.GitHubPat ?? "";
-        _repoOwner = Overrides.GitHubRepoOwner ?? "";
-        _repoName = Overrides.GitHubRepoName ?? "";
-        _baseBranch = Overrides.GitHubBaseBranch ?? "";
+        // In-process: seed from this tenant's persisted overrides. Push the circuit's real tenant so the
+        // singleton RuntimeOverrides → EfAppConfigStore reads the signed-in tenant's row, not `default`.
+        // Split: re-seeded from the API (token-scoped) in OnAfterRenderAsync below.
+        if (!Split)
+        {
+            using var _ = TenantScope();
+            _forceProvider = Overrides.ForceProvider ?? "";
+            _anthropicKey = Overrides.AnthropicApiKey ?? "";
+            _azureKey = Overrides.AzureApiKey ?? "";
+            _azureEndpoint = Overrides.AzureEndpoint ?? "";
+            _githubPat = Overrides.GitHubPat ?? "";
+            _repoOwner = Overrides.GitHubRepoOwner ?? "";
+            _repoName = Overrides.GitHubRepoName ?? "";
+            _baseBranch = Overrides.GitHubBaseBranch ?? "";
+        }
     }
+
+    // Ambient identity for the in-process path so every Overrides read/write lands in THIS tenant's
+    // encrypted app_config row. No-op (null) in standalone dev-auto-login (empty tenant claim, single tenant).
+    private IDisposable? TenantScope()
+        => string.IsNullOrEmpty(_tenantId) ? null : AmbientIdentity.Push(_tenantId, _userId);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -274,6 +317,7 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
         }
         else
         {
+            using var _ = TenantScope();
             Overrides.ForceProvider = string.IsNullOrWhiteSpace(_forceProvider) ? null : _forceProvider;
             Overrides.AnthropicApiKey = string.IsNullOrWhiteSpace(_anthropicKey) ? null : _anthropicKey;
             Overrides.AzureApiKey = string.IsNullOrWhiteSpace(_azureKey) ? null : _azureKey;
@@ -295,6 +339,7 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
         }
         else
         {
+            using var _ = TenantScope();
             Overrides.ForceProvider = null;
             Overrides.AnthropicApiKey = null;
             Overrides.AzureApiKey = null;
@@ -315,6 +360,7 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
         }
         else
         {
+            using var _ = TenantScope();
             Overrides.GitHubPat = string.IsNullOrWhiteSpace(_githubPat) ? null : _githubPat;
             Overrides.GitHubRepoOwner = string.IsNullOrWhiteSpace(_repoOwner) ? null : _repoOwner;
             Overrides.GitHubRepoName = string.IsNullOrWhiteSpace(_repoName) ? null : _repoName;
@@ -341,6 +387,7 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             }
             else
             {
+                using var _scope = TenantScope();
                 var provider = Config["Agents:Orchestrator:Provider"] ?? "Anthropic";
                 var model = Config["Agents:Orchestrator:Model"] ?? "claude-haiku-4-5";
                 var probe = new LlmRequest("You are a connectivity probe.", "Reply with the single word: OK", model, 0.0, 5);
@@ -376,7 +423,9 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     }
 
     private string SaveScopeLabel()
-        => Split ? "Saved to the API (encrypted store)." : "Applied to subsequent LLM calls.";
+        => Split
+            ? "Saved to the API (encrypted, per-tenant store)."
+            : $"Saved for tenant {(_tenantId.Length == 0 ? "(local)" : _tenantId)} — encrypted, applied to subsequent LLM calls.";
 
     private sealed record LlmTestResult(bool Ok, string? Provider, string? Model, string? Sample, string? Error);
 
