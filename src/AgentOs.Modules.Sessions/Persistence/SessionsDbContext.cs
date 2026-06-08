@@ -1,6 +1,10 @@
 // M3 — Sessions persistence (schema sessions). Two aggregates: Runner (a paired machine) and
 // RemoteSession (a member × workspace unit of work). Both tenant-scoped via a global query filter on
-// TenantId mirrored from ITenantContext — same pattern as WorkspacesDbContext / PipelineDbContext.
+// TenantId mirrored from ITenantContext.
+// IMPORTANT: the filter MUST reference the context instance member (_tenant) — NOT a local captured in
+// OnModelCreating. EF caches the compiled model once per context type; a closure local is funcletized to
+// a constant and freezes to whichever tenant first builds the model, whereas an instance-member reference
+// is re-parameterized per executing context instance. (PipelineDbContext does the same.)
 // NOTE: the pairing handshake reads a runner with the filter bypassed (see EfRunnerDirectory) because
 // the connecting runner has no tenant context yet; the token hash is the credential.
 
@@ -31,8 +35,6 @@ public sealed class SessionsDbContext : DbContext
         ArgumentNullException.ThrowIfNull(modelBuilder);
         modelBuilder.HasDefaultSchema("sessions");
 
-        var tenantId = _tenant?.TenantId ?? string.Empty;
-
         modelBuilder.Entity<RunnerEntity>(e =>
         {
             e.ToTable("runners");
@@ -44,7 +46,7 @@ public sealed class SessionsDbContext : DbContext
             e.Property(x => x.Status).IsRequired().HasMaxLength(32);
             e.Property(x => x.CreatedAtUtc).IsRequired();
             e.HasIndex(x => new { x.TenantId, x.OwnerUserId });
-            e.HasQueryFilter(x => x.TenantId == tenantId);
+            e.HasQueryFilter(x => x.TenantId == (_tenant != null ? _tenant.TenantId : null));
         });
 
         modelBuilder.Entity<RemoteSessionEntity>(e =>
@@ -63,7 +65,7 @@ public sealed class SessionsDbContext : DbContext
             e.Property(x => x.TicketKind).HasMaxLength(32);
             e.Property(x => x.RunOnMachine).HasDefaultValue(false);
             e.HasIndex(x => new { x.TenantId, x.CreatedAtUtc });
-            e.HasQueryFilter(x => x.TenantId == tenantId);
+            e.HasQueryFilter(x => x.TenantId == (_tenant != null ? _tenant.TenantId : null));
         });
 
         modelBuilder.Entity<SessionRepoEntity>(e =>
@@ -80,7 +82,7 @@ public sealed class SessionsDbContext : DbContext
             e.Property(x => x.BranchName).HasMaxLength(256);
             e.Property(x => x.PrUrl).HasMaxLength(2048);
             e.HasIndex(x => new { x.TenantId, x.SessionId });
-            e.HasQueryFilter(x => x.TenantId == tenantId);
+            e.HasQueryFilter(x => x.TenantId == (_tenant != null ? _tenant.TenantId : null));
 
             // Cascade-delete a session's repo rows when the session is removed.
             e.HasOne<RemoteSessionEntity>()

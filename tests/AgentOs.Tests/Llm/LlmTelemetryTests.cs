@@ -84,7 +84,7 @@ public sealed class LlmTelemetryTests
 
         var router = new ApiKeyRouter(TimeProvider.System);
         var client = new PooledChatLlmClient(
-            "Claude", (_, _) => OkClient("ok"), () => new List<string> { "k1" }, router,
+            "Claude", (_, _) => OkClient("ok"), _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string> { "k1" }), router,
             _ => false, _ => null, NullLogger.Instance);
 
         await client.SendAsync(new LlmRequest("s", "u", model));
@@ -107,7 +107,7 @@ public sealed class LlmTelemetryTests
         var router = new ApiKeyRouter(TimeProvider.System);
         var map = new Dictionary<string, IChatClient> { ["k1"] = RateLimitedClient(), ["k2"] = OkClient("ok") };
         var client = new PooledChatLlmClient(
-            "Claude", (key, _) => map[key], () => new List<string> { "k1", "k2" }, router,
+            "Claude", (key, _) => map[key], _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string> { "k1", "k2" }), router,
             ex => ex is RateLimitEx, _ => null, NullLogger.Instance, TimeSpan.FromMilliseconds(1));
 
         await client.SendAsync(new LlmRequest("s", "u", model));
@@ -148,7 +148,7 @@ public sealed class LlmTelemetryTests
 
         var router = new ApiKeyRouter(TimeProvider.System);
         var client = new PooledChatLlmClient(
-            "Claude", (_, _) => OkClient("ok"), () => new List<string> { "k1" }, router,
+            "Claude", (_, _) => OkClient("ok"), _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string> { "k1" }), router,
             _ => false, _ => null, NullLogger.Instance);
 
         await client.SendAsync(new LlmRequest("s", "u", model));

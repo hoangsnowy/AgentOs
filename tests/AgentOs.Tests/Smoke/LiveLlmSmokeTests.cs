@@ -31,7 +31,7 @@ public class LiveLlmSmokeTests
         var client = new PooledChatLlmClient(
             "Claude",
             (k, _) => SdkChatClients.CreateClaude(k),
-            () => new List<string> { key },
+            _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string> { key }),
             new ApiKeyRouter(TimeProvider.System),
             SdkChatClients.IsRateLimited, _ => null, NullLogger<PooledChatLlmClient>.Instance);
 
@@ -65,7 +65,7 @@ public class LiveLlmSmokeTests
         var client = new PooledChatLlmClient(
             "AzureOpenAI",
             (k, m) => SdkChatClients.CreateAzure(k, endpoint!, string.IsNullOrWhiteSpace(m) ? deployment : m),
-            () => new List<string> { key },
+            _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string> { key }),
             new ApiKeyRouter(TimeProvider.System),
             SdkChatClients.IsRateLimited, _ => null, NullLogger<PooledChatLlmClient>.Instance);
 

@@ -56,6 +56,42 @@ public sealed class ToolPolicyTests
     }
 
     [Fact]
+    public async Task Evaluate_EnforcedByDefault_TenantWithoutAllowlist_Denies()
+    {
+        // Production posture: fail-closed default → a tenant that hasn't configured an allowlist gets denied.
+        var policy = new AppConfigToolPolicy(new InMemoryAppConfigStore(), enforceByDefault: true);
+        (await policy.EvaluateAsync(Req("anything"))).Allowed.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Evaluate_EnforcedByDefault_BlankTenant_Denies()
+    {
+        var policy = new AppConfigToolPolicy(new InMemoryAppConfigStore(), enforceByDefault: true);
+        var decision = await policy.EvaluateAsync(new ToolInvocationRequest("any", "c1", "{}", TenantId: ""));
+        decision.Allowed.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Evaluate_EnforcedByDefault_NoConfigStore_StillAllows()
+    {
+        // No store to enforce against (no-DB standalone) → degrade to permissive even under fail-closed default.
+        var policy = new AppConfigToolPolicy(config: null, enforceByDefault: true);
+        (await policy.EvaluateAsync(Req("anything"))).Allowed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Evaluate_EnforcedByDefault_TenantAllowlisted_AllowsListedOnly()
+    {
+        // Enforce flag unset for the tenant → falls back to the global default (true); allowlist still gates.
+        var cfg = new InMemoryAppConfigStore();
+        await cfg.SetForTenantAsync("t1", AppConfigToolPolicy.AllowlistKey, "build_verifier");
+        var policy = new AppConfigToolPolicy(cfg, enforceByDefault: true);
+
+        (await policy.EvaluateAsync(Req("build_verifier"))).Allowed.ShouldBeTrue();
+        (await policy.EvaluateAsync(Req("runner_shell"))).Allowed.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Service_SetAsync_WritesEnforceAndDedupedCsv()
     {
         var cfg = new InMemoryAppConfigStore();

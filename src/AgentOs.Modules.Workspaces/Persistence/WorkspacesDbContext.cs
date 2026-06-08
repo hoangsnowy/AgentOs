@@ -1,7 +1,10 @@
 // M2 / board reshape — Workspaces persistence (schema workspaces). Two aggregates now: the board
 // (WorkspaceEntity) and the repos under it (WorkspaceRepoEntity). Both tenant-scoped via a global
-// query filter on TenantId, mirrored from the request's ITenantContext (same pattern as
-// PipelineDbContext / AppConfigDbContext).
+// query filter on TenantId, mirrored from the request's ITenantContext.
+// IMPORTANT: the filter MUST reference the context instance member (_tenant) — NOT a local captured in
+// OnModelCreating. EF caches the compiled model once per context type; a closure local is funcletized to
+// a constant and freezes to whichever tenant first builds the model, whereas an instance-member reference
+// is re-parameterized per executing context instance. (PipelineDbContext does the same.)
 
 using System;
 using AgentOs.Modules.Workspaces.Persistence.Entities;
@@ -30,8 +33,6 @@ public sealed class WorkspacesDbContext : DbContext
         ArgumentNullException.ThrowIfNull(modelBuilder);
         modelBuilder.HasDefaultSchema("workspaces");
 
-        var tenantId = _tenant?.TenantId ?? string.Empty;
-
         modelBuilder.Entity<WorkspaceEntity>(e =>
         {
             e.ToTable("workspaces");
@@ -57,7 +58,7 @@ public sealed class WorkspacesDbContext : DbContext
             e.Property(x => x.Status).IsRequired().HasMaxLength(32);
             e.Property(x => x.CreatedAtUtc).IsRequired();
             e.HasIndex(x => new { x.TenantId, x.CreatedAtUtc });
-            e.HasQueryFilter(x => x.TenantId == tenantId);
+            e.HasQueryFilter(x => x.TenantId == (_tenant != null ? _tenant.TenantId : null));
         });
 
         modelBuilder.Entity<WorkspaceRepoEntity>(e =>
@@ -73,7 +74,7 @@ public sealed class WorkspacesDbContext : DbContext
             e.Property(x => x.Private).IsRequired();
             e.Property(x => x.AddedAtUtc).IsRequired();
             e.HasIndex(x => new { x.TenantId, x.WorkspaceId });
-            e.HasQueryFilter(x => x.TenantId == tenantId);
+            e.HasQueryFilter(x => x.TenantId == (_tenant != null ? _tenant.TenantId : null));
 
             // Cascade-delete repos when their board is removed.
             e.HasOne<WorkspaceEntity>()

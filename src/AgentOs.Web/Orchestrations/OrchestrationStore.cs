@@ -24,9 +24,12 @@ public sealed class OrchestrationStore
     };
 
     private readonly object _gate = new();
-    private readonly Dictionary<string, OrchestrationGraph> _graphs = new(StringComparer.Ordinal);
+    // Keyed by (tenant, graph id). This store is a process-wide SINGLETON shared across every circuit, so a
+    // tenant dimension is mandatory — without it one tenant's editor sees (and overwrites) another's graphs.
+    // Loaded + seeded lazily per tenant on first access.
+    private readonly Dictionary<(string Tenant, string Id), OrchestrationGraph> _graphs = new();
+    private readonly HashSet<string> _loadedTenants = new(StringComparer.Ordinal);
     private readonly IServiceScopeFactory _scopeFactory;
-    private bool _initialized;
 
     /// <summary>Construct. The DB load is LAZY (first access), NOT in the ctor — this store is a
     /// singleton resolved during host build / circuit open, so a blocking DB load here would stall
@@ -37,40 +40,43 @@ public sealed class OrchestrationStore
         _scopeFactory = scopeFactory;
     }
 
-    /// <summary>All orchestrations, sorted by name.</summary>
-    public IReadOnlyList<OrchestrationGraph> All()
+    /// <summary>All orchestrations for a tenant, sorted by name.</summary>
+    public IReadOnlyList<OrchestrationGraph> All(string tenantId)
     {
-        EnsureLoaded();
+        EnsureLoaded(tenantId);
         lock (_gate)
         {
-            return _graphs.Values.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            return _graphs.Where(kv => kv.Key.Tenant == tenantId)
+                .Select(kv => kv.Value)
+                .OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
     }
 
-    /// <summary>Get by id, null if not found.</summary>
-    public OrchestrationGraph? Get(string id)
+    /// <summary>Get by id within a tenant, null if not found.</summary>
+    public OrchestrationGraph? Get(string tenantId, string id)
     {
-        EnsureLoaded();
+        EnsureLoaded(tenantId);
         lock (_gate)
         {
-            return _graphs.GetValueOrDefault(id);
+            return _graphs.GetValueOrDefault((tenantId, id));
         }
     }
 
-    /// <summary>Save (insert or update) into the cache + DB.</summary>
-    public void Save(OrchestrationGraph graph)
+    /// <summary>Save (insert or update) into the tenant's cache + DB.</summary>
+    public void Save(string tenantId, OrchestrationGraph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
-        EnsureLoaded();
+        EnsureLoaded(tenantId);
         lock (_gate)
         {
-            _graphs[graph.Id] = graph;
+            _graphs[(tenantId, graph.Id)] = graph;
         }
-        Persist(graph);
+        Persist(tenantId, graph);
     }
 
-    /// <summary>Create an empty orchestration with a single Start node.</summary>
-    public OrchestrationGraph Create(string name = "New Orchestration")
+    /// <summary>Create an empty orchestration with a single Start node, owned by the tenant.</summary>
+    public OrchestrationGraph Create(string tenantId, string name = "New Orchestration")
     {
         var g = new OrchestrationGraph
         {
@@ -82,39 +88,39 @@ public sealed class OrchestrationStore
                 new GraphNode { Id = NewId(), Type = StepType.Agent, Title = "Start", X = 80, Y = 200, IsStart = true, Description = "Entry point", Output = "result", MaxIterations = 1 },
             ],
         };
-        Save(g);
+        Save(tenantId, g);
         return g;
     }
 
-    /// <summary>Duplicate an orchestration (name + " (copy)").</summary>
-    public OrchestrationGraph Duplicate(string id)
+    /// <summary>Duplicate an orchestration within a tenant (name + " (copy)").</summary>
+    public OrchestrationGraph Duplicate(string tenantId, string id)
     {
-        EnsureLoaded();
+        EnsureLoaded(tenantId);
         OrchestrationGraph clone;
         lock (_gate)
         {
-            var src = _graphs.GetValueOrDefault(id) ?? throw new InvalidOperationException($"Orchestration '{id}' does not exist.");
+            var src = _graphs.GetValueOrDefault((tenantId, id)) ?? throw new InvalidOperationException($"Orchestration '{id}' does not exist.");
             clone = Clone(src);
             clone.Id = NewId();
             clone.Name = src.Name + " (copy)";
-            _graphs[clone.Id] = clone;
+            _graphs[(tenantId, clone.Id)] = clone;
         }
-        Persist(clone);
+        Persist(tenantId, clone);
         return clone;
     }
 
-    /// <summary>Delete by id (cache + DB).</summary>
-    public void Delete(string id)
+    /// <summary>Delete by id within a tenant (cache + DB).</summary>
+    public void Delete(string tenantId, string id)
     {
-        EnsureLoaded();
+        EnsureLoaded(tenantId);
         bool removed;
         lock (_gate)
         {
-            removed = _graphs.Remove(id);
+            removed = _graphs.Remove((tenantId, id));
         }
         if (removed)
         {
-            RunOnRepo(repo => repo.DeleteAsync(id));
+            RunOnRepo(repo => repo.DeleteForTenantAsync(tenantId, id));
         }
     }
 
@@ -123,28 +129,25 @@ public sealed class OrchestrationStore
 
     // ---------------- persistence (repo/DB) ----------------
 
-    // Lazily load from the DB on first access (NOT in the ctor — see the ctor remark). One-time, guarded
-    // by _gate; the blocking DB call runs on a Task.Run threadpool thread (see RunOnRepo), never deadlocks.
-    private void EnsureLoaded()
+    // Lazily load a tenant's graphs from the DB on first access (NOT in the ctor — see the ctor remark).
+    // Once per tenant, guarded by _gate; the blocking DB call runs on a Task.Run threadpool thread (see
+    // RunOnRepo), never deadlocks. lock is reentrant, so callers that also take _gate are fine.
+    private void EnsureLoaded(string tenantId)
     {
-        if (Volatile.Read(ref _initialized))
-        {
-            return;
-        }
         lock (_gate)
         {
-            if (_initialized)
+            if (_loadedTenants.Contains(tenantId))
             {
                 return;
             }
-            LoadOrSeed();
-            _initialized = true;
+            LoadOrSeed(tenantId);
+            _loadedTenants.Add(tenantId);
         }
     }
 
-    private void LoadOrSeed()
+    private void LoadOrSeed(string tenantId)
     {
-        var records = RunOnRepo(repo => repo.ListAsync());
+        var records = RunOnRepo(repo => repo.ListForTenantAsync(tenantId));
         if (records.Count > 0)
         {
             foreach (var r in records)
@@ -152,7 +155,7 @@ public sealed class OrchestrationStore
                 var g = JsonSerializer.Deserialize<OrchestrationGraph>(r.DefinitionJson, Json);
                 if (g is not null)
                 {
-                    _graphs[g.Id] = g;
+                    _graphs[(tenantId, g.Id)] = g;
                 }
             }
             return;
@@ -160,16 +163,19 @@ public sealed class OrchestrationStore
 
         foreach (var g in SeedDefaults())
         {
-            _graphs[g.Id] = g;
-            Persist(g);
+            // The orchestration Id is the GLOBAL primary key, so the fixed seed ids (a single-bucket
+            // artifact) would collide when a second tenant seeds — give each tenant's seeds fresh unique ids.
+            g.Id = NewId();
+            _graphs[(tenantId, g.Id)] = g;
+            Persist(tenantId, g);
         }
     }
 
-    private void Persist(OrchestrationGraph g)
+    private void Persist(string tenantId, OrchestrationGraph g)
     {
         var record = new OrchestrationRecord(
             g.Id, g.Name, g.Description, JsonSerializer.Serialize(g, Json), DateTimeOffset.UtcNow);
-        RunOnRepo(repo => repo.UpsertAsync(record));
+        RunOnRepo(repo => repo.UpsertForTenantAsync(tenantId, record));
     }
 
     // Deadlock-safe sync-over-async: Task.Run escapes the Blazor circuit's SynchronizationContext (avoids deadlock).

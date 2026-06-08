@@ -7,6 +7,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
 using AgentOs.SharedKernel.Modularity;
 using Microsoft.Extensions.Configuration;
@@ -43,7 +45,7 @@ public sealed class LlmModule : IModule
             return new PooledChatLlmClient(
                 "Claude",
                 (key, _model) => SdkChatClients.CreateClaude(key),
-                () => ClaudeKeyPool(opts.Value.Claude, ov),
+                ct => ClaudeKeyPoolAsync(opts.Value.Claude, ov, ct),
                 sp.GetRequiredService<ApiKeyRouter>(),
                 SdkChatClients.IsRateLimited,
                 _ => null,
@@ -64,7 +66,7 @@ public sealed class LlmModule : IModule
                     key,
                     !string.IsNullOrWhiteSpace(ov.AzureEndpoint) ? ov.AzureEndpoint! : opts.Value.AzureOpenAi.Endpoint,
                     string.IsNullOrWhiteSpace(model) ? opts.Value.AzureOpenAi.Model : model),
-                () => AzureKeyPool(opts.Value.AzureOpenAi, ov),
+                ct => AzureKeyPoolAsync(opts.Value.AzureOpenAi, ov, ct),
                 sp.GetRequiredService<ApiKeyRouter>(),
                 SdkChatClients.IsRateLimited,
                 _ => null,
@@ -84,15 +86,15 @@ public sealed class LlmModule : IModule
     // Settings UI (stored per-tenant in app_config), use ONLY those — the shared appsettings/env platform
     // key is NEVER appended, so tenant A can never silently spend on the platform key (or tenant B's).
     // The platform key is a dev/demo fallback used ONLY when the tenant has no key of its own.
-    private static List<string> ClaudeKeyPool(ClaudeOptions opts, IRuntimeOverrides ov)
+    private static async ValueTask<IReadOnlyList<string>> ClaudeKeyPoolAsync(ClaudeOptions opts, IRuntimeOverrides ov, CancellationToken ct)
     {
-        var tenantKeys = Collect(ov.AnthropicApiKey, ov.AnthropicApiKeys);
+        var tenantKeys = await ov.GetAnthropicApiKeysAsync(ct).ConfigureAwait(false);
         return tenantKeys.Count > 0 ? tenantKeys : Collect(opts.ApiKey, opts.ApiKeys);
     }
 
-    private static List<string> AzureKeyPool(AzureOpenAiOptions opts, IRuntimeOverrides ov)
+    private static async ValueTask<IReadOnlyList<string>> AzureKeyPoolAsync(AzureOpenAiOptions opts, IRuntimeOverrides ov, CancellationToken ct)
     {
-        var tenantKeys = Collect(ov.AzureApiKey, ov.AzureApiKeys);
+        var tenantKeys = await ov.GetAzureApiKeysAsync(ct).ConfigureAwait(false);
         return tenantKeys.Count > 0 ? tenantKeys : Collect(opts.ApiKey, opts.ApiKeys);
     }
 

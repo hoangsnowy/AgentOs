@@ -20,6 +20,7 @@ namespace AgentOs.Tests.Llm;
 public sealed class RuntimeOverridesTests
 {
     private static readonly string[] ThreeKeys = { "k1", "k2", "k3" };
+    private static readonly string[] TwoAzureKeys = { "a1", "a2" };
 
     [Fact]
     public void AnthropicApiKey_TenantAWrites_TenantBReadsNull()
@@ -92,6 +93,42 @@ public sealed class RuntimeOverridesTests
         overrides.AnthropicApiKey.ShouldBeNull();
         overrides.AnthropicApiKey = "should-be-ignored";
         overrides.AnthropicApiKey.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task GetAnthropicApiKeysAsync_MergesSingleKeyAndPool_Deduped()
+    {
+        var ctx = new SwitchableTenantContext("acme");
+        var store = new TenantScopedInMemoryStore(ctx);
+        var overrides = new RuntimeOverrides(BuildProvider(ctx, store));
+
+        overrides.AnthropicApiKey = "k1";
+        overrides.AnthropicApiKeys = ThreeKeys; // k1, k2, k3 — k1 duplicates the single key
+
+        (await overrides.GetAnthropicApiKeysAsync()).ShouldBe(ThreeKeys);
+    }
+
+    [Fact]
+    public async Task GetAzureApiKeysAsync_IsTenantScoped()
+    {
+        var ctx = new SwitchableTenantContext("acme");
+        var store = new TenantScopedInMemoryStore(ctx);
+        var overrides = new RuntimeOverrides(BuildProvider(ctx, store));
+
+        overrides.AzureApiKeys = TwoAzureKeys;
+        (await overrides.GetAzureApiKeysAsync()).ShouldBe(TwoAzureKeys);
+
+        ctx.TenantId = "globex";
+        (await overrides.GetAzureApiKeysAsync()).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetAnthropicApiKeysAsync_NoAppConfigStore_ReturnsEmpty()
+    {
+        var services = new ServiceCollection();
+        var overrides = new RuntimeOverrides(services.BuildServiceProvider());
+
+        (await overrides.GetAnthropicApiKeysAsync()).ShouldBeEmpty();
     }
 
     private static IServiceProvider BuildProvider(SwitchableTenantContext ctx, IAppConfigStore store)

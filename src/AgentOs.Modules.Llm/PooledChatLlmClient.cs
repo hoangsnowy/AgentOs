@@ -24,7 +24,7 @@ namespace AgentOs.Modules.Llm;
 public sealed class PooledChatLlmClient : ILlmClient, IDisposable
 {
     private readonly Func<string, string, IChatClient> _clientFactory;
-    private readonly Func<IReadOnlyList<string>> _keyProvider;
+    private readonly Func<CancellationToken, ValueTask<IReadOnlyList<string>>> _keyProvider;
     private readonly ApiKeyRouter _router;
     private readonly Func<Exception, bool> _isRateLimited;
     private readonly Func<Exception, TimeSpan?> _retryAfter;
@@ -43,7 +43,7 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
     public PooledChatLlmClient(
         string provider,
         Func<string, string, IChatClient> clientFactory,
-        Func<IReadOnlyList<string>> keyProvider,
+        Func<CancellationToken, ValueTask<IReadOnlyList<string>>> keyProvider,
         ApiKeyRouter router,
         Func<Exception, bool> isRateLimited,
         Func<Exception, TimeSpan?> retryAfter,
@@ -74,7 +74,7 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
 
-        var keys = _keyProvider();
+        var keys = await _keyProvider(cancellationToken).ConfigureAwait(false);
         if (keys.Count == 0)
         {
             throw new LlmException(

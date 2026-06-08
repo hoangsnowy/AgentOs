@@ -29,4 +29,11 @@ internal sealed class NullOrchestrationRepository : IOrchestrationRepository
     public Task UpsertAsync(OrchestrationRecord record, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task DeleteAsync(string id, CancellationToken ct = default) => Task.CompletedTask;
+
+    public Task<IReadOnlyList<OrchestrationRecord>> ListForTenantAsync(string tenantId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<OrchestrationRecord>>([]);
+
+    public Task UpsertForTenantAsync(string tenantId, OrchestrationRecord record, CancellationToken ct = default) => Task.CompletedTask;
+
+    public Task DeleteForTenantAsync(string tenantId, string id, CancellationToken ct = default) => Task.CompletedTask;
 }
