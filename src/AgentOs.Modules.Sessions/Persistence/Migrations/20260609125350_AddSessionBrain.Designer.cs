@@ -3,6 +3,7 @@ using System;
 using AgentOs.Modules.Sessions.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AgentOs.Modules.Sessions.Persistence.Migrations
 {
     [DbContext(typeof(SessionsDbContext))]
-    partial class SessionsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260609125350_AddSessionBrain")]
+    partial class AddSessionBrain
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
