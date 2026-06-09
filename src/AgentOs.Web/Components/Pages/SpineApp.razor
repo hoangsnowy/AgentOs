@@ -32,6 +32,7 @@
 @inject ISessionRunFeed Feed
 @inject IServiceScopeFactory ScopeFactory
 @inject Microsoft.Extensions.Options.IOptions<PipelineOptions> PipelineOpts
+@inject AgentOs.Web.Services.WindowManagerService WM
 @implements IDisposable
 
 <header class="page-head">
@@ -356,6 +357,10 @@ else if (_tab == Tab.Boards)
                                 <td>@if (ticket.Status is not null) { <Badge>@ticket.Status</Badge> } else { <span class="muted">—</span> }</td>
                                 <td class="muted">@(ticket.AssigneeLogin ?? "—")</td>
                                 <td class="actions">
+                                    <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => OpenInPipeline(ticket))"
+                                         title="Open this ticket as a story in the Pipeline app (sandbox run)">
+                                        <Icon Name="play" Size="13" /> Pipeline
+                                    </Btn>
                                     <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Primary"
                                          OnClick="@(() => OpenWorkDialog(ticket))"
                                          Disabled="@(_busy || ticket.Kind == BoardTicketKind.DraftIssue || ticket.RepoOwner is null)">
@@ -1161,9 +1166,7 @@ else if (_tab == Tab.Sessions)
                 return;
             }
 
-            var descriptor = new WorkspaceDescriptor(
-                repo.Id, _tenantId, _selectedBoard.Kind, repo.Owner, repo.Repo, _selectedBoard.Project,
-                string.IsNullOrWhiteSpace(repo.DefaultBranch) ? "main" : repo.DefaultBranch, pat);
+            var descriptor = RepoDescriptor(_selectedBoard, _tenantId, repo.Owner, repo.Repo, repo.DefaultBranch, pat);
             var result = await BoardWriteSvc.EnsureLabelsAsync(descriptor, StandardLabels.All);
 
             Toasts.Show("Spine",
@@ -1404,6 +1407,17 @@ else if (_tab == Tab.Sessions)
         _workTicket = null;
     }
 
+    // Cross-link — open the ticket as a story in the Pipeline app (a sandbox run), prefilling the story
+    // editor via a one-shot launch payload so the three surfaces read as one engine.
+    private void OpenInPipeline(BoardTicket ticket)
+    {
+        var app = AgentOs.Web.Services.AppCatalog.Find("pipeline");
+        if (app is null) { return; }
+        var story = ticket.Number is { } n ? $"#{n} {ticket.Title}".Trim() : ticket.Title.Trim();
+        WM.RequestLaunchPayload("pipeline", story);
+        WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
+    }
+
     private async Task ConfirmWorkSession()
     {
         if (_busy || _selectedBoard is null || _workTicket is null) { return; }
@@ -1503,6 +1517,14 @@ else if (_tab == Tab.Sessions)
     // hard-gate the Quality engine. First match wins; null when the ticket carries no type label.
     private static string? TicketTypeOf(IEnumerable<string>? labels) =>
         labels?.FirstOrDefault(l => l.StartsWith("type:", StringComparison.OrdinalIgnoreCase));
+
+    // A1 residue — the single builder for the repo-level, token-carrying WorkspaceDescriptor the source /
+    // PR / label services consume (transient; the PAT is resolved per call, never persisted). Kind +
+    // Project come from the board (the workspace); the descriptor Id is the board's workspace id.
+    private static WorkspaceDescriptor RepoDescriptor(
+        WorkspaceEntity board, string tenantId, string owner, string repo, string defaultBranch, string pat) =>
+        new(board.Id, tenantId, board.Kind, owner, repo, board.Project,
+            string.IsNullOrWhiteSpace(defaultBranch) ? "main" : defaultBranch, pat);
 
     // The ai:ready tickets on the board that the spine can run unattended (real issue, has a repo).
     private List<BoardTicket> ReadyTickets() => _tickets is null
@@ -1667,9 +1689,7 @@ else if (_tab == Tab.Sessions)
                         }
 
                         var childBranch = capturedChildren.FirstOrDefault(c => c.Id == outcome.SessionRepoId)?.DefaultBranch ?? "main";
-                        var descriptor = new AgentOs.Domain.Workspaces.WorkspaceDescriptor(
-                            capturedBoard.Id, capturedTenantId, capturedBoard.Kind,
-                            outcome.Owner, outcome.Repo, capturedBoard.Project, childBranch, capturedPat);
+                        var descriptor = RepoDescriptor(capturedBoard, capturedTenantId, outcome.Owner, outcome.Repo, childBranch, capturedPat);
 
                         try
                         {
@@ -1823,8 +1843,7 @@ else if (_tab == Tab.Sessions)
         }
 
         // Commit the generated code + tests to the primary repo and open a PR (server-side via Octokit).
-        var descriptor = new WorkspaceDescriptor(
-            board.Id, tenantId, board.Kind, primary.Owner, primary.Repo, board.Project, primary.DefaultBranch, pat);
+        var descriptor = RepoDescriptor(board, tenantId, primary.Owner, primary.Repo, primary.DefaultBranch, pat);
         var title = $"feat: #{session.IssueNumber} {session.Title}";
         var body = $"Generated by the AgentOS Quality pipeline (5-agent SDLC loop) for session #{session.IssueNumber}.";
         try

@@ -36,9 +36,9 @@ public static class AppCatalog
 {
     private static readonly List<DesktopApp> _builtIn = new()
     {
-        new("pipeline", "Pipeline", "play",  "Run the 5-agent SDLC pipeline", "Agents", 920, 620),
-        new("workflow", "Workflow", "graph", "Visual orchestration editor",   "Agents", 1080, 660),
-        new("spine",    "Spine",    "git-pull-request", "Boards → tickets → AI sessions", "Agents", 940, 640),
+        new("pipeline", "Pipeline", "play",  "Run the 5-agent pipeline on a sandbox story", "Agents", 920, 620),
+        new("workflow", "Workflow", "graph", "Edit the same pipeline as a visual graph",     "Agents", 1080, 660),
+        new("spine",    "Spine",    "git-pull-request", "Run the pipeline on a real ticket → PR", "Agents", 940, 640),
         new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: true, AdminOnly: true),
         new("evidence", "Evidence", "lock",  "Tool-invocation audit trail",   "Admin", 960, 620, Pinned: true, AdminOnly: true),
         new("cost",     "Cost",     "graph", "LLM spend by agent, provider, model", "Admin", 1000, 660, Pinned: true, AdminOnly: true),
