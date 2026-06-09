@@ -31,6 +31,7 @@
 @inject AgentOs.Web.Services.ToastService Toasts
 @inject ISessionRunFeed Feed
 @inject IServiceScopeFactory ScopeFactory
+@inject Microsoft.Extensions.Options.IOptions<PipelineOptions> PipelineOpts
 @implements IDisposable
 
 <header class="page-head">
@@ -456,8 +457,19 @@ else if (_tab == Tab.Idea)
             </table>
 
             @if (_ideaError is not null) { <p class="login-error">@_ideaError</p> }
+            <label class="spine-ai-toggle" style="margin:10px 0 0">
+                Engine
+                <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:8px">
+                    <option value="Quick">Quick — runner edit loop</option>
+                    <option value="Quality">Quality — 5-agent pipeline</option>
+                </select>
+            </label>
+            @if (_brain == "Quality")
+            {
+                <p class="muted spine-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
+            }
             <label class="spine-ai-toggle" style="margin:10px 0">
-                <input type="checkbox" @bind="_runOnMachine" />
+                <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" />
                 Run on my machine — your paired runner's CLI does the work (0 server tokens)
             </label>
             @if (_runOnMachine)
@@ -692,7 +704,18 @@ else if (_tab == Tab.Sessions)
             }
         </div>
         <label class="spine-ai-toggle" style="margin-top:10px">
-            <input type="checkbox" @bind="_runOnMachine" />
+            Engine
+            <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:8px">
+                <option value="Quick">Quick — runner edit loop</option>
+                <option value="Quality">Quality — 5-agent pipeline</option>
+            </select>
+        </label>
+        @if (_brain == "Quality")
+        {
+            <p class="muted spine-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
+        }
+        <label class="spine-ai-toggle" style="margin-top:10px">
+            <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" />
             Run on my machine — your paired runner's CLI does the work (0 server tokens)
         </label>
         @if (_runOnMachine)
@@ -791,6 +814,7 @@ else if (_tab == Tab.Sessions)
     // / codex) instead of the server LLM. Shared by the idea-wizard auto-run + the Work-on-this dialog.
     private bool _runOnMachine;
     private string _cliProfile = "claude";   // which subscription CLI runs on-machine (claude | codex)
+    private string _brain = "Quick";         // which engine runs the session (Quick = runner edit loop | Quality = 5-agent pipeline)
     private BootstrapPreview? _preview;
     private readonly List<DraftRow> _draftRows = new();
     private IReadOnlyList<CreatedTicket> _createdTickets = Array.Empty<CreatedTicket>();
@@ -1248,6 +1272,11 @@ else if (_tab == Tab.Sessions)
             _ideaError = "Pick a target board and repository.";
             return;
         }
+        if (runReady && EngineSelection.Validate(_brain, _runOnMachine) is { } brainErr)
+        {
+            _ideaError = brainErr;
+            return;
+        }
         _ideaBusy = true;
         _ideaError = null;
         try
@@ -1288,7 +1317,7 @@ else if (_tab == Tab.Sessions)
                     var t = _createdTickets[i];
                     sessions.Add(await PersistSessionAsync(
                         board.Id, t.Number, $"#{t.Number} {t.Title}", t.ItemNodeId, "Issue", [repoOpt], _runOnMachine,
-                        ticketType: TicketTypeOf(drafts[i].Labels)));
+                        brain: _brain, ticketType: TicketTypeOf(drafts[i].Labels)));
                 }
                 if (sessions.Count > 0)
                 {
@@ -1384,6 +1413,11 @@ else if (_tab == Tab.Sessions)
             Toasts.Show("Spine", "Select at least one repository.", ToastKind.Err);
             return;
         }
+        if (EngineSelection.Validate(_brain, _runOnMachine) is { } brainErr)
+        {
+            Toasts.Show("Spine", brainErr, ToastKind.Err);
+            return;
+        }
         _busy = true;
         try
         {
@@ -1395,7 +1429,7 @@ else if (_tab == Tab.Sessions)
             await PersistSessionAsync(
                 _selectedBoard.Id, ticket.Number, $"#{ticket.Number} {ticket.Title}",
                 ticket.ItemNodeId, ticket.Kind.ToString(), ordered, _runOnMachine,
-                ticketType: TicketTypeOf(ticket.Labels));
+                brain: _brain, ticketType: TicketTypeOf(ticket.Labels));
 
             Toasts.Show("Spine", $"Session created for #{ticket.Number} across {ordered.Count} repo(s). Switch to Sessions to run it.", ToastKind.Ok);
             CloseWorkDialog();
@@ -1589,7 +1623,7 @@ else if (_tab == Tab.Sessions)
                     // Quality engine — the 5-agent SDLC pipeline runs server-side (generates new files,
                     // commits them + opens a PR via Octokit), greenfield only, hard-gated by the ticket-type
                     // router. The Quick engine (the default IssueWorkAgent edit loop) is below.
-                    if (string.Equals(capturedSession.Brain, "Quality", StringComparison.OrdinalIgnoreCase))
+                    if (EngineSelection.IsQuality(capturedSession.Brain))
                     {
                         await RunQualitySessionAsync(
                             scope, sessRepo, capturedSession, capturedBoard, capturedPat, capturedChildren, capturedTenantId)
@@ -1815,9 +1849,16 @@ else if (_tab == Tab.Sessions)
         }
     }
 
-    // The QA-loop iteration cap for a Quality run. A2b clamps a user selection to the admin/tenant bound;
-    // for now the pipeline default.
-    private static int QualityNMax() => 3;
+    // The QA-loop iteration cap for a Quality run, clamped to the admin/tenant bound (S4): the pipeline
+    // default (3), never above Pipeline:MaxIterations. The orchestrator re-clamps the same way, so this is
+    // also what the cost label can honestly advertise.
+    private int QualityNMax() => Math.Clamp(Math.Min(3, PipelineOpts.Value.MaxIterations), 1, 10);
+
+    // Switching the engine to Quality forces "run on my machine" off — the pipeline is server-side.
+    private void OnBrainChanged()
+    {
+        if (EngineSelection.IsQuality(_brain)) { _runOnMachine = false; }
+    }
 
     // ── Runner management ────────────────────────────────────────────────────────────────────────
 
