@@ -1,17 +1,19 @@
 # AgentOS — Roadmap
 
 > Where AgentOS is today and where it's going. AgentOS is a .NET-native, multi-tenant
-> operating shell for AI software-engineering agents. Horizon: ~18 months.
+> operating shell for AI software-engineering agents. Horizon: **12 months (Jun 2026 – Jun 2027)**,
+> plus a beyond-12-months outlook.
 
 ## Contents
 
 1. [Vision & positioning](#1--vision--positioning)
 2. [Where it is today](#2--where-it-is-today)
-3. [Roadmap](#3--roadmap)
-4. [Technical pillars](#4--technical-pillars)
-5. [Business model](#5--business-model)
-6. [Risks & mitigations](#6--risks--mitigations)
-7. [Definition of success](#7--definition-of-success)
+3. [The 12-month roadmap](#3--the-12-month-roadmap)
+4. [Open architecture decisions](#4--open-architecture-decisions)
+5. [Technical pillars](#5--technical-pillars)
+6. [Business model](#6--business-model)
+7. [Risks & mitigations](#7--risks--mitigations)
+8. [Definition of success](#8--definition-of-success)
 
 ---
 
@@ -52,66 +54,198 @@ cloud (finance, gov, healthcare), and (3) want to *govern and measure* agent out
 
 AgentOS is a working platform, not a sketch. Already shipped:
 
+- **One engine, three surfaces** — Pipeline (sandbox story), Workflow (visual graph of the same 5
+  agents, [#52](https://github.com/hoangsnowy/AgentOs/pull/52)), and Spine (real ticket →
+  PR) all run the same engine. Spine tickets run either the **Quality** brain (full 5-agent pipeline
+  with a greenfield router) or the **Quick** brain, with a user-facing toggle, cost label, and
+  bidirectional cross-links between all three apps
+  ([#54](https://github.com/hoangsnowy/AgentOs/pull/54),
+  [#73](https://github.com/hoangsnowy/AgentOs/pull/73)).
 - **5-agent SDLC pipeline** (Orchestrator/Requirement/Coding/Testing/QA) in a **Leader–Specialists–Quality loop** that iterates to convergence or an iteration cap.
-- **Provider-agnostic LLM gateway** — Claude + Azure OpenAI via `Microsoft.Extensions.AI` `IChatClient`, plus Microsoft Agent Framework and a paired dev-machine **RemoteAgent** (zero server API tokens). Multi-key pool with 429 failover; cost calculation.
+- **Provider-agnostic LLM gateway** — Claude + Azure OpenAI via `Microsoft.Extensions.AI` `IChatClient`, plus Microsoft Agent Framework and a paired dev-machine **RemoteAgent** (zero server API tokens). Multi-key pool with 429 failover; cost calculation; per-tenant BYO LLM keys ([#71](https://github.com/hoangsnowy/AgentOs/pull/71)).
+- **Safety baseline** — budget gate on every server-token entrypoint, per-tenant rate + concurrency
+  limits, `runner_shell` output cap ([#55](https://github.com/hoangsnowy/AgentOs/pull/55));
+  fail-closed tool-policy gates, tenant-filter freeze, and SSRF guard
+  ([#72](https://github.com/hoangsnowy/AgentOs/pull/72)).
 - **Modular monolith** — each feature is a self-contained `IModule` with its own DI surface, EF Core context, and Postgres schema; any module can later ship as a standalone package.
 - **Multi-tenant identity** — Keycloak OIDC (RS256) or operator mode (HS256), tenant claim, **row-level isolation** via an EF global query filter.
-- **Governance & evidence** — every tool call flows through `IToolGateway` → per-tenant `IToolPolicy` → `IToolInvocationLog`. Per-tenant **rate limiting**, a month-to-date **budget gate**, and a **`runner_shell` output cap** are live.
+- **Governance & evidence** — every tool call flows through `IToolGateway` → per-tenant `IToolPolicy` → `IToolInvocationLog`.
+- **Cloud hardening (in code)** — ForwardedHeaders behind TLS-terminating ingress, durable
+  Postgres-backed DataProtection key ring, publish-mode environment gating, `RequireDatabase`
+  fail-loud, Keycloak custom image + postprovision hook groundwork
+  ([#69](https://github.com/hoangsnowy/AgentOs/pull/69),
+  [#70](https://github.com/hoangsnowy/AgentOs/pull/70)).
 - **Tools & MCP** — GitHub PR service, build verifier, an MCP client (consume external tool servers), and AgentOS's own pipeline served as MCP tools.
 - **Remote repo execution** — Workspaces + Sessions drive boards → tickets → AI coding sessions against connected repos.
 - **Plugin system** — runtime-discovered `IAgentOsPlugin` extensions dropped into a `plugins/` folder, no compile-time reference.
-- **Supply-chain + SAST** — Dependabot, dependency-review, CodeQL on every push/PR.
+- **Supply-chain + SAST** — Dependabot, dependency-review, SHA-pinned actions, least-privilege workflow tokens, CodeQL at 0 findings ([#56](https://github.com/hoangsnowy/AgentOs/pull/56), [#62](https://github.com/hoangsnowy/AgentOs/pull/62)–[#65](https://github.com/hoangsnowy/AgentOs/pull/65)).
+- **Health probes** — `/health` + `/alive` mapped unconditionally for container orchestrators ([#58](https://github.com/hoangsnowy/AgentOs/pull/58)).
+
+### Honesty ledger
+
+Status vocabulary used throughout this document: **Shipped+verified** (exercised in a running
+deployment), **Shipped, cloud-unverified** (in code and tested, but no real cloud round-trip yet),
+**Planned**.
+
+| Claim | Status |
+|---|---|
+| Cloud hardening (ForwardedHeaders, DataProtection, env gating) | Shipped, **cloud-unverified** — no real `azd up` round-trip yet |
+| Multi-tenant isolation | Shipped+verified at row level; residue open: run-history stamping + `AuthSession` fallback; `OrchestrationStore` per-tenant keying shipped in [#72](https://github.com/hoangsnowy/AgentOs/pull/72), full-stack E2E pending |
+| `build_verifier` execution | **Not sandboxed** — runs MSBuild on LLM-influenced code in-process ([audit #10](docs/deploy-readiness-audit.md)); gated **off by default in Production** ([#72](https://github.com/hoangsnowy/AgentOs/pull/72)) until the Q1 sandbox lands |
+| Scale-out (≥2 replicas) | **Unverified** — single-instance only until a 2-replica test (see Q2) |
 
 ---
 
-## 3 — Roadmap
+## 3 — The 12-month roadmap
 
-Product milestones (not a fixed calendar). Each: goal · deliverable · signal.
+Sequencing is dependency-driven with one hard external commitment in the **Sep–Dec 2026** window.
+The spine: **identity decision → `azd up` round-trip → tenant residue + secrets → demo hardening →
+enterprise ops → OSS launch**. The `build_verifier` sandbox is a parallel Q1 track — it does not
+depend on the Azure deployment. PR-level slicing for the E/F/G workstreams lives in
+[coherence-plan.md](coherence-plan.md), the engineering appendix to this roadmap.
 
-### M1 — OSS polish
-- **Goal:** a credible, easy-to-adopt OSS project.
-- **Deliverable:** sharp README with architecture diagram + screenshots; runnable examples; first-party sample plugin; a few engineering write-ups (why .NET agents, multi-tenant agent isolation, the LLM gateway, the on-prem story).
-- **Signal:** external issues + the first non-author PR merged.
+### Q1 (Jun–Aug 2026) — Live on Azure
 
-### M2 — Extensibility depth
-- **Goal:** go beyond the fixed 5 agents.
-- **Deliverable:** richer plugin contracts (agent plugins, prompt-template packs, BYO LLM provider adapters); a `plugin-scaffold` codegen path for third parties; a minimal registry/discovery; first-party sample plugins.
-- **Signal:** external contributors; community plugins published.
+- **Goal:** a clean `azd up` produces a working, secured AgentOS on Azure Container Apps — login,
+  run, persist — with no seeded credentials and no in-process RCE.
+- **Deliverables:**
+  - **Identity ([D1](#4--open-architecture-decisions), decide month 1):** persistent Keycloak on
+    managed Postgres per [docs/keycloak-prod-runbook.md](docs/keycloak-prod-runbook.md) —
+    `KC_DB=postgres`, stable `KC_HOSTNAME`, `KC_PROXY=edge`, theme baked into the image, seed users
+    stripped, secrets via `azd env` / Key Vault.
+  - **Real `azd up` round-trip:** provision → configure → redeploy → smoke test — OIDC login on the
+    real FQDN, an authenticated pipeline run that persists under the real tenant, realm + saved LLM
+    keys surviving a restart. Fix the dead `/auth/token` CD smoke step.
+  - **Sandboxed `build_verifier`, done properly ([audit #10](docs/deploy-readiness-audit.md)):**
+    ADR for the sandbox architecture ([D2](#4--open-architecture-decisions)) in month 1;
+    implementation months 2–3 — ephemeral per-build container, no egress, CPU/mem/disk/timeout
+    quotas, always-synthesized project file (model-authored `.csproj`/`.targets`/`.props` rejected),
+    `--no-restore` with a locked feed.
+  - **Multi-tenant residue (audit B4):** run-history repo tenant stamping; `AuthSession`
+    null-`HttpContext` fix; full-stack two-tenant verification of the
+    [#72](https://github.com/hoangsnowy/AgentOs/pull/72) `OrchestrationStore` per-tenant keying —
+    all exercised on the real cloud deployment with two tenants.
+  - **Secrets, first slice (F2):** delete the dead HS256 secret + operator password from
+    `appsettings.json`; Azure Key Vault as the production secret source.
+  - **Low-severity security:** explicit workspace-connect `Host` allowlist (defense in depth on top
+    of the [#72](https://github.com/hoangsnowy/AgentOs/pull/72) connect-time `SsrfGuard`); ownership
+    check so a member cannot revoke another member's runner/session.
+- **Exit criteria:** a documented `azd up` from a clean environment yields a deployment where an
+  external user can log in via OIDC and complete a pipeline run that persists under their tenant;
+  a malicious-`.csproj` fixture test proves the sandbox cannot reach the host or the network; zero
+  default credentials anywhere in the deployed environment.
+- **Deferred:** real SMTP ([D4](#4--open-architecture-decisions): realm `verifyEmail:false` for
+  now), scale-out, observability backend, Entra/Okta SSO, repo-grounded Quality editing.
 
-### M3 — Enterprise-ready
-- **Goal:** buyable by an enterprise.
-- **Deliverable:** SSO beyond Keycloak (Okta, Microsoft Entra ID); fine-grained RBAC (per-project, per-agent, per-action); full audit log + export; SOC 2 readiness checklist + evidence; on-prem deploy guide (Docker Compose + Helm/k8s + `azd`).
-- **Signal:** a signed enterprise pilot (design-partner or paid).
+### Q2 (Sep–Nov 2026) — Defensible demo ⭐ hard deadline anchor
 
-### M4 — Observability + AIOps
-- **Goal:** cheap, self-improving agent ops.
-- **Deliverable:** OpenTelemetry GenAI semantic conventions (a span per LLM call with model/tokens/cost); a cost-optimization dashboard (spend by agent/model/tenant/day — the `cost-report` skill is the seed); productized prompt tuning (`prompt-tune`); prompt-drift regression alerts.
-- **Signal:** a measured cost reduction vs a naive "always call the biggest model" baseline (routing + caching + cheaper-model fallback).
+> External commitment lands in the Sep–Dec 2026 window. Everything in Q1 plus this milestone is the
+> minimum defensible set; Q3/Q4 content can slip without breaking the commitment.
 
-### M5 — Ecosystem
-- **Goal:** a self-sustaining ecosystem.
-- **Deliverable:** an agent / prompt-pack marketplace with quality gating; certified, benchmarked packs; a community contribution flow.
-- **Signal:** marketplace items in real use; first revenue (sponsor, paid pack, or hosted seat).
+- **Goal:** the live deployment survives a hostile end-to-end demo and hard questions about
+  architecture, cost, and isolation.
+- **Deliverables:**
+  - **Latency/UX:** LLM token streaming (`GetStreamingResponseAsync`) + prompt-keyed HybridCache
+    (E5); per-shell-command streaming in session runs; "Find boards" picker.
+  - **Operability:** deploy-time migrations with an advisory lock (E1); observability backend wired
+    (App Insights / OTLP exporter) so a demo run is visible as traces + cost telemetry.
+  - **Scale-out honesty resolved:** run the 2-replica test; then either ship the backplane choice
+    ([D3](#4--open-architecture-decisions)) or pin sticky sessions + `minReplicas=1` and *document*
+    single-instance as the supported posture.
+  - **Secrets, second slice (F2):** finish the `IRuntimeOverrides` reshape into an async secret
+    provider — async key getters shipped in [#72](https://github.com/hoangsnowy/AgentOs/pull/72);
+    retire the remaining sync bridge (unblocks Q3 secret rotation).
+  - **Gateway robustness:** pooled-client wrapper leak, failover gaps (401/400/5xx), CostCalculator
+    unknown-model `$0`.
+  - **Defense-grade docs:** `docs/architecture.md` refresh; ADRs 0001–0005 (modular monolith, LLM
+    gateway, multi-tenant isolation, one-engine-three-surfaces, sandbox);
+    `docs/FEATURE-MATRIX.md` — every module/app tagged Working / Degraded-standalone / Stub / Gap.
+- **Exit criteria:** a scripted 15-minute demo on the live Azure deployment — login → board ticket →
+  Quality run with streaming progress → PR on a real repo → cost + trace shown in the observability
+  backend — executed by someone other than the author; FEATURE-MATRIX published with no "Working"
+  claim that isn't verified.
+- **Deferred:** RBAC depth, audit export, DR drill, marketplace, local models.
+
+### Q3 (Dec 2026 – Feb 2027) — Enterprise-grade operations
+
+- **Goal:** every table-stakes enterprise concern is either shipped or has a recorded decision —
+  silence reads as "forgotten".
+- **Deliverables:** RBAC depth (admin / developer / viewer roles gating budget + tool-policy admin
+  actions); audit export + tamper-evident trail from `IToolInvocationLog` + Tenants audit; data
+  retention / GDPR-style deletion (or an explicit recorded deferral); backup/restore + an *executed*
+  DR drill with timings; SLO definitions + alert rules on the existing OTel metrics (budget
+  over-cap, runner disconnect, failed run); secret rotation for tenant PATs + LLM keys (built on
+  Q2's async secret provider); real SMTP (closes [D4](#4--open-architecture-decisions));
+  `docs/operations.md` + `docs/governance.md` written against the hardened state.
+- **Exit criteria:** all six enterprise rows shipped-or-decided; an alert fires on a real over-cap
+  run; a restore drill from backup is documented with timings.
+- **Deferred:** schema-per-tenant / infra-per-tenant isolation tiers, SOC 2 certification itself
+  (readiness checklist only), Okta SSO.
+
+### Q4 (Mar–May 2027) — Open the doors: OSS launch & extensibility
+
+- **Goal:** a stranger can adopt, run, and extend AgentOS without talking to the author.
+- **Deliverables:** authoring guides (module / agent / plugin / tool / LLM provider);
+  `CONTRIBUTING.md` rewritten as a 5–10-minute first-PR path; community skills pack
+  (module-scaffold, tool-scaffold, lint-conventions + CI check); plugin contract polish +
+  first-party sample plugins; engineering write-ups (why .NET agents, multi-tenant isolation, the
+  sandbox story); launch push (README, screenshots, runnable examples).
+- **Exit criteria:** first non-author issue and first non-author PR merged; a recorded cold-start —
+  clean machine → running AgentOS + one custom plugin using only the docs.
+- **Deferred:** marketplace, certified packs, hosted AgentOS Cloud.
+
+### Beyond 12 months
+
+No dates — named horizon items: AIOps cost optimization (routing, cheaper-model fallback, measured
+against a naive always-biggest-model baseline); prompt-drift regression harness; **local models**
+(Ollama, vLLM) for fully air-gapped on-prem; RAG over the tenant's own codebase (pgvector, stays in
+Postgres); event-sourced runs → replay + time-travel debugging; agent/prompt-pack marketplace with
+quality gating; tiered isolation (row → schema → infra) as a pricing axis.
+
+### Milestone map (old → new)
+
+| Old milestone | Where it went |
+|---|---|
+| M1 — OSS polish | Q4 |
+| M2 — Extensibility depth | Q4 + beyond |
+| M3 — Enterprise-ready | split: Q1 (deploy + secrets) / Q3 (RBAC, audit, DR) / beyond (Okta, SOC 2) |
+| M4 — Observability + AIOps | Q2 (backend + traces) + beyond (AIOps) |
+| M5 — Ecosystem | beyond |
 
 ---
 
-## 4 — Technical pillars
+## 4 — Open architecture decisions
+
+Decision log — recommended defaults, not prescriptions. Each gets decided (and recorded as an ADR
+where marked) by its deadline; until then the roadmap assumes the default.
+
+| ID | Decision | Options | Recommended default | Decide by | Blocks |
+|---|---|---|---|---|---|
+| **D1** | Identity provider in cloud | Persistent Keycloak-on-Postgres vs Entra External ID | **Persistent Keycloak** — [the runbook exists](docs/keycloak-prod-runbook.md), preserves Tenants-module admin provisioning + custom theme + on-prem parity; Entra would force a Graph rewrite and weaken the on-prem story | Q1 month 1 | everything in Q1 |
+| **D2** | `build_verifier` sandbox host | ACA Jobs vs Docker-in-ACA (likely dead end — privileged containers unsupported) vs ACI per-exec container groups vs process-level jail (insufficient alone) | **ACA Jobs** with egress disabled + CPU/mem/timeout quotas; local dev runs the same image via Docker under Aspire; project-synthesis + locked-feed defenses apply regardless of host | Q1 month 1 (ADR-0005) | Q1 sandbox implementation |
+| **D3** | Blazor Server scale-out | Azure SignalR backplane vs ACA sticky sessions + `minReplicas=1` | **Sticky sessions + min 1 replica** through the deadline window; adopt Azure SignalR only when the 2-replica test proves a real need | Q2 | E2; honest scale claims |
+| **D4** | Email | Defer (`verifyEmail:false`) vs ACS Email / SendGrid now | **Defer in Q1**, wire real SMTP in Q3 | Q1 (defer) / Q3 (wire) | signup verification, invitations |
+| **D5** | Web↔API topology | Web in-process (today's reality) vs Web→API over HTTP (the API container is currently deployed but never called by Web) | **In-process for the deadline**; record the split as the scale path; stop deploying the unused API container or wire it — don't ship dead topology | Q2 | RemoteAgent hub reachability in cloud |
+
+---
+
+## 5 — Technical pillars
 
 Long-term architecture commitments — where we are → where we go.
 
-- **Orchestration** — *Now:* 5 agents in `AgentOs.Modules.Pipeline` (+ optional MAF workflow engine). *Next:* user-defined agents via plugins; an orchestration graph (DAG, conditional routing, parallel fan-out); no lock-in in the orchestration layer (our contracts, MAF/SK as one engine, not the only one).
-- **LLM abstraction** — *Now:* Claude + Azure OpenAI + MAF + RemoteAgent behind `ILlmClient`/`ILlmClientFactory`. *Next:* **local models** (Ollama, vLLM) for fully air-gapped on-prem; capability negotiation (tool-calling/vision/context window) so the router picks per task. Rule: **always ≥2 providers wired.**
+- **Orchestration** — *Now:* 5 agents in `AgentOs.Modules.Pipeline`, executed as a sandbox story (Pipeline), a visual graph (Workflow `GraphExecutor`), or a real ticket (Spine) with two brains — Quality (5-agent) and Quick — behind one toggle. *Next:* user-defined agents via plugins; richer graph routing (conditional, parallel fan-out); no lock-in in the orchestration layer (our contracts, MAF/SK as one engine, not the only one).
+- **LLM abstraction** — *Now:* Claude + Azure OpenAI + MAF + RemoteAgent behind `ILlmClient`/`ILlmClientFactory`, per-tenant BYO keys. *Next:* token streaming + response cache (Q2); **local models** (Ollama, vLLM) for fully air-gapped on-prem; capability negotiation (tool-calling/vision/context window) so the router picks per task. Rule: **always ≥2 providers wired.**
 - **State** — *Now:* per-module Postgres contexts (modular monolith). *Next:* event-sourced agent runs → replay + time-travel debugging; snapshot a run, branch it, re-run with a different prompt/model (doubles as the prompt-drift regression harness).
-- **Observability** — *Now:* structured logs (enough to drive `cost-report`). *Next:* OpenTelemetry GenAI spans; exemplar traces; cost telemetry as a first-class signal, not a log scrape.
-- **Security** — *Now:* Keycloak OIDC, JWT, tenant row-level isolation, per-tenant rate limit + budget gate + `runner_shell` cap, CodeQL SAST. *Next:* **sandboxed code execution** — the Coding/Testing agents currently build in a temp dir; jailing that in a no-network/no-secret container is the single biggest gap before any "agent runs your code" feature hardens. Plus zero-trust between modules, prompt-injection defense, and output filtering (PII/secrets).
-- **Multi-tenant** — *Now:* row-level isolation via tenant context. *Next:* tiered isolation — row-level → schema-per-tenant → isolated infra per tenant; sell isolation level as a pricing axis.
+- **Observability** — *Now:* OTel wired (spans + metrics) but no backend; structured logs drive `cost-report`. *Next:* exporter to App Insights / OTLP (Q2); OpenTelemetry GenAI semantic conventions; cost telemetry as a first-class signal, not a log scrape.
+- **Security** — *Now:* Keycloak OIDC, JWT, tenant row-level isolation, per-tenant rate limit + budget gate + `runner_shell` cap, fail-closed tool-policy gates, SSRF guard, CodeQL SAST at 0. *Next:* **sandboxed code execution** — ADR + ephemeral quota'd container scheduled Q1 (see [D2](#4--open-architecture-decisions)); then zero-trust between modules, prompt-injection defense, and output filtering (PII/secrets).
+- **Multi-tenant** — *Now:* row-level isolation via tenant context + isolation tests. *Next:* tiered isolation — row-level → schema-per-tenant → isolated infra per tenant; sell isolation level as a pricing axis.
 - **Knowledge** — *Now:* agents are stateless beyond prompt context. *Next:* RAG over the tenant's own codebase + docs (pgvector, stays in Postgres); citation tracking so a claim links back to a source line.
 - **Tools** — *Now:* MCP client + server, GitHub PR service, build verifier, `runner_shell`. *Next:* broader MCP tool catalog, browser automation for agents that verify a running app, richer native API calls.
 - **UI** — *Now:* Blazor desktop shell, interactive circuits. *Next:* SSR + interactive islands for faster first paint; a mobile read-only view (check a run from your phone); a **CLI** for CI/headless use — same backend, no browser.
 
 ---
 
-## 5 — Business model
+## 6 — Business model
 
 | Model | Free | Paid | Pros | Cons |
 |-------|------|------|------|------|
@@ -124,28 +258,34 @@ Long-term architecture commitments — where we are → where we go.
 *cannot* use SaaS — keeping code in-house is exactly why they'd pick AgentOS, which rules out pure
 SaaS as the primary model. The features enterprises pay for (SSO/Entra, fine-grained RBAC,
 audit/SOC 2, infra-level isolation, priority support) are precisely the ones that should be gated —
-and they're the M3 roadmap. Start OSS for adoption, introduce the enterprise edition when those
-features land. Consulting fills the gap and feeds requirements. A hosted "AgentOS Cloud" stays a
-*later optional* offering, not the core bet.
+and they're the Q3-and-beyond roadmap. Start OSS for adoption, introduce the enterprise edition when
+those features land. Consulting fills the gap and feeds requirements. A hosted "AgentOS Cloud" stays
+a *later optional* offering, not the core bet.
 
 ---
 
-## 6 — Risks & mitigations
+## 7 — Risks & mitigations
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| **LLM cost explosion** | A runaway loop burns the budget in hours | ✅ per-tenant/per-run budget gate + rate limit (shipped); cheaper-model routing (M4); cache identical prompts |
+| **LLM cost explosion** | A runaway loop burns the budget in hours | ✅ per-tenant/per-run budget gate + rate limit (shipped); cheaper-model routing (beyond-12mo); prompt-keyed cache (Q2) |
 | **Agent loop / hallucination** | Confidently wrong code, infinite loops | ✅ QA gate + max-iteration cap (shipped); human-in-the-loop checkpoints; a quality benchmark in CI |
-| **Multi-tenant data leak** | Tenant A sees tenant B → trust dead, legal exposure | ✅ row-level isolation via EF global query filter + tenant-isolation tests; audit the tenant context on every data-access PR; tiered isolation for high-assurance tenants |
+| **Multi-tenant data leak** | Tenant A sees tenant B → trust dead, legal exposure | ✅ row-level isolation + fail-closed gates + tenant-filter freeze (shipped); B4 residue scheduled Q1; audit the tenant context on every data-access PR; tiered isolation for high-assurance tenants |
+| **Sandbox escape** | Agent-run code touches the host | ADR-0005 + ephemeral quota'd sandbox **scheduled Q1**; interim mitigation: `build_verifier` gated **off by default in Production** + fail-closed tool-policy gates ([#72](https://github.com/hoangsnowy/AgentOs/pull/72)) |
+| **Hard external deadline (Sep–Dec 2026)** | A slipped milestone breaks an external commitment | Q1+Q2 scope is the minimum defensible set; Q3/Q4 content is explicitly off the critical path and can slip without breaking the commitment |
 | **Prompt drift** | Yesterday's good prompt silently regresses | Version prompts v1→vN; snapshot fixtures; regression test in CI (`prompt-tune` scores variants) |
 | **Vendor lock-in** | A provider changes pricing/API | ✅ `IChatClient` abstraction + ≥2 providers wired; add a local model (Ollama/vLLM) as the always-available floor |
 | **Prompt injection** | Malicious input hijacks an agent | Strict template boundaries (untrusted input never concatenated into the system prompt); input/output classification; secret/PII output filter |
-| **Sandbox escape** | Agent-run code touches the host | Never execute generated code on the host; jailed container with no network/secret access — a hard dependency before any "agent runs your tests" feature ships |
 
 ---
 
-## 7 — Definition of success
+## 8 — Definition of success
 
-- **Near term** — OSS adoption: external PRs merged, issues from non-authors, a growing contributor base.
-- **Mid term** — one enterprise pilot in production; a published plugin ecosystem; a proven cost story vs a naive baseline.
-- **Long term** — pick the lane the data points to: a thriving open-core/community project (companies in production, sustainable contributors) **or** a commercial lane (enterprise seats + hosted AgentOS Cloud). Instrument adoption months in; let the numbers choose rather than pre-committing.
+- **Near term (the Q2 anchor)** — AgentOS live on Azure, demoed end-to-end by someone other than the
+  author: login → ticket → streaming Quality run → real PR → cost + trace in the observability
+  backend.
+- **Mid term** — the enterprise checklist green (RBAC, audit export, DR drill, rotation); first
+  external contributors (non-author issues + a merged non-author PR).
+- **Long term** — pick the lane the data points to: a thriving open-core/community project (companies
+  in production, sustainable contributors) **or** a commercial lane (enterprise seats + hosted
+  AgentOS Cloud). Instrument adoption months in; let the numbers choose rather than pre-committing.

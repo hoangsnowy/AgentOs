@@ -1,5 +1,11 @@
 # AgentOS — Coherence Program v2: one seamless engine, fast + enterprise-grade, docs, community
 
+> **SUPERSEDED as the planning document by [ROADMAP.md](ROADMAP.md) (2026-06).**
+> Phases 0–2 shipped (#52–#73): A1 + safety baseline (S1–S3) + A2a/A2b/A3 cross-links, plus E4
+> health probes, E7 store fix, F1 CI hardening. The remaining workstreams (B, E, F2, G, C, D) are
+> absorbed into ROADMAP.md §3 at milestone granularity. This file remains the **engineering
+> appendix** — its verified file:line anchors and PR-level slicing are still the implementation reference.
+
 > **Status of this doc.** Revised after a grounding pass that (a) verified every file:line anchor against current code, (b) audited performance + enterprise hardening with evidence, (c) red-teamed the sequencing. The original plan predated PR #54 and is stale in places — corrections are marked **⚠ CHANGED**. Goal added this session: the product must be **fast** and meet **enterprise standards**, not only coherent.
 
 ---
