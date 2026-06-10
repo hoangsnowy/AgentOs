@@ -12,7 +12,13 @@ services:
 
 hooks:
   postprovision:
-    shell: sh
-    run: ./infra/hooks/postprovision.sh
-    interactive: false
-    continueOnError: true
+    posix:
+      shell: sh
+      run: ./infra/hooks/postprovision.sh
+      interactive: false
+      continueOnError: true
+    windows:
+      shell: pwsh
+      run: ./infra/hooks/postprovision.ps1
+      interactive: false
+      continueOnError: true
