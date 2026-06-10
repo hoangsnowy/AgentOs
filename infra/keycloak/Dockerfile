@@ -5,13 +5,14 @@
 # Context: infra/keycloak/  (set by AppHost WithDockerfile("../../infra/keycloak"))
 # Files available in context: agentic-realm.json, themes/
 
-FROM quay.io/keycloak/keycloak:26 AS builder
+# NOTE: quay.io has no bare major tag — `keycloak:26` does NOT resolve; pin minor.
+FROM quay.io/keycloak/keycloak:26.6 AS builder
 WORKDIR /opt/keycloak
 
 # Build KC with Postgres DB provider pre-compiled for fast optimized startup.
 RUN /opt/keycloak/bin/kc.sh build --db=postgres
 
-FROM quay.io/keycloak/keycloak:26
+FROM quay.io/keycloak/keycloak:26.6
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 
 # Bake realm so KC imports it on first start (idempotent — KC skips if realm already exists in DB).
