@@ -19,8 +19,18 @@ ambient tenant + `PipelineStudio` pushes the circuit's tenant/member around the 
 + key reads). **Still open** (need full-stack verify): run-history repo tenant stamping,
 `OrchestrationStore` singleton cache, `AuthSession` identity from null HttpContext.
 
-**Still NOT done (other open items):** #10 build_verifier RCE sandbox; backlog SSRF (workspace connect),
-member can revoke another's runner/session, LLM-gateway edge bugs, observability backend.
+**Since this audit (landed on `main`):** per-tenant BYO LLM key isolation + Dapper read-side (#71);
+#72 — tenant-filter freeze (C1), fail-closed tool policy in Production, #10 build_verifier gated OFF
+by default in Production (interim), connect-time `SsrfGuard` on GitHub/ADO clients, DevSecretGuard,
+`OrchestrationStore` per-tenant cache keying (full-stack E2E pending), async `IRuntimeOverrides` key
+getters; Coherence Phase 2 — Spine runs the Quality engine, Quick/Quality toggle, cross-links +
+pooled-client per-call tenant fix (#73).
+
+**Still NOT done (other open items):** #10 build_verifier RCE *sandbox* (prod-gate is interim only);
+backlog: member can revoke another's runner/session, LLM-gateway edge bugs, observability backend.
+
+> Open items are **scheduled in [ROADMAP.md](../ROADMAP.md) Q1 (Live on Azure)**; this audit remains
+> the blocker-level tracker for the `azd up` round-trip.
 
 ## Batch 3 (cloud hardening) — status
 
