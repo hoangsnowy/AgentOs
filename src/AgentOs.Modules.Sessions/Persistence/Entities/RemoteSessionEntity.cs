@@ -47,4 +47,14 @@ public sealed class RemoteSessionEntity
     // CLI (claude-code / codex) via the RemoteAgent provider instead of the server LLM, spending zero
     // server tokens. Chosen per session at create time; remembered so a re-run keeps the choice.
     public bool RunOnMachine { get; set; }
+
+    // Coherence Phase 2 — which engine runs this session. "Quick" = IssueWorkAgent (an edit loop on the
+    // paired runner; the default). "Quality" = the 5-agent SDLC pipeline (server-side, greenfield only,
+    // gated by the ticket-type router). Chosen per session at create time; remembered for re-runs.
+    public string Brain { get; set; } = "Quick";
+
+    // The ticket's `type:*` label (e.g. "type:feature"/"type:bug") captured at create time, so the
+    // greenfield router can hard-gate the Quality engine even on the unattended "Run all ai:ready" path
+    // where there is no per-ticket UI. Null for legacy/migrated sessions or tickets with no type label.
+    public string? TicketType { get; set; }
 }

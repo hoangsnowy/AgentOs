@@ -52,9 +52,11 @@ public sealed class LlmModule : IModule
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PooledChatLlmClient>>(),
                 baseDelay: null,
                 toolRegistry: sp.GetService<AgentOs.Domain.Tools.IToolRegistry>(),
-                tenantContext: sp.GetService<AgentOs.SharedKernel.Identity.ITenantContext>(),
                 toolPolicy: sp.GetService<AgentOs.Domain.Tools.IToolPolicy>(),
-                toolInvocationLog: sp.GetService<AgentOs.Domain.Tools.IToolInvocationLog>());
+                toolInvocationLog: sp.GetService<AgentOs.Domain.Tools.IToolInvocationLog>(),
+                // Singleton client: pass the root provider so the request-scoped ITenantContext is resolved
+                // PER CALL (never captured here — that throws "scoped from root" under scope validation).
+                tenantProvider: sp);
         });
         services.AddKeyedSingleton<ILlmClient>("AzureOpenAI", (sp, _) =>
         {
@@ -73,9 +75,11 @@ public sealed class LlmModule : IModule
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PooledChatLlmClient>>(),
                 baseDelay: null,
                 toolRegistry: sp.GetService<AgentOs.Domain.Tools.IToolRegistry>(),
-                tenantContext: sp.GetService<AgentOs.SharedKernel.Identity.ITenantContext>(),
                 toolPolicy: sp.GetService<AgentOs.Domain.Tools.IToolPolicy>(),
-                toolInvocationLog: sp.GetService<AgentOs.Domain.Tools.IToolInvocationLog>());
+                toolInvocationLog: sp.GetService<AgentOs.Domain.Tools.IToolInvocationLog>(),
+                // Singleton client: pass the root provider so the request-scoped ITenantContext is resolved
+                // PER CALL (never captured here — that throws "scoped from root" under scope validation).
+                tenantProvider: sp);
         });
 
         services.AddSingleton<ILlmClientFactory, LlmClientFactory>();

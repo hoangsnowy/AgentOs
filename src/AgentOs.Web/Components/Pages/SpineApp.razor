@@ -17,6 +17,9 @@
 @using AgentOs.Modules.Workspaces.Persistence.Entities
 @using AgentOs.Modules.Sessions.Persistence
 @using AgentOs.Modules.Sessions.Persistence.Entities
+@using AgentOs.Domain.Pipeline
+@using AgentOs.Modules.Pipeline.Pipeline
+@using AgentOs.Modules.Pipeline.Sessions
 @inject IWorkspaceRepository Workspaces
 @inject IWorkspaceConnector Connector
 @inject IRunnerRepository Runners
@@ -28,6 +31,8 @@
 @inject AgentOs.Web.Services.ToastService Toasts
 @inject ISessionRunFeed Feed
 @inject IServiceScopeFactory ScopeFactory
+@inject Microsoft.Extensions.Options.IOptions<PipelineOptions> PipelineOpts
+@inject AgentOs.Web.Services.WindowManagerService WM
 @implements IDisposable
 
 <header class="page-head">
@@ -352,6 +357,10 @@ else if (_tab == Tab.Boards)
                                 <td>@if (ticket.Status is not null) { <Badge>@ticket.Status</Badge> } else { <span class="muted">—</span> }</td>
                                 <td class="muted">@(ticket.AssigneeLogin ?? "—")</td>
                                 <td class="actions">
+                                    <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => OpenInPipeline(ticket))"
+                                         title="Open this ticket as a story in the Pipeline app (sandbox run)">
+                                        <Icon Name="play" Size="13" /> Pipeline
+                                    </Btn>
                                     <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Primary"
                                          OnClick="@(() => OpenWorkDialog(ticket))"
                                          Disabled="@(_busy || ticket.Kind == BoardTicketKind.DraftIssue || ticket.RepoOwner is null)">
@@ -453,8 +462,19 @@ else if (_tab == Tab.Idea)
             </table>
 
             @if (_ideaError is not null) { <p class="login-error">@_ideaError</p> }
+            <label class="spine-ai-toggle" style="margin:10px 0 0">
+                Engine
+                <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:8px">
+                    <option value="Quick">Quick — runner edit loop</option>
+                    <option value="Quality">Quality — 5-agent pipeline</option>
+                </select>
+            </label>
+            @if (_brain == "Quality")
+            {
+                <p class="muted spine-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
+            }
             <label class="spine-ai-toggle" style="margin:10px 0">
-                <input type="checkbox" @bind="_runOnMachine" />
+                <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" />
                 Run on my machine — your paired runner's CLI does the work (0 server tokens)
             </label>
             @if (_runOnMachine)
@@ -689,7 +709,18 @@ else if (_tab == Tab.Sessions)
             }
         </div>
         <label class="spine-ai-toggle" style="margin-top:10px">
-            <input type="checkbox" @bind="_runOnMachine" />
+            Engine
+            <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:8px">
+                <option value="Quick">Quick — runner edit loop</option>
+                <option value="Quality">Quality — 5-agent pipeline</option>
+            </select>
+        </label>
+        @if (_brain == "Quality")
+        {
+            <p class="muted spine-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
+        }
+        <label class="spine-ai-toggle" style="margin-top:10px">
+            <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" />
             Run on my machine — your paired runner's CLI does the work (0 server tokens)
         </label>
         @if (_runOnMachine)
@@ -788,6 +819,7 @@ else if (_tab == Tab.Sessions)
     // / codex) instead of the server LLM. Shared by the idea-wizard auto-run + the Work-on-this dialog.
     private bool _runOnMachine;
     private string _cliProfile = "claude";   // which subscription CLI runs on-machine (claude | codex)
+    private string _brain = "Quick";         // which engine runs the session (Quick = runner edit loop | Quality = 5-agent pipeline)
     private BootstrapPreview? _preview;
     private readonly List<DraftRow> _draftRows = new();
     private IReadOnlyList<CreatedTicket> _createdTickets = Array.Empty<CreatedTicket>();
@@ -1134,9 +1166,7 @@ else if (_tab == Tab.Sessions)
                 return;
             }
 
-            var descriptor = new WorkspaceDescriptor(
-                repo.Id, _tenantId, _selectedBoard.Kind, repo.Owner, repo.Repo, _selectedBoard.Project,
-                string.IsNullOrWhiteSpace(repo.DefaultBranch) ? "main" : repo.DefaultBranch, pat);
+            var descriptor = RepoDescriptor(_selectedBoard, _tenantId, repo.Owner, repo.Repo, repo.DefaultBranch, pat);
             var result = await BoardWriteSvc.EnsureLabelsAsync(descriptor, StandardLabels.All);
 
             Toasts.Show("Spine",
@@ -1245,6 +1275,11 @@ else if (_tab == Tab.Sessions)
             _ideaError = "Pick a target board and repository.";
             return;
         }
+        if (runReady && EngineSelection.Validate(_brain, _runOnMachine) is { } brainErr)
+        {
+            _ideaError = brainErr;
+            return;
+        }
         _ideaBusy = true;
         _ideaError = null;
         try
@@ -1284,7 +1319,8 @@ else if (_tab == Tab.Sessions)
                     if (!drafts[i].AiReady) { continue; }
                     var t = _createdTickets[i];
                     sessions.Add(await PersistSessionAsync(
-                        board.Id, t.Number, $"#{t.Number} {t.Title}", t.ItemNodeId, "Issue", [repoOpt], _runOnMachine));
+                        board.Id, t.Number, $"#{t.Number} {t.Title}", t.ItemNodeId, "Issue", [repoOpt], _runOnMachine,
+                        brain: _brain, ticketType: TicketTypeOf(drafts[i].Labels)));
                 }
                 if (sessions.Count > 0)
                 {
@@ -1371,6 +1407,17 @@ else if (_tab == Tab.Sessions)
         _workTicket = null;
     }
 
+    // Cross-link — open the ticket as a story in the Pipeline app (a sandbox run), prefilling the story
+    // editor via a one-shot launch payload so the three surfaces read as one engine.
+    private void OpenInPipeline(BoardTicket ticket)
+    {
+        var app = AgentOs.Web.Services.AppCatalog.Find("pipeline");
+        if (app is null) { return; }
+        var story = ticket.Number is { } n ? $"#{n} {ticket.Title}".Trim() : ticket.Title.Trim();
+        WM.RequestLaunchPayload("pipeline", story);
+        WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
+    }
+
     private async Task ConfirmWorkSession()
     {
         if (_busy || _selectedBoard is null || _workTicket is null) { return; }
@@ -1378,6 +1425,11 @@ else if (_tab == Tab.Sessions)
         if (selected.Count == 0)
         {
             Toasts.Show("Spine", "Select at least one repository.", ToastKind.Err);
+            return;
+        }
+        if (EngineSelection.Validate(_brain, _runOnMachine) is { } brainErr)
+        {
+            Toasts.Show("Spine", brainErr, ToastKind.Err);
             return;
         }
         _busy = true;
@@ -1390,7 +1442,8 @@ else if (_tab == Tab.Sessions)
                 .ToList();
             await PersistSessionAsync(
                 _selectedBoard.Id, ticket.Number, $"#{ticket.Number} {ticket.Title}",
-                ticket.ItemNodeId, ticket.Kind.ToString(), ordered, _runOnMachine);
+                ticket.ItemNodeId, ticket.Kind.ToString(), ordered, _runOnMachine,
+                brain: _brain, ticketType: TicketTypeOf(ticket.Labels));
 
             Toasts.Show("Spine", $"Session created for #{ticket.Number} across {ordered.Count} repo(s). Switch to Sessions to run it.", ToastKind.Ok);
             CloseWorkDialog();
@@ -1417,7 +1470,7 @@ else if (_tab == Tab.Sessions)
     // the idea-wizard auto-run. repos[0] is the primary repo.
     private async Task<RemoteSessionEntity> PersistSessionAsync(
         Guid workspaceId, int? issueNumber, string title, string? itemNodeId, string ticketKind,
-        IReadOnlyList<RepoOption> repos, bool runOnMachine = false)
+        IReadOnlyList<RepoOption> repos, bool runOnMachine = false, string brain = "Quick", string? ticketType = null)
     {
         var sessionId = Guid.NewGuid();
         var primary = repos[0];
@@ -1436,6 +1489,8 @@ else if (_tab == Tab.Sessions)
             BoardItemNodeId = itemNodeId,
             TicketKind = ticketKind,
             RunOnMachine = runOnMachine,
+            Brain = brain,
+            TicketType = ticketType,
             CreatedAtUtc = DateTimeOffset.UtcNow,
             CreatedByUserId = string.IsNullOrEmpty(_userId) ? null : _userId,
         };
@@ -1457,6 +1512,19 @@ else if (_tab == Tab.Sessions)
         }
         return session;
     }
+
+    // The ticket's `type:*` label (type:feature / type:bug / …), captured so the greenfield router can
+    // hard-gate the Quality engine. First match wins; null when the ticket carries no type label.
+    private static string? TicketTypeOf(IEnumerable<string>? labels) =>
+        labels?.FirstOrDefault(l => l.StartsWith("type:", StringComparison.OrdinalIgnoreCase));
+
+    // A1 residue — the single builder for the repo-level, token-carrying WorkspaceDescriptor the source /
+    // PR / label services consume (transient; the PAT is resolved per call, never persisted). Kind +
+    // Project come from the board (the workspace); the descriptor Id is the board's workspace id.
+    private static WorkspaceDescriptor RepoDescriptor(
+        WorkspaceEntity board, string tenantId, string owner, string repo, string defaultBranch, string pat) =>
+        new(board.Id, tenantId, board.Kind, owner, repo, board.Project,
+            string.IsNullOrWhiteSpace(defaultBranch) ? "main" : defaultBranch, pat);
 
     // The ai:ready tickets on the board that the spine can run unattended (real issue, has a repo).
     private List<BoardTicket> ReadyTickets() => _tickets is null
@@ -1497,7 +1565,8 @@ else if (_tab == Tab.Sessions)
             {
                 sessions.Add(await PersistSessionAsync(
                     _selectedBoard.Id, ticket.Number, $"#{ticket.Number} {ticket.Title}",
-                    ticket.ItemNodeId, ticket.Kind.ToString(), [RepoOptionForTicket(ticket)]));
+                    ticket.ItemNodeId, ticket.Kind.ToString(), [RepoOptionForTicket(ticket)],
+                    ticketType: TicketTypeOf(ticket.Labels)));
             }
             Toasts.Show("Spine", $"Running {sessions.Count} ai:ready ticket(s)…", ToastKind.Ok);
             await ReloadAll();
@@ -1571,9 +1640,21 @@ else if (_tab == Tab.Sessions)
                     // identity — the LLM tool tenant + the runner dispatch read it to target the right runner,
                     // and runner_shell tags its per-command progress to the session id carried here.
                     using var _identity = AgentOs.SharedKernel.Identity.AmbientIdentity.Push(capturedTenantId, capturedSession.MemberUserId, capturedSession.Id);
+                    var sessRepo = scope.ServiceProvider.GetRequiredService<AgentOs.Modules.Sessions.Persistence.ISessionRepository>();
+
+                    // Quality engine — the 5-agent SDLC pipeline runs server-side (generates new files,
+                    // commits them + opens a PR via Octokit), greenfield only, hard-gated by the ticket-type
+                    // router. The Quick engine (the default IssueWorkAgent edit loop) is below.
+                    if (EngineSelection.IsQuality(capturedSession.Brain))
+                    {
+                        await RunQualitySessionAsync(
+                            scope, sessRepo, capturedSession, capturedBoard, capturedPat, capturedChildren, capturedTenantId)
+                            .ConfigureAwait(false);
+                        return;
+                    }
+
                     var agent = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Sessions.IIssueWorkAgent>();
                     var prService = scope.ServiceProvider.GetRequiredService<AgentOs.Domain.Workspaces.IPrCreationService>();
-                    var sessRepo = scope.ServiceProvider.GetRequiredService<AgentOs.Modules.Sessions.Persistence.ISessionRepository>();
 
                     var workRepos = capturedChildren
                         .Select(c => new AgentOs.Domain.Sessions.WorkRepo(c.Id, c.Owner, c.Repo, c.DefaultBranch))
@@ -1608,9 +1689,7 @@ else if (_tab == Tab.Sessions)
                         }
 
                         var childBranch = capturedChildren.FirstOrDefault(c => c.Id == outcome.SessionRepoId)?.DefaultBranch ?? "main";
-                        var descriptor = new AgentOs.Domain.Workspaces.WorkspaceDescriptor(
-                            capturedBoard.Id, capturedTenantId, capturedBoard.Kind,
-                            outcome.Owner, outcome.Repo, capturedBoard.Project, childBranch, capturedPat);
+                        var descriptor = RepoDescriptor(capturedBoard, capturedTenantId, outcome.Owner, outcome.Repo, childBranch, capturedPat);
 
                         try
                         {
@@ -1685,6 +1764,119 @@ else if (_tab == Tab.Sessions)
         {
             _busyId = null;
         }
+    }
+
+    // ── Quality engine (5-agent pipeline) ─────────────────────────────────────────────────────────
+
+    // Runs the 5-agent SDLC pipeline for a session against its PRIMARY repo (children[0]) and opens a PR
+    // with the generated code + tests. Server-side end-to-end — no runner needed. Hard-gated by the
+    // ticket-type router: a non-greenfield ticket is REFUSED (the pipeline only generates new files), never
+    // silently downgraded to Quick. Multi-repo fan-out is deferred (Quality targets the primary repo only).
+    private async Task RunQualitySessionAsync(
+        IServiceScope scope,
+        AgentOs.Modules.Sessions.Persistence.ISessionRepository sessRepo,
+        RemoteSessionEntity session,
+        WorkspaceEntity board,
+        string pat,
+        IReadOnlyList<SessionRepoEntity> children,
+        string tenantId)
+    {
+        // Tenant + session tagged publish to the live feed.
+        void Publish(SessionRunEventKind kind, string message, string? repo = null, string? status = null, string? prUrl = null) =>
+            Feed.Publish(new SessionRunEvent(tenantId, session.Id, kind, message, DateTimeOffset.UtcNow, repo, status, prUrl));
+
+        // Hard greenfield router (red-team HIGH) — refuse edit/bug/ambiguous tickets, never best-effort.
+        var cls = TicketClassifier.Classify(session.TicketType, session.Title);
+        if (cls != TicketClass.Greenfield)
+        {
+            var reason = TicketClassifier.RefusalMessage(cls);
+            await sessRepo.UpdateRunResultAsync(tenantId, session.Id, "Failed", null, reason).ConfigureAwait(false);
+            Publish(SessionRunEventKind.Failed, reason);
+            return;
+        }
+
+        var primary = children.Count > 0 ? children[0] : null;
+        if (primary is null)
+        {
+            const string noRepo = "Quality run has no target repo — recreate the session from a board ticket.";
+            await sessRepo.UpdateRunResultAsync(tenantId, session.Id, "Failed", null, noRepo).ConfigureAwait(false);
+            Publish(SessionRunEventKind.Failed, noRepo);
+            return;
+        }
+        var repoLabel = $"{primary.Owner}/{primary.Repo}";
+
+        // Resolve the heavy services lazily, inside this background scope (eager-DI landmine — never a
+        // @inject'd field, which would build a pooled LLM client in the circuit ctor and crash on open).
+        var pipeline = scope.ServiceProvider.GetRequiredService<IPipelineClient>();
+        var prService = scope.ServiceProvider.GetRequiredService<IGitHubPrService>();
+
+        Publish(SessionRunEventKind.Running, $"Quality engine — 5-agent pipeline on {repoLabel}.", repoLabel);
+
+        var story = IssueToStoryAdapter.ToUserStory(session.Title, null, QualityNMax());
+        PipelineResult? result = null;
+        string? error = null;
+        // The pipeline runs through PersistingOrchestratorAgent, which applies the S1 per-tenant budget gate
+        // (the ambient identity pushed by RunSession flows in via InProcessPipelineClient).
+        await foreach (var evt in pipeline.StreamAsync(story).ConfigureAwait(false))
+        {
+            switch (evt.Kind)
+            {
+                case PipelineStreamEventKind.Progress when evt.Progress is not null:
+                    Publish(SessionRunEventKind.Step, PipelineProgressFormatter.Describe(evt.Progress), repoLabel);
+                    break;
+                case PipelineStreamEventKind.Result:
+                    result = evt.Result;
+                    break;
+                case PipelineStreamEventKind.Error:
+                    error = evt.Error ?? "Pipeline error.";
+                    break;
+            }
+        }
+
+        if (result is null || result.Status == PipelineStatus.Failed)
+        {
+            var msg = error ?? "Quality pipeline failed — see the server log.";
+            await sessRepo.UpdateRepoRunResultAsync(tenantId, primary.Id, "Failed", null, null, msg).ConfigureAwait(false);
+            await sessRepo.UpdateRunResultAsync(tenantId, session.Id, "Failed", null, msg).ConfigureAwait(false);
+            Publish(SessionRunEventKind.Failed, $"{repoLabel} — {msg}", repoLabel, "Failed");
+            return;
+        }
+
+        // Commit the generated code + tests to the primary repo and open a PR (server-side via Octokit).
+        var descriptor = RepoDescriptor(board, tenantId, primary.Owner, primary.Repo, primary.DefaultBranch, pat);
+        var title = $"feat: #{session.IssueNumber} {session.Title}";
+        var body = $"Generated by the AgentOS Quality pipeline (5-agent SDLC loop) for session #{session.IssueNumber}.";
+        try
+        {
+            var pr = await prService.OpenPrAsync(result, descriptor, title, body, CancellationToken.None).ConfigureAwait(false);
+            await sessRepo.UpdateRepoRunResultAsync(tenantId, primary.Id, "Done", pr.Branch, pr.HtmlUrl, null).ConfigureAwait(false);
+            await sessRepo.RecomputeSessionStatusForTenantAsync(tenantId, session.Id).ConfigureAwait(false);
+            Publish(SessionRunEventKind.Done, $"{repoLabel} — PR opened.", repoLabel, "Done", pr.HtmlUrl);
+        }
+        catch (System.Net.Http.HttpRequestException ex) { await PrFailed(ex).ConfigureAwait(false); }
+        catch (System.Text.Json.JsonException ex) { await PrFailed(ex).ConfigureAwait(false); }
+        catch (InvalidOperationException ex) { await PrFailed(ex).ConfigureAwait(false); }
+        catch (ArgumentException ex) { await PrFailed(ex).ConfigureAwait(false); }
+        catch (System.IO.IOException ex) { await PrFailed(ex).ConfigureAwait(false); }
+        catch (TimeoutException ex) { await PrFailed(ex).ConfigureAwait(false); }
+
+        async Task PrFailed(Exception ex)
+        {
+            await sessRepo.UpdateRepoRunResultAsync(tenantId, primary.Id, "Failed", null, null, $"PR creation failed: {ex.Message}").ConfigureAwait(false);
+            await sessRepo.UpdateRunResultAsync(tenantId, session.Id, "Failed", null, $"PR creation failed: {ex.Message}").ConfigureAwait(false);
+            Publish(SessionRunEventKind.Failed, $"{repoLabel} — PR creation failed: {ex.Message}", repoLabel, "Failed");
+        }
+    }
+
+    // The QA-loop iteration cap for a Quality run, clamped to the admin/tenant bound (S4): the pipeline
+    // default (3), never above Pipeline:MaxIterations. The orchestrator re-clamps the same way, so this is
+    // also what the cost label can honestly advertise.
+    private int QualityNMax() => Math.Clamp(Math.Min(3, PipelineOpts.Value.MaxIterations), 1, 10);
+
+    // Switching the engine to Quality forces "run on my machine" off — the pipeline is server-side.
+    private void OnBrainChanged()
+    {
+        if (EngineSelection.IsQuality(_brain)) { _runOnMachine = false; }
     }
 
     // ── Runner management ────────────────────────────────────────────────────────────────────────

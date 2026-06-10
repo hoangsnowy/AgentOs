@@ -55,6 +55,24 @@ public sealed class WindowManagerService
         return null;
     }
 
+    /// <summary>
+    /// One-shot launch payload: data a freshly-opened app consumes on init (e.g. the Spine "Open in
+    /// Pipeline" action prefills the Pipeline app's story text). Set it right before <see cref="OpenApp"/>;
+    /// the app reads it once via <see cref="ConsumeLaunchPayload"/> and it self-clears, so a later plain
+    /// launch starts empty. Keyed by app so concurrent deep-links don't collide.
+    /// </summary>
+    private readonly Dictionary<string, string> _launchPayload = new(StringComparer.Ordinal);
+
+    /// <summary>Request that the next <see cref="OpenApp"/> of <paramref name="appKey"/> receives <paramref name="payload"/>.</summary>
+    public void RequestLaunchPayload(string appKey, string payload) => _launchPayload[appKey] = payload;
+
+    /// <summary>Read + clear the pending launch payload for an app (null when none was requested).</summary>
+    public string? ConsumeLaunchPayload(string appKey)
+    {
+        if (_launchPayload.Remove(appKey, out var payload)) { return payload; }
+        return null;
+    }
+
     /// <summary>Fires when the window set or z-order changes.</summary>
     public event Action? Changed;
 

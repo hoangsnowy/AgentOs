@@ -16,6 +16,7 @@ using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Logging;
 using AgentOs.SharedKernel.Telemetry;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Modules.Llm;
@@ -32,6 +33,11 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
     private readonly TimeSpan _baseDelay;
     private readonly IToolRegistry? _toolRegistry;
     private readonly ITenantContext? _tenantContext;
+    // Root provider for resolving the request-scoped ITenantContext PER CALL. This client is a keyed
+    // SINGLETON, so it must NOT capture a scoped ITenantContext at construction (that throws
+    // "scoped from root" under scope validation when the host's tenant context is scoped, e.g. Keycloak's
+    // HttpTenantContext). Used only as a fallback when no AmbientIdentity is on the call.
+    private readonly IServiceProvider? _tenantProvider;
     private readonly IToolPolicy? _toolPolicy;
     private readonly IToolInvocationLog? _toolInvocationLog;
     private readonly ConcurrentDictionary<string, IChatClient> _clients = new(StringComparer.Ordinal);
@@ -52,7 +58,8 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
         IToolRegistry? toolRegistry = null,
         ITenantContext? tenantContext = null,
         IToolPolicy? toolPolicy = null,
-        IToolInvocationLog? toolInvocationLog = null)
+        IToolInvocationLog? toolInvocationLog = null,
+        IServiceProvider? tenantProvider = null)
     {
         Provider = string.IsNullOrWhiteSpace(provider) ? throw new ArgumentException("provider required", nameof(provider)) : provider;
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
@@ -64,8 +71,21 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
         _baseDelay = baseDelay ?? TimeSpan.FromSeconds(1);
         _toolRegistry = toolRegistry;
         _tenantContext = tenantContext;
+        _tenantProvider = tenantProvider;
         _toolPolicy = toolPolicy;
         _toolInvocationLog = toolInvocationLog;
+    }
+
+    // The tenant for tool tagging / telemetry when there is no AmbientIdentity on the call. Prefer a
+    // directly-supplied ITenantContext (tests); otherwise resolve the request-scoped one inside a fresh
+    // scope off the root provider (safe from a singleton — IHttpContextAccessor is itself a singleton, so
+    // the scoped HttpTenantContext still sees the current request). Returns null when neither is available.
+    private string? ResolveFallbackTenant()
+    {
+        if (_tenantContext is not null) { return _tenantContext.TenantId; }
+        if (_tenantProvider is null) { return null; }
+        using var scope = _tenantProvider.CreateScope();
+        return scope.ServiceProvider.GetService<ITenantContext>()?.TenantId;
     }
 
     /// <inheritdoc />
@@ -101,7 +121,7 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
         var maxAttempts = Math.Max(1, keys.Count);
         Exception? last = null;
 
-        var tenantId = AmbientIdentity.Current?.TenantId ?? _tenantContext?.TenantId;
+        var tenantId = AmbientIdentity.Current?.TenantId ?? ResolveFallbackTenant();
         var genAiSystem = LlmTelemetry.SystemFor(Provider);
 
         for (var attempt = 0; attempt < maxAttempts; attempt++)
@@ -181,7 +201,7 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
             return resolved;
         }
 
-        var tenantId = AgentOs.SharedKernel.Identity.AmbientIdentity.Current?.TenantId ?? _tenantContext?.TenantId ?? "anonymous";
+        var tenantId = AgentOs.SharedKernel.Identity.AmbientIdentity.Current?.TenantId ?? ResolveFallbackTenant() ?? "anonymous";
         foreach (var name in requested)
         {
             if (string.IsNullOrWhiteSpace(name))

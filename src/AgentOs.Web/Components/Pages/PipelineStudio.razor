@@ -563,6 +563,10 @@
             _stages[s] = new StageRow();
         }
         _dbConnected = !string.IsNullOrWhiteSpace(Config.GetConnectionString("DefaultConnection"));
+
+        // Cross-link: the Spine "Open in Pipeline" action prefills the story via a one-shot launch payload.
+        var prefill = WM.ConsumeLaunchPayload("pipeline");
+        if (!string.IsNullOrWhiteSpace(prefill)) { _description = prefill; }
     }
 
     private async Task RunAsync()
