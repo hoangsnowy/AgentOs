@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
-# postprovision.sh — run by `azd` after `azd provision` completes.
+# postprovision.sh — run by `azd` after `azd provision` completes (Windows runs postprovision.ps1).
 #
-# Patches the 'agentic-web' Keycloak client's redirectUris + webOrigins to use the real
-# Azure Container Apps FQDN for the Web app (instead of the hardcoded localhost:5180 from
-# the realm import). Also prints the KC DB bootstrap instructions.
+# Brings the imported 'agentic' realm in line with the cloud deployment:
+#   1. Patches the 'agentic-web' client's redirectUris + webOrigins to the real ACA Web FQDN
+#      (the realm import hardcodes https://localhost:5180) AND rotates the client secret to the
+#      KEYCLOAKWEBCLIENTSECRET azd parameter (the import bakes the public dev secret — the Web app
+#      already receives the azd value, so without this patch every login fails on secret mismatch).
+#   2. Disables realm verifyEmail in cloud — no SMTP is wired yet (roadmap decision D4).
+#   3. Rotates the imported seed users' passwords (operator/member) to OPERATORPASSWORD /
+#      MEMBERPASSWORD when set — the import ships public placeholder passwords.
 #
 # Required env vars (set via `azd env set`):
-#   KEYCLOAK_BASE_URL   — public FQDN of the KC container, e.g. https://keycloak.<env>.azurecontainerapps.io
-#   WEB_BASE_URL        — public FQDN of the Web container, e.g. https://web.<env>.azurecontainerapps.io
-#   KEYCLOAKADMINPASSWORD — KC admin password (same as azd env parameter)
+#   KEYCLOAK_BASE_URL      — public FQDN of the KC container app
+#   WEB_BASE_URL           — public FQDN of the Web container app
+#   KEYCLOAKADMINPASSWORD  — KC admin password (azd parameter)
+#   KEYCLOAKWEBCLIENTSECRET— agentic-web client secret (azd parameter)
+# Optional:
+#   OPERATORPASSWORD, MEMBERPASSWORD — new seed-user passwords (skipped when unset)
 #
 # Run manually:  bash infra/hooks/postprovision.sh
 set -euo pipefail
@@ -17,29 +25,23 @@ KC_URL="${KEYCLOAK_BASE_URL:-}"
 WEB_URL="${WEB_BASE_URL:-}"
 KC_ADMIN_PASS="${KEYCLOAKADMINPASSWORD:-}"
 KC_ADMIN_USER="${KEYCLOAKADMINUSERNAME:-admin}"
+KC_WEB_SECRET="${KEYCLOAKWEBCLIENTSECRET:-}"
 REALM="agentic"
 CLIENT_ID="agentic-web"
 
 if [[ -z "$KC_URL" || -z "$WEB_URL" || -z "$KC_ADMIN_PASS" ]]; then
-  echo "Skipping KC client patch — KEYCLOAK_BASE_URL, WEB_BASE_URL, or KEYCLOAKADMINPASSWORD not set."
+  echo "Skipping KC realm patch — KEYCLOAK_BASE_URL, WEB_BASE_URL, or KEYCLOAKADMINPASSWORD not set."
   echo ""
-  echo "To enable, run:"
+  echo "After the first 'azd up', run:"
   echo "  azd env set KEYCLOAK_BASE_URL  'https://keycloak.<env>.azurecontainerapps.io'"
   echo "  azd env set WEB_BASE_URL       'https://web.<env>.azurecontainerapps.io'"
-  echo ""
-  echo "KC Postgres bootstrap (run after KC is up):"
-  echo "  1. Create 'keycloak' database on the provisioned Postgres server"
-  echo "  2. azd env set KEYCLOAKDBURL      'jdbc:postgresql://<host>:5432/keycloak?sslmode=require'"
-  echo "  3. azd env set KEYCLOAKDBUSERNAME '<admin-login>'"
-  echo "  4. azd env set KEYCLOAKDBPASSWORD '<password>'"
-  echo "  5. azd env set KEYCLOAKHOSTNAME   '$KC_URL'"
-  echo "  6. azd up"
+  echo "  azd provision   # re-runs this hook"
   exit 0
 fi
 
-echo "Patching KC client '$CLIENT_ID' redirectUris + webOrigins → $WEB_URL"
+echo "Patching realm '$REALM' for $WEB_URL"
 
-# Get admin token
+# Admin token
 TOKEN=$(curl -sf -X POST "$KC_URL/realms/master/protocol/openid-connect/token" \
   -d "grant_type=password" \
   -d "client_id=admin-cli" \
@@ -51,8 +53,10 @@ if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
   exit 1
 fi
 
-# Find client UUID
-CLIENT_UUID=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+auth=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json")
+
+# 1. agentic-web client: redirect URIs + origins + secret
+CLIENT_UUID=$(curl -sf "${auth[@]}" \
   "$KC_URL/admin/realms/$REALM/clients?clientId=$CLIENT_ID" | jq -r '.[0].id')
 
 if [[ -z "$CLIENT_UUID" || "$CLIENT_UUID" == "null" ]]; then
@@ -60,10 +64,41 @@ if [[ -z "$CLIENT_UUID" || "$CLIENT_UUID" == "null" ]]; then
   exit 1
 fi
 
-# Patch redirectUris + webOrigins
-curl -sf -X PUT "$KC_URL/admin/realms/$REALM/clients/$CLIENT_UUID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"redirectUris\":[\"$WEB_URL/*\"],\"webOrigins\":[\"$WEB_URL\"]}" \
-  && echo "KC client patched: redirectUris=$WEB_URL/*" \
-  || echo "ERROR: Failed to patch KC client."
+CLIENT_PATCH="{\"redirectUris\":[\"$WEB_URL/*\"],\"webOrigins\":[\"$WEB_URL\"]"
+if [[ -n "$KC_WEB_SECRET" ]]; then
+  CLIENT_PATCH+=",\"secret\":$(jq -Rn --arg s "$KC_WEB_SECRET" '$s')"
+fi
+CLIENT_PATCH+="}"
+
+curl -sf -X PUT "${auth[@]}" "$KC_URL/admin/realms/$REALM/clients/$CLIENT_UUID" -d "$CLIENT_PATCH" \
+  && echo "Client patched: redirectUris=$WEB_URL/* secret=$([[ -n "$KC_WEB_SECRET" ]] && echo rotated || echo unchanged)" \
+  || { echo "ERROR: Failed to patch KC client."; exit 1; }
+
+# 2. Realm: verifyEmail off in cloud (no SMTP yet — D4)
+curl -sf -X PUT "${auth[@]}" "$KC_URL/admin/realms/$REALM" -d '{"realm":"agentic","verifyEmail":false}' \
+  && echo "Realm verifyEmail=false" \
+  || echo "WARN: Failed to set verifyEmail=false."
+
+# 3. Seed users: rotate imported placeholder passwords
+rotate_user() {
+  local username="$1" newpass="$2"
+  if [[ -z "$newpass" ]]; then
+    echo "WARN: ${username^^}PASSWORD not set — seed user '$username' keeps the public imported password."
+    return 0
+  fi
+  local uid
+  uid=$(curl -sf "${auth[@]}" "$KC_URL/admin/realms/$REALM/users?username=$username&exact=true" | jq -r '.[0].id')
+  if [[ -z "$uid" || "$uid" == "null" ]]; then
+    echo "WARN: seed user '$username' not found — skipping."
+    return 0
+  fi
+  curl -sf -X PUT "${auth[@]}" "$KC_URL/admin/realms/$REALM/users/$uid/reset-password" \
+    -d "$(jq -n --arg p "$newpass" '{type:"password",value:$p,temporary:false}')" \
+    && echo "Seed user '$username' password rotated." \
+    || echo "WARN: Failed to rotate '$username' password."
+}
+
+rotate_user "operator" "${OPERATORPASSWORD:-}"
+rotate_user "member"   "${MEMBERPASSWORD:-}"
+
+echo "Realm patch complete."

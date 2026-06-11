@@ -7,25 +7,31 @@
 // `agentic-web` client redirectUris. MailHog catches all dev verification emails on UI port 8025;
 // Keycloak sends to it via the realm-level smtpServer config (host=mailhog port=1025).
 //
-// --- Cloud bootstrap (two-step) ---
-// Step 1: azd provision  → provisions Azure Postgres + Container Apps infrastructure.
-//         KC starts ephemeral (H2) on first deploy — app works but realm resets on restarts.
-// Step 2: Create a 'keycloak' database on the provisioned Postgres server, then:
-//         azd env set KEYCLOAKDBURL      "jdbc:postgresql://<host>:5432/keycloak?sslmode=require"
-//         azd env set KEYCLOAKDBUSERNAME "<admin-login>"
-//         azd env set KEYCLOAKDBPASSWORD "<password>"
-//         azd env set KEYCLOAKHOSTNAME   "https://keycloak.<env>.<region>.azurecontainerapps.io"
+// --- Cloud bootstrap (single pass + realm patch) ---
+// Keycloak is durable from the FIRST `azd up`: the publish branch provisions a 'keycloak' database
+// on the same Azure Postgres flexible server (password auth — Keycloak's JDBC driver and the app's
+// plain Npgsql can't do Entra tokens) and wires KC_DB_* from the server's bicep outputs. No manual
+// JDBC step. KC auto-detects its public hostname from the ACA forwarded headers
+// (KC_HOSTNAME_STRICT=false + KC_PROXY_HEADERS=xforwarded + KC_HTTP_ENABLED=true — Keycloak 24+
+// removed the old KC_PROXY=edge option). Before the first `azd up`, set the required secrets:
 //         azd env set KEYCLOAKADMINPASSWORD    "<strong-password>"
 //         azd env set KEYCLOAKWEBCLIENTSECRET  "<strong-secret>"
-//         azd env set SMTPHOST  "<smtp-relay-host>"
-//         azd env set SMTPPORT  "587"
-//         azd up  → KC now uses Postgres (durable) + stable hostname
+//         azd env set POSTGRESPASSWORD         "<strong-password>"
+// After the first deploy, set the public URLs and re-run the realm patch hook (azd runs it on every
+// provision; it skips silently until these are set):
+//         azd env set KEYCLOAK_BASE_URL "https://keycloak.<env>.<region>.azurecontainerapps.io"
+//         azd env set WEB_BASE_URL      "https://web.<env>.<region>.azurecontainerapps.io"
+// The hook (infra/hooks/postprovision.*) patches realm redirectUris/webOrigins + the agentic-web
+// client secret to match KEYCLOAKWEBCLIENTSECRET, rotates seed-user passwords, and disables
+// verifyEmail in cloud (no SMTP yet — roadmap D4).
 //
-// Secrets (Keycloak admin password + agentic-web client secret) are Aspire Parameters; their dev
-// defaults live in appsettings.json under "Parameters". Override per-environment via
-// `dotnet user-secrets`, `azd env set`, or environment variables — never edit the dev defaults.
+// Secrets (Keycloak admin password + agentic-web client secret + Postgres password) are Aspire
+// Parameters; their dev defaults live in appsettings.json under "Parameters". Override
+// per-environment via `dotnet user-secrets`, `azd env set`, or environment variables — never edit
+// the dev defaults.
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -38,20 +44,23 @@ var kcAdminUsername   = builder.AddParameter("KeycloakAdminUsername");
 var kcAdminPassword   = builder.AddParameter("KeycloakAdminPassword", secret: true);
 var kcWebClientSecret = builder.AddParameter("KeycloakWebClientSecret", secret: true);
 
-// --- Cloud KC persistence + hostname (empty in dev; set via azd env set — see bootstrap comment above) ---
-var kcDbUrl      = builder.AddParameter("KeycloakDbUrl");
-var kcDbUsername = builder.AddParameter("KeycloakDbUsername");
-var kcDbPassword = builder.AddParameter("KeycloakDbPassword", secret: true);
-var kcHostname   = builder.AddParameter("KeycloakHostname");
-
 // --- Email (dev → MailHog localhost:1025; cloud → real SMTP via azd env set SMTPHOST / SMTPPORT) ---
 var smtpHost = builder.AddParameter("SmtpHost");
 var smtpPort = builder.AddParameter("SmtpPort");
 
 // --- App database (local: Docker container; cloud: Azure Postgres Flexible Server) ---
-var db = builder.AddAzurePostgresFlexibleServer("postgres")
-    .RunAsContainer(c => c.WithDataVolume())
-    .AddDatabase("DefaultConnection", databaseName: "agentos");
+// Password auth, not Entra: the app talks plain Npgsql (UseNpgsql with a connection string, no
+// token plumbing) and Keycloak talks JDBC — neither can use the AzurePostgresqlAuthenticationPlugin
+// that Aspire's default Entra-only provisioning assumes.
+var pgUsername = builder.AddParameter("PostgresUsername");
+var pgPassword = builder.AddParameter("PostgresPassword", secret: true);
+var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
+    .WithPasswordAuthentication(pgUsername, pgPassword)
+    .RunAsContainer(c => c.WithDataVolume());
+var db = postgres.AddDatabase("DefaultConnection", databaseName: "agentos");
+// Keycloak's durable store — created by the same bicep so KC is Postgres-backed from the first
+// `azd up` (no manual "create the keycloak database" step).
+postgres.AddDatabase("keycloak-db", databaseName: "keycloak");
 
 // --- MailHog: dev SMTP catcher only — never ship to cloud ---
 IResourceBuilder<ContainerResource>? mailhog = null;
@@ -86,32 +95,25 @@ if (!isPublish)
 else
 {
     // Cloud: custom image (infra/keycloak/Dockerfile) bakes realm JSON + theme into the image so
-    // bind-mounts aren't needed. KC_PROXY=edge trusts the ACA TLS-terminating ingress X-Forwarded-*
-    // headers. KC_HOSTNAME_STRICT=false lets KC auto-detect its public URL from requests on the first
-    // deploy (before KC_HOSTNAME is set); set KC_HOSTNAME once you have the stable ACA FQDN.
+    // bind-mounts aren't needed. ACA's ingress terminates TLS and forwards plain HTTP with
+    // X-Forwarded-* headers, so KC must (a) accept HTTP (KC_HTTP_ENABLED — `start` mode refuses
+    // plain HTTP otherwise), (b) trust the forwarded headers (KC_PROXY_HEADERS=xforwarded — the
+    // old KC_PROXY=edge option was removed in Keycloak 24), and (c) derive its public URL from the
+    // request (KC_HOSTNAME_STRICT=false) — the ACA FQDN is stable, so the issuer stays consistent.
     keycloak
         .WithDockerfile("../../infra/keycloak")
-        .WithEnvironment("KC_PROXY", "edge")
-        .WithEnvironment("KC_HOSTNAME_STRICT", "false");
-
-    // Durable Postgres backend — only activate once KC DB params are set (step 2 of cloud bootstrap).
-    // Without these, KC starts with H2 (ephemeral) which is fine for the initial provision round.
-    var kcDbUrlValue = builder.Configuration["Parameters:KeycloakDbUrl"];
-    if (!string.IsNullOrEmpty(kcDbUrlValue))
-    {
-        keycloak
-            .WithEnvironment("KC_DB", "postgres")
-            .WithEnvironment("KC_DB_URL", kcDbUrl)
-            .WithEnvironment("KC_DB_USERNAME", kcDbUsername)
-            .WithEnvironment("KC_DB_PASSWORD", kcDbPassword);
-    }
-
-    // Stable public hostname — set after first provision so issuer + redirect_uri are consistent.
-    var kcHostnameValue = builder.Configuration["Parameters:KeycloakHostname"];
-    if (!string.IsNullOrEmpty(kcHostnameValue))
-    {
-        keycloak.WithEnvironment("KC_HOSTNAME", kcHostname);
-    }
+        .WithEnvironment("KC_HTTP_ENABLED", "true")
+        .WithEnvironment("KC_PROXY_HEADERS", "xforwarded")
+        .WithEnvironment("KC_HOSTNAME_STRICT", "false")
+        // Browser must reach the login page + OIDC endpoints → external ingress (http 8080 only;
+        // the management endpoint stays internal).
+        .WithEndpoint("http", e => e.IsExternal = true)
+        // Durable Postgres backend from the first deploy — same flexible server, 'keycloak' DB,
+        // composed from the server's bicep outputs (no manual JDBC bootstrap step).
+        .WithEnvironment("KC_DB", "postgres")
+        .WithEnvironment("KC_DB_URL", KeycloakJdbcUrl(postgres))
+        .WithEnvironment("KC_DB_USERNAME", pgUsername)
+        .WithEnvironment("KC_DB_PASSWORD", pgPassword);
 }
 
 // --- API ---
@@ -131,6 +133,7 @@ var api = builder.AddProject<Projects.AgentOs_Api>("api")
     .WithEnvironment("Email__SmtpPort", smtpPort);
 
 if (!isPublish) { api.WaitFor(mailhog!); }
+else { api.WithExternalHttpEndpoints(); }   // cloud: health smoke + Scalar need a public FQDN
 
 // The Web must be reachable at EXACTLY https://localhost:5180 in run mode — that string is hard-wired
 // into the Keycloak realm's redirectUris, so any other scheme/port/origin breaks OIDC login. Make that
@@ -143,8 +146,21 @@ if (!isPublish) { api.WaitFor(mailhog!); }
 //                                    reverse-proxy in front), so nothing else contends for 5180 and the
 //                                    request origin the app sees IS https://localhost:5180 → the OIDC
 //                                    redirect_uri matches the realm with no forwarded-header juggling.
-var web = builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null)
-    .WithHttpsEndpoint(port: 5180, targetPort: 5180, name: "https", isProxied: false)
+var web = builder.AddProject<Projects.AgentOs_Web>("web", launchProfileName: null);
+if (!isPublish)
+{
+    // Run mode: pin EXACTLY https://localhost:5180 (see comment above).
+    web.WithHttpsEndpoint(port: 5180, targetPort: 5180, name: "https", isProxied: false);
+}
+else
+{
+    // Cloud: TLS terminates at the ACA ingress — the container must listen on plain HTTP (an
+    // in-container HTTPS endpoint would make Kestrel demand a server cert that doesn't exist in
+    // the image and crash on boot). External ingress so the browser can reach the desktop.
+    web.WithHttpEndpoint(name: "http", targetPort: 8080)
+       .WithExternalHttpEndpoints();
+}
+web
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", isPublish ? "Production" : "Development")
     .WithEnvironment("Auth__DevAutoLogin", "false")
     .WithReference(db).WaitFor(db)
@@ -175,5 +191,16 @@ static ReferenceExpression RealmAuthority(EndpointReference http)
     var b = new ReferenceExpressionBuilder();
     b.AppendFormatted(http.Property(EndpointProperty.Url));
     b.AppendLiteral("/realms/agentic");
+    return b.Build();
+}
+
+// JDBC URL for Keycloak's durable store on the provisioned flexible server — composed from the
+// server's bicep `hostName` output so it resolves at deploy time (publish mode only).
+static ReferenceExpression KeycloakJdbcUrl(IResourceBuilder<AzurePostgresFlexibleServerResource> postgres)
+{
+    var b = new ReferenceExpressionBuilder();
+    b.AppendLiteral("jdbc:postgresql://");
+    b.AppendFormatted(postgres.GetOutput("hostName"));
+    b.AppendLiteral(":5432/keycloak?sslmode=require");
     return b.Build();
 }
