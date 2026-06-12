@@ -18,6 +18,12 @@ internal static class SettingsEndpoints
 
         app.MapGet("/settings/{prefix}", async (string prefix, IAppConfigStore store, CancellationToken ct) =>
         {
+            if (!SettingsKeyRegistry.IsReadablePrefix(prefix))
+            {
+                return Results.Problem(
+                    detail: $"'{prefix}' is not a readable settings prefix.",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
             var keys = await store.ListAsync(prefix + ":", ct).ConfigureAwait(false);
             var dict = new Dictionary<string, string?>(keys.Count);
             foreach (var k in keys)
@@ -40,6 +46,20 @@ internal static class SettingsEndpoints
                     ["key"] = ["A non-empty setting key is required."],
                 });
             }
+            if (!SettingsKeyRegistry.IsKnownKey(body.Key))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["key"] = [$"'{body.Key}' is not a recognised runtime setting."],
+                });
+            }
+            if (SettingsKeyRegistry.ValidateValue(body.Key, body.Value) is { } error)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["value"] = [error],
+                });
+            }
             await store.SetAsync(body.Key, body.Value, ct).ConfigureAwait(false);
             return Results.NoContent();
         })
@@ -50,6 +70,12 @@ internal static class SettingsEndpoints
 
         app.MapDelete("/settings/{key}", async (string key, IAppConfigStore store, CancellationToken ct) =>
         {
+            if (!SettingsKeyRegistry.IsKnownKey(key))
+            {
+                return Results.Problem(
+                    detail: $"'{key}' is not a recognised runtime setting.",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
             await store.DeleteAsync(key, ct).ConfigureAwait(false);
             return Results.NoContent();
         })

@@ -31,6 +31,18 @@ public sealed class AgentsOptions
 
     /// <summary>TicketDecomposerAgent configuration (bootstrap — RequirementSpec → board tickets).</summary>
     public AgentOptions Decomposer { get; set; } = new() { Model = "claude-sonnet-4-6", Temperature = 0.2, MaxTokens = 4000 };
+
+    /// <summary>Every configured agent, for cross-cutting checks (startup validation).</summary>
+    public IEnumerable<AgentOptions> All()
+    {
+        yield return Orchestrator;
+        yield return Requirement;
+        yield return Coding;
+        yield return Testing;
+        yield return Qa;
+        yield return IssueWork;
+        yield return Decomposer;
+    }
 }
 
 /// <summary>Configuration for a single agent.</summary>

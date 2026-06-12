@@ -3,6 +3,7 @@
 // IToolRegistry. Depends on IToolRegistry being registered first (ToolsModule).
 
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Mcp.Configuration;
@@ -19,8 +20,23 @@ public sealed class McpModule : IModule, IInitializableModule
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
+        // Fail-fast config: a server entry missing its name or transport coordinates would otherwise
+        // surface as an opaque connect failure at startup (or a silently dead toolset).
         services.AddOptions<McpOptions>()
-            .Bind(configuration.GetSection(McpOptions.SectionName));
+            .Bind(configuration.GetSection(McpOptions.SectionName))
+            .Validate(o => o.CallTimeoutSeconds > 0,
+                "Mcp:CallTimeoutSeconds must be > 0.")
+            .Validate(o => o.Servers.All(s => !s.Enabled || !string.IsNullOrWhiteSpace(s.Name)),
+                "Mcp:Servers — every enabled server needs a Name (it prefixes its tools).")
+            .Validate(o => o.Servers.All(s => !s.Enabled
+                    || !string.Equals(s.Transport, "stdio", StringComparison.OrdinalIgnoreCase)
+                    || !string.IsNullOrWhiteSpace(s.Command)),
+                "Mcp:Servers — a stdio server needs a Command to spawn.")
+            .Validate(o => o.Servers.All(s => !s.Enabled
+                    || !string.Equals(s.Transport, "http", StringComparison.OrdinalIgnoreCase)
+                    || Uri.TryCreate(s.Url, UriKind.Absolute, out _)),
+                "Mcp:Servers — an http server needs an absolute Url.")
+            .ValidateOnStart();
 
         services.AddSingleton<McpClientHost>();
     }
