@@ -29,6 +29,8 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <!-- Release stamp surfaced by the hosts' / and /version endpoints (AssemblyInformationalVersion). -->
+    <Version>0.6.0</Version>
     <Product>AgentOs</Product>
     <RepositoryUrl>https://github.com/hoangsnowy/AgentOs</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

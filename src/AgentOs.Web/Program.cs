@@ -214,19 +214,23 @@ app.UseResponseCompression();
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    // Branded static crash screen (no routing/auth/circuit — see ErrorPage for why not a component).
+    app.UseExceptionHandler(errorApp => errorApp.Run(AgentOs.Web.ErrorPage.HandleAsync));
 }
 
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
-app.MapGet("/health", () => Results.Ok(new { status = "Healthy", utc = DateTime.UtcNow }));
+// /health (readiness: self + postgres + keycloak when configured) and /alive (liveness) come from
+// ServiceDefaults — real dependency probes with a JSON body naming each failing check.
+app.MapDefaultEndpoints();
 
-// E4 — liveness probe. Distinct from readiness: returns 200 as long as the process can serve a
-// request, so a hung instance fails liveness and Container Apps recycles it. Mapped unconditionally
-// (the old shared MapDefaultEndpoints gated this behind IsDevelopment, so prod had no liveness target).
-app.MapGet("/alive", () => Results.Ok(new { status = "Alive", utc = DateTime.UtcNow }));
+// Build-stamped version (Directory.Build.props <Version>) for operators/monitoring.
+var informationalVersion = System.Reflection.CustomAttributeExtensions
+    .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(Program).Assembly)
+    ?.InformationalVersion ?? "0.0.0";
+app.MapGet("/version", () => Results.Ok(new { name = "agentos-web", version = informationalVersion }));
 
 // Serve the self-contained AgentOs.RemoteAgent exe so the VS Code extension (and the Runners tab) can
 // fetch the runner with no .NET SDK and no source checkout. scripts/build-runner.ps1 publishes one

@@ -78,6 +78,40 @@ public class IssueWorkAgentTests
         result.Repos[0].BranchName.ShouldBe("issue-42-ai-fix");
     }
 
+    [Fact]
+    public async Task RunAsync_BracesInsideJsonStringValue_StillParses()
+    {
+        // The old LastIndexOf('{') boundary hunt grabbed the '{' INSIDE the summary string and
+        // reported a successful run as a parse failure. JsonExtractor spans first-{ .. last-}.
+        var response = "Done. Summary follows.\n" +
+                       "{\"branch\":\"issue-42-ai-fix\",\"summary\":\"Wrapped retries in a { count: 3 } options object.\"}";
+
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
+           .Returns(AgentTestHelpers.StubResponse(response));
+
+        var result = await MakeAgent(llm).RunAsync(MakeRequest());
+
+        result.Ok.ShouldBeTrue();
+        result.Repos[0].BranchName.ShouldBe("issue-42-ai-fix");
+        result.Repos[0].Summary.ShouldContain("{ count: 3 }");
+    }
+
+    [Fact]
+    public async Task RunAsync_MarkdownFencedJson_StillParses()
+    {
+        var response = "```json\n{\"branch\":\"issue-42-ai-fix\",\"summary\":\"Fenced output.\"}\n```";
+
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
+           .Returns(AgentTestHelpers.StubResponse(response));
+
+        var result = await MakeAgent(llm).RunAsync(MakeRequest());
+
+        result.Ok.ShouldBeTrue();
+        result.Repos[0].BranchName.ShouldBe("issue-42-ai-fix");
+    }
+
     // ── Multi-repo ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]

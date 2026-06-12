@@ -56,22 +56,31 @@ internal static class SessionEndpoints
     }
 
     private static async Task<IResult> CreateSessionAsync(
-        CreateSessionRequest request,
+        CreateSessionRequest? request,
         ISessionRepository repo,
         ITenantContext tenant,
         TimeProvider clock,
         CancellationToken ct)
     {
-        if (request is null || string.IsNullOrWhiteSpace(request.Title) || request.WorkspaceId == Guid.Empty)
+        var errors = new Dictionary<string, string[]>();
+        if (request is null || string.IsNullOrWhiteSpace(request.Title))
         {
-            return Results.BadRequest("title and workspaceId are required.");
+            errors["title"] = ["A session title is required."];
+        }
+        if (request is null || request.WorkspaceId == Guid.Empty)
+        {
+            errors["workspaceId"] = ["A workspace id is required."];
+        }
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
         }
 
         var entity = new RemoteSessionEntity
         {
             Id = Guid.NewGuid(),
             TenantId = tenant.TenantId,
-            WorkspaceId = request.WorkspaceId,
+            WorkspaceId = request!.WorkspaceId,
             MemberUserId = tenant.UserId ?? string.Empty,
             Title = request.Title,
             Status = "Draft",
@@ -99,14 +108,17 @@ internal static class SessionEndpoints
     }
 
     private static async Task<IResult> RegisterRunnerAsync(
-        RegisterRunnerRequest request,
+        RegisterRunnerRequest? request,
         IRunnerProvisioningService provisioning,
         ITenantContext tenant,
         CancellationToken ct)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.Label))
         {
-            return Results.BadRequest("label is required.");
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["label"] = ["A runner label is required."],
+            });
         }
 
         // Same provisioning path the VS Code browser-pairing flow uses. The plaintext token is

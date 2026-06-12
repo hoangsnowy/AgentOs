@@ -23,9 +23,17 @@ public static class JwtAuthExtensions
         var kc = config.GetSection("Auth:Keycloak");
         var authority = kc["Authority"] ?? "http://localhost:8080/realms/agentic";
         var audience = kc["Audience"] ?? "agentic-api";
-        // Default true: when the setting is absent or unparseable, pick the secure value. Dev
-        // overrides explicitly via appsettings.Development.json / Aspire env injection.
-        var requireHttps = !bool.TryParse(kc["RequireHttpsMetadata"], out var rh) || rh;
+        // Default secure (true) — except for an http://localhost authority IN DEVELOPMENT, where
+        // requiring HTTPS metadata makes the JwtBearer options-factory THROW on the first request and
+        // turns every route (including /health and /alive) into a 500 on a standalone dev run. The
+        // exception is environment-gated so a reverse-proxied production deploy that points its
+        // authority at loopback still fails loud rather than silently skipping metadata validation.
+        // Explicit config wins.
+        var environment = config["ASPNETCORE_ENVIRONMENT"] ?? config["DOTNET_ENVIRONMENT"];
+        var isDevelopment = string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase);
+        var requireHttps = bool.TryParse(kc["RequireHttpsMetadata"], out var rh)
+            ? rh
+            : !(isDevelopment && IsLoopbackHttp(authority));
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -52,6 +60,13 @@ public static class JwtAuthExtensions
 
         return services;
     }
+
+    /// <summary>True when <paramref name="authority"/> is plain http on a loopback host (the dev
+    /// Keycloak) — the only case where the HTTPS-metadata requirement defaults off.</summary>
+    internal static bool IsLoopbackHttp(string authority) =>
+        Uri.TryCreate(authority, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttp
+        && uri.IsLoopback;
 
     /// <summary>Flatten Keycloak's nested <c>realm_access.roles</c> JSON into individual role claims.</summary>
     public static void FlattenRealmRoles(System.Security.Claims.ClaimsPrincipal? principal)

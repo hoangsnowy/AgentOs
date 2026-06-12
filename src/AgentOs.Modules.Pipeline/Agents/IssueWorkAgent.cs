@@ -241,10 +241,15 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
 
     private RepoWorkOutcome ParseOutcome(string content, IssueWorkRequest request, WorkRepo repo)
     {
-        // Locate the last JSON object in the response (the agent may emit reasoning before the JSON).
-        var start = content.LastIndexOf('{');
-        var end = content.LastIndexOf('}');
-        if (start < 0 || end <= start)
+        // The agent may wrap the JSON in a markdown fence or emit reasoning around it. JsonExtractor
+        // handles direct / fenced / brace-spanned forms; the old LastIndexOf('{') hand-roll broke as
+        // soon as a '{' appeared inside a JSON string value (it grabbed an inner brace fragment).
+        string json;
+        try
+        {
+            json = JsonExtractor.ExtractJson(content, nameof(IssueWorkAgent));
+        }
+        catch (LlmException)
         {
             _logger.LogWarning("IssueWorkAgent: no JSON found for session {SessionId} repo {Owner}/{Repo}",
                 request.SessionId, repo.Owner, repo.Repo);
@@ -252,7 +257,6 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
                 content.Length > 200 ? content[..200] : content, "Agent did not return a JSON summary.");
         }
 
-        var json = content[start..(end + 1)];
         try
         {
             using var doc = JsonDocument.Parse(json);

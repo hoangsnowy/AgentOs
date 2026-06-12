@@ -14,8 +14,9 @@ public interface IPipelineRunRepository
     /// <summary>Gets a single full run by Id (null if not found).</summary>
     Task<PipelineRunRecord?> GetAsync(Guid id, CancellationToken ct = default);
 
-    /// <summary>List of the most recent runs (summary, without the artifact json).</summary>
-    Task<IReadOnlyList<PipelineRunSummary>> ListAsync(int limit = 50, CancellationToken ct = default);
+    /// <summary>List of the most recent runs (summary, without the artifact json), newest first.
+    /// <paramref name="offset"/> skips that many rows for paging.</summary>
+    Task<IReadOnlyList<PipelineRunSummary>> ListAsync(int limit = 50, int offset = 0, CancellationToken ct = default);
 
     /// <summary>Aggregated LLM cost for one tenant since an optional cutoff (null = all time).
     /// Tenant-explicit: the caller passes the tenant id so this is safe to call from a Blazor

@@ -40,6 +40,9 @@ builder.Logging.AddSimpleConsole(options =>
 });
 
 builder.Services.AddOpenApi();
+// RFC 7807 error contract: unhandled endpoint exceptions become application/problem+json (status,
+// title, traceId) instead of a bare 500 — no stack traces leave the process outside Development.
+builder.Services.AddProblemDetails();
 // Durable, shared key ring (Postgres-backed when configured) — survives restart/scale + decrypts across
 // the Api ↔ Web hosts. Replaces a bare AddDataProtection() (in-memory, per-host).
 builder.AddAgentOsDataProtection();
@@ -54,7 +57,8 @@ builder.Services.AddRateLimiter(options =>
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
     {
         var path = httpContext.Request.Path;
-        if (path.StartsWithSegments("/health") || path.StartsWithSegments("/alive") || path.Value == "/")
+        if (path.StartsWithSegments("/health") || path.StartsWithSegments("/alive")
+            || path.StartsWithSegments("/version") || path.Value == "/")
         {
             return RateLimitPartition.GetNoLimiter("exempt");
         }
@@ -131,6 +135,13 @@ await app.Services.InitializeModulesAsync();
 // generation see the original https scheme + client IP.
 app.UseAgentOsForwardedHeaders();
 
+if (!app.Environment.IsDevelopment())
+{
+    // Renders unhandled exceptions through IProblemDetailsService (AddProblemDetails above).
+    // Development keeps the developer exception page.
+    app.UseExceptionHandler();
+}
+
 app.UseResponseCompression();
 
 app.UseAuthentication();
@@ -150,17 +161,34 @@ if (!app.Environment.IsProduction())
     });
 }
 
+// Build-stamped version (Directory.Build.props <Version>), surfaced on / and /version so operators
+// can verify which release is running without inspecting container tags.
+var informationalVersion = System.Reflection.CustomAttributeExtensions
+    .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(Program).Assembly)
+    ?.InformationalVersion ?? "0.0.0";
+
 app.MapGet("/", () => Results.Ok(new
 {
     name = "agentos",
-    version = "0.5.0-modular",
+    version = informationalVersion,
     status = "pipeline-ready"
 }))
    .WithName("Root")
    .WithSummary("Service identity")
    .WithTags("Meta");
 
-app.MapGet("/health", (IOptions<LlmOptions> llm) =>
+app.MapGet("/version", () => Results.Ok(new { name = "agentos-api", version = informationalVersion }))
+   .WithName("Version")
+   .WithSummary("Running release version (monitoring/upgrade verification)")
+   .WithTags("Meta");
+
+// /health (readiness: self + postgres + keycloak when configured) and /alive (liveness) come from
+// ServiceDefaults — real dependency probes with a JSON body naming each failing check.
+app.MapDefaultEndpoints();
+
+// LLM provider configuration detail — kept off the readiness path: a missing LLM key is a
+// configuration state the Settings UI surfaces, not a reason for the orchestrator to recycle pods.
+app.MapGet("/health/llm", (IOptions<LlmOptions> llm) =>
 {
     var o = llm.Value;
     var claudeReady = !string.IsNullOrWhiteSpace(o.Claude.ApiKey);
@@ -178,16 +206,8 @@ app.MapGet("/health", (IOptions<LlmOptions> llm) =>
         },
     });
 })
-   .WithName("Health")
-   .WithSummary("Readiness probe + LLM provider readiness")
-   .WithTags("Meta");
-
-// E4 — liveness probe. Distinct from /health (readiness): returns 200 while the process can serve a
-// request, so a hung instance fails liveness and Container Apps recycles it. Mapped unconditionally
-// (the old shared MapDefaultEndpoints gated this behind IsDevelopment, so prod had no liveness target).
-app.MapGet("/alive", () => Results.Ok(new { status = "Alive", utc = DateTime.UtcNow }))
-   .WithName("Alive")
-   .WithSummary("Liveness probe")
+   .WithName("HealthLlm")
+   .WithSummary("LLM provider configuration readiness (not a pod-recycle signal)")
    .WithTags("Meta");
 
 app.MapModuleEndpoints();

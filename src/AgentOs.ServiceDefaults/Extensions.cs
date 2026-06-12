@@ -3,6 +3,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -87,29 +88,60 @@ public static class Extensions
         return builder;
     }
 
-    /// <summary>Adds a "self" liveness health check.</summary>
+    /// <summary>Adds a "self" liveness check plus real readiness probes: Postgres when
+    /// <c>ConnectionStrings:DefaultConnection</c> is configured, and the OIDC discovery document when
+    /// <c>Auth:Keycloak:Authority</c> is set outside Development (dev/standalone runs must stay healthy
+    /// with no external services — the Aspire dashboard already covers dependency health in dev).</summary>
     public static IHostApplicationBuilder AddDefaultHealthChecks(this IHostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Services.AddHealthChecks()
+        var checks = builder.Services.AddHealthChecks()
             .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"]);
+
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            checks.Add(new HealthCheckRegistration(
+                "postgres",
+                _ => new PostgresHealthCheck(connectionString),
+                HealthStatus.Unhealthy,
+                tags: ["ready"],
+                timeout: TimeSpan.FromSeconds(5)));
+        }
+
+        var authority = builder.Configuration["Auth:Keycloak:Authority"];
+        if (!builder.Environment.IsDevelopment()
+            && !string.IsNullOrWhiteSpace(authority)
+            && Uri.TryCreate(authority.TrimEnd('/') + "/.well-known/openid-configuration", UriKind.Absolute, out var metadataUri))
+        {
+            builder.Services.AddHttpClient(OidcMetadataHealthCheck.ClientName);
+            checks.Add(new HealthCheckRegistration(
+                "keycloak",
+                sp => new OidcMetadataHealthCheck(sp.GetRequiredService<IHttpClientFactory>(), metadataUri),
+                HealthStatus.Unhealthy,
+                tags: ["ready"],
+                timeout: TimeSpan.FromSeconds(10)));
+        }
 
         return builder;
     }
 
-    /// <summary>Maps /health (readiness — all checks) and /alive (liveness — live-tagged checks).
-    /// Mapped UNCONDITIONALLY: Container Apps / k8s liveness+readiness probes must work in Production,
-    /// not just Development. (The hosts currently hand-roll equivalent /health + /alive routes; adopt
-    /// this helper to centralise them once the per-host /health payloads are reconciled.)</summary>
+    /// <summary>Maps /health (readiness — all checks) and /alive (liveness — live-tagged checks),
+    /// both with a JSON body naming each check and its status. Mapped UNCONDITIONALLY: Container Apps /
+    /// k8s liveness+readiness probes must work in Production, not just Development.</summary>
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/health", new HealthCheckOptions
+        {
+            ResponseWriter = HealthJsonWriter.WriteAsync,
+        });
         app.MapHealthChecks("/alive", new HealthCheckOptions
         {
             Predicate = r => r.Tags.Contains("live"),
+            ResponseWriter = HealthJsonWriter.WriteAsync,
         });
 
         return app;

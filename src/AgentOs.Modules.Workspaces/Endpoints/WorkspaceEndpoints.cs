@@ -56,14 +56,32 @@ internal static class WorkspaceEndpoints
     }
 
     private static async Task<IResult> ConnectAsync(
-        ConnectWorkspaceRequest request,
+        ConnectWorkspaceRequest? request,
         IWorkspaceConnector connector,
         ITenantContext tenant,
         CancellationToken ct)
     {
         if (request is null)
         {
-            return Results.BadRequest("A request body is required.");
+            return Results.Problem(detail: "A JSON request body is required.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var errors = new Dictionary<string, string[]>();
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            errors["name"] = ["A board name is required."];
+        }
+        if (string.IsNullOrWhiteSpace(request.ProjectOwner))
+        {
+            errors["projectOwner"] = ["The project owner (org/user) is required."];
+        }
+        if (string.IsNullOrWhiteSpace(request.AccessToken))
+        {
+            errors["accessToken"] = ["An access token is required."];
+        }
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
         }
 
         var input = new WorkspaceConnectInput(
@@ -73,7 +91,7 @@ internal static class WorkspaceEndpoints
 
         return result.Ok && result.Workspace is not null
             ? Results.Created($"/workspaces/{result.Workspace.Id}", WorkspaceDto.From(result.Workspace))
-            : Results.BadRequest(result.Error ?? "Could not connect the board.");
+            : Results.Problem(detail: result.Error ?? "Could not connect the board.", statusCode: StatusCodes.Status400BadRequest);
     }
 
     private static async Task<IResult> RemoveAsync(
@@ -93,17 +111,22 @@ internal static class WorkspaceEndpoints
     }
 
     private static async Task<IResult> ListReposForTokenAsync(
-        ListReposRequest request,
+        ListReposRequest? request,
         ISourceProviderResolver providers,
         CancellationToken ct)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.AccessToken))
         {
-            return Results.BadRequest("accessToken is required.");
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["accessToken"] = ["An access token is required."],
+            });
         }
         if (!providers.TryResolve(request.Kind, out var provider) || provider is null)
         {
-            return Results.BadRequest($"No source provider registered for '{request.Kind}'.");
+            return Results.Problem(
+                detail: $"No source provider registered for '{request.Kind}'.",
+                statusCode: StatusCodes.Status400BadRequest);
         }
 
         var creds = new ConnectionCredentials(request.Kind, request.AccessToken, request.Owner, request.Host);
@@ -112,17 +135,22 @@ internal static class WorkspaceEndpoints
     }
 
     private static async Task<IResult> ListBoardsForTokenAsync(
-        ListReposRequest request,
+        ListReposRequest? request,
         ISourceProviderResolver providers,
         CancellationToken ct)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.AccessToken))
         {
-            return Results.BadRequest("accessToken is required.");
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["accessToken"] = ["An access token is required."],
+            });
         }
         if (!providers.TryResolve(request.Kind, out var provider) || provider is null)
         {
-            return Results.BadRequest($"No source provider registered for '{request.Kind}'.");
+            return Results.Problem(
+                detail: $"No source provider registered for '{request.Kind}'.",
+                statusCode: StatusCodes.Status400BadRequest);
         }
 
         var creds = new ConnectionCredentials(request.Kind, request.AccessToken, request.Owner, request.Host);
@@ -138,17 +166,27 @@ internal static class WorkspaceEndpoints
     }
 
     private static async Task<IResult> AddRepoAsync(
-        Guid id, AddRepoRequest request, IWorkspaceConnector connector, ITenantContext tenant, CancellationToken ct)
+        Guid id, AddRepoRequest? request, IWorkspaceConnector connector, ITenantContext tenant, CancellationToken ct)
     {
-        if (request is null || string.IsNullOrWhiteSpace(request.Owner) || string.IsNullOrWhiteSpace(request.Repo))
+        var errors = new Dictionary<string, string[]>();
+        if (request is null || string.IsNullOrWhiteSpace(request.Owner))
         {
-            return Results.BadRequest("owner and repo are required.");
+            errors["owner"] = ["The repository owner is required."];
         }
-        var result = await connector.AddRepoAsync(tenant.TenantId, id, request.Owner, request.Repo, request.DefaultBranch, ct)
+        if (request is null || string.IsNullOrWhiteSpace(request.Repo))
+        {
+            errors["repo"] = ["The repository name is required."];
+        }
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        var result = await connector.AddRepoAsync(tenant.TenantId, id, request!.Owner, request.Repo, request.DefaultBranch, ct)
             .ConfigureAwait(false);
         return result.Ok && result.Repo is not null
             ? Results.Created($"/workspaces/{id}/repos/{result.Repo.Id}", RepoDto.From(result.Repo))
-            : Results.BadRequest(result.Error ?? "Could not add the repository.");
+            : Results.Problem(detail: result.Error ?? "Could not add the repository.", statusCode: StatusCodes.Status400BadRequest);
     }
 
     private static async Task<IResult> RemoveRepoAsync(
@@ -173,20 +211,26 @@ internal static class WorkspaceEndpoints
         }
         if (!providers.TryResolve(row.Kind, out var provider) || provider is null)
         {
-            return Results.BadRequest($"No source provider registered for '{row.Kind}'.");
+            return Results.Problem(
+                detail: $"No source provider registered for '{row.Kind}'.",
+                statusCode: StatusCodes.Status400BadRequest);
         }
 
         var repos = await repo.ListReposForTenantAsync(tenant.TenantId, id, ct).ConfigureAwait(false);
         if (repos.Count == 0)
         {
-            return Results.BadRequest("This board has no repositories connected yet.");
+            return Results.Problem(
+                detail: "This board has no repositories connected yet.",
+                statusCode: StatusCodes.Status400BadRequest);
         }
         var first = repos[0];
 
         var token = await credentials.GetAsync(row.CredentialRef, ct).ConfigureAwait(false);
         if (string.IsNullOrEmpty(token))
         {
-            return Results.BadRequest("Stored credentials for this board are missing; reconnect it.");
+            return Results.Problem(
+                detail: "Stored credentials for this board are missing; reconnect it.",
+                statusCode: StatusCodes.Status400BadRequest);
         }
 
         var descriptor = new WorkspaceDescriptor(

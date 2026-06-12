@@ -83,6 +83,31 @@ public sealed class PipelineRunRepositoryTests
         }
     }
 
+    [Fact]
+    public async Task ListAsync_WithOffset_SkipsNewestRows()
+    {
+        var options = NewOptions();
+        var oldest = Guid.NewGuid();
+        var middle = Guid.NewGuid();
+        var newest = Guid.NewGuid();
+        await using (var db = NewDb(options))
+        {
+            var repo = new PipelineRunRepository(db, Tenant);
+            await repo.SaveAsync(SampleRecord(oldest, createdAt: DateTimeOffset.UtcNow.AddMinutes(-30)));
+            await repo.SaveAsync(SampleRecord(middle, createdAt: DateTimeOffset.UtcNow.AddMinutes(-20)));
+            await repo.SaveAsync(SampleRecord(newest, createdAt: DateTimeOffset.UtcNow.AddMinutes(-10)));
+        }
+
+        await using (var db = NewDb(options))
+        {
+            var page = await new PipelineRunRepository(db, Tenant).ListAsync(limit: 2, offset: 1);
+
+            page.Count.ShouldBe(2);
+            page[0].Id.ShouldBe(middle);
+            page[1].Id.ShouldBe(oldest);
+        }
+    }
+
     private static AgentMetrics M(decimal cost, int tin, int tout) =>
         new("Anthropic", "claude-sonnet-4", tin, tout, cost, TimeSpan.FromSeconds(1));
 

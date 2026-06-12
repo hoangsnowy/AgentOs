@@ -31,8 +31,15 @@ internal static class SettingsEndpoints
         .WithTags("Settings")
         .RequireAuthorization("Admin");
 
-        app.MapPost("/settings", async (SetEntryRequest body, IAppConfigStore store, CancellationToken ct) =>
+        app.MapPost("/settings", async (SetEntryRequest? body, IAppConfigStore store, CancellationToken ct) =>
         {
+            if (body is null || string.IsNullOrWhiteSpace(body.Key))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["key"] = ["A non-empty setting key is required."],
+                });
+            }
             await store.SetAsync(body.Key, body.Value, ct).ConfigureAwait(false);
             return Results.NoContent();
         })
