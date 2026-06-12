@@ -123,14 +123,14 @@
 
             @if (_error is not null)
             {
-                <div class="issues-panel" style="margin-top:14px">
+                <div class="issues-panel" style="margin-top:var(--space-4)">
                     <h3>Pipeline error</h3>
                     <ul><li>@_error</li></ul>
                 </div>
             }
             else if (_result is not null)
             {
-                <p style="margin-top:14px">
+                <p style="margin-top:var(--space-4)">
                     @if (_finalStatus == PipelineStatus.Done)
                     {
                         <span class="badge ok">Complete</span>
@@ -152,12 +152,10 @@
         {
             <div class="card">
                 <h2>Generated artifacts</h2>
-                <div class="tabs">
-                    <div class="tab @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Requirements</div>
-                    <div class="tab @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Source code</div>
-                    <div class="tab @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">Test</div>
-                    <div class="tab @(_tab == 3 ? "active" : "")" @onclick="() => _tab = 3">QA</div>
-                </div>
+                <TabStrip Tabs="ArtifactTabs"
+                          Active="@_tab.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                          ActiveChanged="key => _tab = int.Parse(key, System.Globalization.CultureInfo.InvariantCulture)"
+                          AriaLabel="Generated artifacts" />
 
                 @if (_tab == 0)
                 {
@@ -230,7 +228,7 @@
                     </button>
                     @if (_buildResult is not null)
                     {
-                        <p class="hint" style="margin-top:10px">
+                        <p class="hint" style="margin-top:var(--space-3)">
                             @if (_buildResult.Success)
                             {
                                 <span class="badge ok">Build OK</span>
@@ -245,7 +243,7 @@
                     }
                     @if (_buildError is not null)
                     {
-                        <p class="hint" style="margin-top:10px"><span class="badge err">Error</span> <span class="muted">@_buildError</span></p>
+                        <p class="hint" style="margin-top:var(--space-3)"><span class="badge err">Error</span> <span class="muted">@_buildError</span></p>
                     }
                 </div>
 
@@ -254,7 +252,7 @@
                     <p class="muted">Open a pull request with the generated code + tests. Pick a connected workspace repo (uses its board credentials), or leave blank to use the <a href="/settings">Settings</a> token.</p>
                     @if (_boards.Count > 0)
                     {
-                        <div class="form-grid" style="margin-bottom:10px">
+                        <div class="form-grid" style="margin-bottom:var(--space-3)">
                             <label>Workspace
                                 <select class="syn-select" value="@_selBoardId" @onchange="OnSelectBoard">
                                     <option value="">— Settings token —</option>
@@ -283,11 +281,11 @@
                     </button>
                     @if (_prUrl is not null)
                     {
-                        <p class="hint" style="margin-top:10px"><span class="badge ok">PR opened</span> <a href="@_prUrl" target="_blank">@_prUrl</a></p>
+                        <p class="hint" style="margin-top:var(--space-3)"><span class="badge ok">PR opened</span> <a href="@_prUrl" target="_blank">@_prUrl</a></p>
                     }
                     @if (_prError is not null)
                     {
-                        <p class="hint" style="margin-top:10px"><span class="badge err">Error</span> <span class="muted">@_prError</span></p>
+                        <p class="hint" style="margin-top:var(--space-3)"><span class="badge err">Error</span> <span class="muted">@_prError</span></p>
                     }
                 </div>
             }
@@ -354,6 +352,14 @@
     private string? _error;
     private int _currentIteration;
     private int _tab;
+
+    private static readonly TabStrip.TabDef[] ArtifactTabs =
+    [
+        new("0", "Requirements"),
+        new("1", "Source code"),
+        new("2", "Test"),
+        new("3", "QA"),
+    ];
     private PipelineResult? _result;
     private PipelineStatus _finalStatus;
     private CancellationTokenSource? _cts;

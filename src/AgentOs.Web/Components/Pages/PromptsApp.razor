@@ -28,7 +28,7 @@ else
     @foreach (var entry in PromptCatalog.All)
     {
         <Panel Title="@entry.DisplayName">
-            <div style="margin-bottom:8px">
+            <div style="margin-bottom:var(--space-2)">
                 <Badge Variant="@(_overridden.Contains(entry.Key) ? Badge.BadgeVariant.Warn : Badge.BadgeVariant.Ok)">
                     @(_overridden.Contains(entry.Key) ? "Overridden" : "Default")
                 </Badge>
@@ -36,7 +36,7 @@ else
             <textarea class="prefs-input" rows="8" style="width:100%;font-family:var(--font-mono, monospace)"
                       value="@CurrentText(entry)"
                       @onchange="e => _text[entry.Key] = e.Value?.ToString() ?? string.Empty"></textarea>
-            <div style="display:flex;gap:var(--space-2);margin-top:8px">
+            <div style="display:flex;gap:var(--space-2);margin-top:var(--space-2)">
                 <Btn OnClick="() => Save(entry)" Disabled="_saving" Variant="Btn.ButtonVariant.Primary">Save</Btn>
                 <Btn OnClick="() => Reset(entry)" Disabled="_saving">Reset to default</Btn>
             </div>

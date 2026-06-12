@@ -1,0 +1,83 @@
+@* TabStrip — accessible tab bar (WAI-ARIA tabs pattern: real <button> tabs, roving tabindex,
+   arrow/Home/End keyboard navigation, selection follows focus). Replaces the clickable-<div>
+   tab rows that keyboard and assistive-tech users could not operate. Styling stays with the
+   existing class families (.tabs/.tab by default; pass ContainerClass/TabClass for .syn-tabs). *@
+
+<div class="@ContainerClass" role="tablist" aria-label="@AriaLabel">
+    @foreach (var tab in Tabs)
+    {
+        var key = tab.Key;
+        <button type="button"
+                class="@CssFor(key)"
+                role="tab"
+                aria-selected="@(key == Active ? "true" : "false")"
+                tabindex="@(key == Active ? 0 : -1)"
+                @ref="_refs[key]"
+                @onclick="() => ActivateAsync(key)"
+                @onkeydown="e => OnKeyDownAsync(e, key)">
+            @tab.Label
+            @if (!string.IsNullOrEmpty(tab.Badge))
+            {
+                <span class="cnt">@tab.Badge</span>
+            }
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>One tab: stable key, visible label, optional count badge (rendered as .cnt).</summary>
+    public readonly record struct TabDef(string Key, string Label, string? Badge = null);
+
+    [Parameter, EditorRequired] public IReadOnlyList<TabDef> Tabs { get; set; } = [];
+    [Parameter] public string Active { get; set; } = "";
+    [Parameter] public EventCallback<string> ActiveChanged { get; set; }
+    [Parameter] public string AriaLabel { get; set; } = "Tabs";
+    [Parameter] public string ContainerClass { get; set; } = "tabs";
+    [Parameter] public string TabClass { get; set; } = "tab";
+
+    private readonly Dictionary<string, Microsoft.AspNetCore.Components.ElementReference> _refs = new();
+
+    private string CssFor(string key) => key == Active ? $"{TabClass} active" : TabClass;
+
+    private Task ActivateAsync(string key) =>
+        key == Active ? Task.CompletedTask : ActiveChanged.InvokeAsync(key);
+
+    private async Task OnKeyDownAsync(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e, string key)
+    {
+        var index = IndexOf(key);
+        if (index < 0 || Tabs.Count == 0)
+        {
+            return;
+        }
+        var target = e.Key switch
+        {
+            "ArrowRight" or "ArrowDown" => (index + 1) % Tabs.Count,
+            "ArrowLeft" or "ArrowUp" => (index - 1 + Tabs.Count) % Tabs.Count,
+            "Home" => 0,
+            "End" => Tabs.Count - 1,
+            _ => -1,
+        };
+        if (target < 0)
+        {
+            return;
+        }
+        var targetKey = Tabs[target].Key;
+        await ActivateAsync(targetKey);
+        if (_refs.TryGetValue(targetKey, out var element))
+        {
+            await element.FocusAsync();
+        }
+    }
+
+    private int IndexOf(string key)
+    {
+        for (var i = 0; i < Tabs.Count; i++)
+        {
+            if (Tabs[i].Key == key)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+}

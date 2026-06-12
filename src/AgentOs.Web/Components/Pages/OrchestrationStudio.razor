@@ -129,12 +129,12 @@
         @if (_bottomOpen)
         {
         <div class="syn-bottom">
-            <div class="syn-tabs">
-                <div class="syn-tab @(_bottomTab == 0 ? "active" : "")" @onclick="@(() => _bottomTab = 0)">State Schema</div>
-                <div class="syn-tab @(_bottomTab == 1 ? "active" : "")" @onclick="@(() => _bottomTab = 1)">Guardrails</div>
-                <div class="syn-tab @(_bottomTab == 2 ? "active" : "")" @onclick="@(() => _bottomTab = 2)">Run Log</div>
-                <div class="syn-tab @(_bottomTab == 3 ? "active" : "")" @onclick="@(() => _bottomTab = 3)">Recent Runs <span class="cnt">@_recentRuns</span></div>
-            </div>
+            <TabStrip Tabs="BottomTabs"
+                      Active="@_bottomTab.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                      ActiveChanged="key => _bottomTab = int.Parse(key, System.Globalization.CultureInfo.InvariantCulture)"
+                      AriaLabel="Workflow details"
+                      ContainerClass="syn-tabs"
+                      TabClass="syn-tab" />
             <div class="syn-bottom-body">
                 @if (_bottomTab == 0)
                 {
@@ -190,6 +190,14 @@
     private string _tenantId = string.Empty;
 
     private int _bottomTab = 2;
+
+    private TabStrip.TabDef[] BottomTabs =>
+    [
+        new("0", "State Schema"),
+        new("1", "Guardrails"),
+        new("2", "Run Log"),
+        new("3", "Recent Runs", _recentRuns.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+    ];
     private bool _bottomOpen;          // collapsed by default — gives canvas full height
     private string _runInput = string.Empty;
     private readonly List<string> _runLog = [];

@@ -1,0 +1,32 @@
+@* EmptyState — the standard "nothing here yet" block: what's empty, why, and how to fill it.
+   Replaces the ad-hoc per-app "No data." paragraphs so every screen guides the user the same way. *@
+
+<div class="empty-state">
+    @if (!string.IsNullOrEmpty(Icon))
+    {
+        <span class="empty-state-ic"><Icon Name="@Icon" Size="22" /></span>
+    }
+    <div class="empty-state-title">@Title</div>
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <div class="empty-state-hint">@Hint</div>
+    }
+    @if (Action is not null)
+    {
+        <div class="empty-state-action">@Action</div>
+    }
+</div>
+
+@code {
+    /// <summary>What's empty — e.g. "No runs yet".</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>How to populate it — e.g. "Run the pipeline to see cost here."</summary>
+    [Parameter] public string? Hint { get; set; }
+
+    /// <summary>Icon name (Icon.razor map).</summary>
+    [Parameter] public string? Icon { get; set; }
+
+    /// <summary>Optional call-to-action (a Btn).</summary>
+    [Parameter] public RenderFragment? Action { get; set; }
+}

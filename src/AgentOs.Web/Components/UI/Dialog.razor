@@ -1,4 +1,6 @@
-@* Dialog — centered modal with backdrop. *@
+@* Dialog — centered modal with backdrop. Destructive confirmations set Destructive=true: the
+   backdrop no longer dismisses (an accidental click outside must not cancel — or worse, look like
+   it confirmed — a delete); only the explicit ×/Cancel/confirm buttons close it. *@
 
 @if (Show)
 {
@@ -24,13 +26,17 @@
     [Parameter] public int Width { get; set; } = 480;
     [Parameter] public string MaxHeight { get; set; } = "80vh";
     [Parameter] public bool CloseOnBackdrop { get; set; } = true;
+
+    /// <summary>Destructive confirmation: backdrop clicks never dismiss, regardless of CloseOnBackdrop.</summary>
+    [Parameter] public bool Destructive { get; set; }
+
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public RenderFragment? Footer { get; set; }
 
     private async Task HandleBackdropClick()
     {
-        if (CloseOnBackdrop)
+        if (CloseOnBackdrop && !Destructive)
         {
             await OnClose.InvokeAsync();
         }

@@ -80,7 +80,7 @@ else
                     <div class="prefs-saved"><Chip Variant="Chip.ChipVariant.Ok">Saved</Chip> @SaveScopeLabel()</div>
                 }
 
-                <div class="prefs-row" style="margin-top:18px">
+                <div class="prefs-row" style="margin-top:var(--space-5)">
                     <div class="prefs-label"><strong>Test connection</strong><br /><span class="prefs-hint">Send a minimal probe to the configured provider.</span></div>
                     <Btn OnClick="TestConnection" Disabled="_testing">@(_testing ? "Testing…" : "Test")</Btn>
                 </div>

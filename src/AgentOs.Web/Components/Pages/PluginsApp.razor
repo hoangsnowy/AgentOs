@@ -14,10 +14,9 @@
 
 @if (Catalog.Plugins.Count == 0)
 {
-    <div class="muted spine-empty">
-        No plugins installed. Drop a plugin assembly in the host's <code>plugins/</code> folder and restart.
-        Build the bundled sample with <code>scripts/build-plugins.ps1</code>, then reload.
-    </div>
+    <EmptyState Icon="squares-stack"
+                Title="No plugins installed"
+                Hint="Drop a plugin assembly in the host's plugins/ folder and restart. Build the bundled sample with scripts/build-plugins.ps1, then reload." />
 }
 else
 {
