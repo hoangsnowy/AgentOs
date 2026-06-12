@@ -8,8 +8,8 @@
     <div class="toast-container">
         @foreach (var t in Toasts.Items)
         {
-            <div class="toast toast-@(t.Kind.ToString().ToLowerInvariant())" @key="t.Id">
-                <span class="toast-ic">@KindIcon(t.Kind)</span>
+            <div class="toast toast-@(t.Kind.ToString().ToLowerInvariant())" @key="t.Id" role="status">
+                <span class="toast-ic" aria-hidden="true"><Icon Name="@KindIcon(t.Kind)" Size="14" /></span>
                 <div class="toast-body">
                     <div class="toast-title">@t.Title</div>
                     @if (!string.IsNullOrEmpty(t.Message))
@@ -31,12 +31,13 @@
 
     private void OnChanged() => InvokeAsync(StateHasChanged);
 
+    // Icon names (Icon.razor map) — emoji are invisible to screen readers and ignore currentColor.
     private static string KindIcon(AgentOs.Web.Services.ToastKind k) => k switch
     {
-        AgentOs.Web.Services.ToastKind.Ok => "✓",
-        AgentOs.Web.Services.ToastKind.Warn => "⚠",
-        AgentOs.Web.Services.ToastKind.Err => "✕",
-        _ => "ℹ",
+        AgentOs.Web.Services.ToastKind.Ok => "check",
+        AgentOs.Web.Services.ToastKind.Warn => "warning",
+        AgentOs.Web.Services.ToastKind.Err => "x",
+        _ => "info",
     };
 
     public void Dispose() => Toasts.Changed -= OnChanged;

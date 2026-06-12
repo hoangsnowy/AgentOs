@@ -62,10 +62,9 @@ else
     }
     else if (_summary.CallCount == 0)
     {
-        <div class="muted spine-empty">
-            No LLM calls recorded @(_days == 0 ? "yet" : "in " + _rangeLabel).
-            Cost appears here after a pipeline run.
-        </div>
+        <EmptyState Icon="graph"
+                    Title="@($"No LLM calls recorded {(_days == 0 ? "yet" : "in " + _rangeLabel)}")"
+                    Hint="Cost appears here after a pipeline run." />
     }
     else
     {
@@ -94,7 +93,7 @@ else
                 <Panel Title="@bd.Title">
                     @if (bd.Rows.Count == 0)
                     {
-                        <div class="muted">No data.</div>
+                        <EmptyState Title="No data for this breakdown" Hint="Rows appear once a run records cost in the selected range." />
                     }
                     else
                     {

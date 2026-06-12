@@ -33,7 +33,7 @@ else
 
     @if (_tools.Count == 0)
     {
-        <div class="muted spine-empty">No tools registered. Tools appear here once a module or plugin registers them.</div>
+        <EmptyState Title="No tools registered" Hint="Tools appear here once a module or plugin registers them." Icon="gear" />
     }
     else
     {
@@ -51,6 +51,7 @@ else
                     <tr>
                         <td>
                             <input type="checkbox" checked="@_allowed.Contains(tool.Name)" disabled="@(!_enforce)"
+                                   aria-label="@($"Allow {tool.Name}")"
                                    @onchange="e => Toggle(tool.Name, (bool)(e.Value ?? false))" />
                         </td>
                         <td><code>@tool.Name</code></td>

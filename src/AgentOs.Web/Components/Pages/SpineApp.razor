@@ -443,7 +443,7 @@ else if (_tab == Tab.Idea)
                             <td>@foreach (var l in row.Labels) { <Badge>@l</Badge> }</td>
                             <td>
                                 <label class="spine-ai-toggle">
-                                    <input type="checkbox" checked="@row.AiReady"
+                                    <input type="checkbox" checked="@row.AiReady" aria-label="Auto-run this ticket (ai:ready)"
                                            @onchange="@(e => ToggleAiReady(row, e))" /> ai:ready
                                 </label>
                             </td>
@@ -462,9 +462,9 @@ else if (_tab == Tab.Idea)
             </table>
 
             @if (_ideaError is not null) { <p class="login-error">@_ideaError</p> }
-            <label class="spine-ai-toggle" style="margin:10px 0 0">
+            <label class="spine-ai-toggle" style="margin:var(--space-3) 0 0">
                 Engine
-                <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:8px">
+                <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:var(--space-2)">
                     <option value="Quick">Quick — runner edit loop</option>
                     <option value="Quality">Quality — 5-agent pipeline</option>
                 </select>
@@ -473,15 +473,15 @@ else if (_tab == Tab.Idea)
             {
                 <p class="muted spine-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
             }
-            <label class="spine-ai-toggle" style="margin:10px 0">
-                <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" />
+            <label class="spine-ai-toggle" style="margin:var(--space-3) 0">
+                <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" aria-label="Run on my machine" />
                 Run on my machine — your paired runner's CLI does the work (0 server tokens)
             </label>
             @if (_runOnMachine)
             {
-                <label class="spine-ai-toggle" style="margin:0 0 10px">
+                <label class="spine-ai-toggle" style="margin:0 0 var(--space-3)">
                     CLI agent
-                    <select @bind="_cliProfile" class="prefs-input" style="width:auto;margin-left:8px">
+                    <select @bind="_cliProfile" class="prefs-input" style="width:auto;margin-left:var(--space-2)">
                         <option value="claude">Claude Code</option>
                         <option value="codex">Codex</option>
                     </select>
@@ -698,7 +698,7 @@ else if (_tab == Tab.Sessions)
             @foreach (var opt in _workRepoOptions)
             {
                 <label class="spine-repo-option">
-                    <input type="checkbox" @bind="opt.Selected" />
+                    <input type="checkbox" @bind="opt.Selected" aria-label="@($"Include {opt.Owner}/{opt.Repo} in this session")" />
                     <code>@opt.Owner/@opt.Repo</code>
                     <span class="muted">@opt.DefaultBranch</span>
                 </label>
@@ -708,9 +708,9 @@ else if (_tab == Tab.Sessions)
                 <p class="muted">No repositories available — add one under the board first.</p>
             }
         </div>
-        <label class="spine-ai-toggle" style="margin-top:10px">
+        <label class="spine-ai-toggle" style="margin-top:var(--space-3)">
             Engine
-            <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:8px">
+            <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:var(--space-2)">
                 <option value="Quick">Quick — runner edit loop</option>
                 <option value="Quality">Quality — 5-agent pipeline</option>
             </select>
@@ -719,15 +719,15 @@ else if (_tab == Tab.Sessions)
         {
             <p class="muted spine-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
         }
-        <label class="spine-ai-toggle" style="margin-top:10px">
-            <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" />
+        <label class="spine-ai-toggle" style="margin-top:var(--space-3)">
+            <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" aria-label="Run on my machine" />
             Run on my machine — your paired runner's CLI does the work (0 server tokens)
         </label>
         @if (_runOnMachine)
         {
-            <label class="spine-ai-toggle" style="margin:0 0 10px">
+            <label class="spine-ai-toggle" style="margin:0 0 var(--space-3)">
                 CLI agent
-                <select @bind="_cliProfile" class="prefs-input" style="width:auto;margin-left:8px">
+                <select @bind="_cliProfile" class="prefs-input" style="width:auto;margin-left:var(--space-2)">
                     <option value="claude">Claude Code</option>
                     <option value="codex">Codex</option>
                 </select>

@@ -102,8 +102,8 @@ else
 
         <Panel Title="Invite a member">
             <div class="form-grid">
-                <Field Label="Email (optional)">
-                    <input type="email" @bind="_inviteEmail" placeholder="bob@@acme.test" autocomplete="email" />
+                <Field Label="Email">
+                    <input type="email" @bind="_inviteEmail" placeholder="bob@@acme.test" autocomplete="email" required />
                 </Field>
                 <Field Label="Role">
                     <select @bind="_inviteRole" class="prefs-select">
@@ -116,8 +116,8 @@ else
                 </Field>
             </div>
             <div class="form-actions">
-                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="MintInvite" Disabled="_busy">
-                    @(_busy ? "Generating…" : "Mint invite URL")
+                <Btn Variant="Btn.ButtonVariant.Primary" OnClick="MintInvite" Loading="_busy">
+                    Mint invite URL
                 </Btn>
             </div>
 
@@ -136,7 +136,7 @@ else
     }
 }
 
-<Dialog Show="_confirmRemove is not null" Title="Remove member" Width="380" OnClose="@(() => _confirmRemove = null)">
+<Dialog Show="_confirmRemove is not null" Title="Remove member" Width="380" Destructive="true" OnClose="@(() => _confirmRemove = null)">
     <ChildContent>
         @if (_confirmRemove is not null)
         {
@@ -145,8 +145,8 @@ else
         }
     </ChildContent>
     <Footer>
-        <Btn OnClick="@(() => _confirmRemove = null)">Cancel</Btn>
-        <Btn Variant="Btn.ButtonVariant.Danger" OnClick="ConfirmRemove">Remove</Btn>
+        <Btn OnClick="@(() => _confirmRemove = null)" Disabled="_removing">Cancel</Btn>
+        <Btn Variant="Btn.ButtonVariant.Danger" OnClick="ConfirmRemove" Loading="_removing">Remove</Btn>
     </Footer>
 </Dialog>
 
@@ -164,6 +164,7 @@ else
     private string? _busyId;
 
     private KeycloakUser? _confirmRemove;
+    private bool _removing;
 
     private string _inviteEmail = "";
     private string _inviteRole = "member";
@@ -260,8 +261,8 @@ else
     private async Task ConfirmRemove()
     {
         var m = _confirmRemove;
-        _confirmRemove = null;
         if (m is null) { return; }
+        _removing = true;
         _busyId = m.Id;
         try
         {
@@ -275,62 +276,70 @@ else
         }
         finally
         {
+            _removing = false;
             _busyId = null;
+            _confirmRemove = null;
         }
     }
 
     private async Task MintInvite()
     {
         if (_busy) { return; }
-        _busy = true;
         _inviteError = null;
+
+        // Required-field gate: an invitation must go to an address. Inline error, no toast —
+        // the user is looking at the form.
+        var email = _inviteEmail.Trim();
+        if (email.Length == 0 || !email.Contains('@', StringComparison.Ordinal))
+        {
+            _inviteError = "Enter the invitee's email address (must contain '@').";
+            return;
+        }
+
+        _busy = true;
         try
         {
             var ttl = TimeSpan.FromHours(Math.Clamp(_inviteTtl, 1, 168));
-            var email = string.IsNullOrWhiteSpace(_inviteEmail) ? null : _inviteEmail.Trim();
             var token = Signup.CreateInvitation(_tenantId, _inviteRole, email, ttl);
             _inviteExpiresAt = token.ExpiresAtUtc;
             _inviteUrl = $"/signup?invite={Uri.EscapeDataString(token.Token)}";
 
-            // Email the absolute link when an address is given. Best-effort: the URL stays on screen
-            // for copy/paste so the admin is never blocked if delivery is unconfigured or fails.
-            if (email is not null)
+            // Email the absolute link. Best-effort: the URL stays on screen for copy/paste so the
+            // admin is never blocked if delivery is unconfigured or fails.
+            var absoluteUrl = Nav.ToAbsoluteUri(_inviteUrl).ToString();
+            try
             {
-                var absoluteUrl = Nav.ToAbsoluteUri(_inviteUrl).ToString();
-                try
-                {
-                    var (subject, htmlBody, textBody) = AgentOs.Modules.Tenants.Email.InvitationEmail.Build(_tenantId, _inviteRole, absoluteUrl);
-                    await Email.SendAsync(email, subject, htmlBody, textBody);
-                    Toasts.Show("Users", $"Invitation emailed to {email}.", ToastKind.Ok);
-                }
-                catch (MailKit.CommandException ex)
-                {
-                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
-                }
-                catch (MailKit.ProtocolException ex)
-                {
-                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
-                }
-                catch (MailKit.ServiceNotConnectedException ex)
-                {
-                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
-                }
-                catch (MailKit.Security.AuthenticationException ex)
-                {
-                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
-                }
-                catch (System.Net.Sockets.SocketException ex)
-                {
-                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
-                }
-                catch (System.IO.IOException ex)
-                {
-                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
-                }
-                catch (System.InvalidOperationException ex)
-                {
-                    Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
-                }
+                var (subject, htmlBody, textBody) = AgentOs.Modules.Tenants.Email.InvitationEmail.Build(_tenantId, _inviteRole, absoluteUrl);
+                await Email.SendAsync(email, subject, htmlBody, textBody);
+                Toasts.Show("Users", $"Invitation emailed to {email}.", ToastKind.Ok);
+            }
+            catch (MailKit.CommandException ex)
+            {
+                Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+            }
+            catch (MailKit.ProtocolException ex)
+            {
+                Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+            }
+            catch (MailKit.ServiceNotConnectedException ex)
+            {
+                Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+            }
+            catch (MailKit.Security.AuthenticationException ex)
+            {
+                Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+            }
+            catch (System.Net.Sockets.SocketException ex)
+            {
+                Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+            }
+            catch (System.IO.IOException ex)
+            {
+                Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
+            }
+            catch (System.InvalidOperationException ex)
+            {
+                Toasts.Show("Users", $"Invitation created, but email failed: {ex.Message}. Copy the link below.", ToastKind.Warn);
             }
         }
         catch (ArgumentException ex) { _inviteError = ex.Message; }

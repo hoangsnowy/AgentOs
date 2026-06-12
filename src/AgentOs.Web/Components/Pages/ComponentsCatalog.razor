@@ -72,6 +72,14 @@
     </section>
 
     <section class="catalog-section">
+        <h2 class="catalog-section-h">Btn — loading</h2>
+        <div class="catalog-row">
+            <Btn Loading="true">Saving…</Btn>
+            <Btn Variant="Btn.ButtonVariant.Primary" Loading="true">Saving…</Btn>
+        </div>
+    </section>
+
+    <section class="catalog-section">
         <h2 class="catalog-section-h">IconBtn</h2>
         <div class="catalog-row">
             <IconBtn Icon="⚙" Title="Settings" />
@@ -90,7 +98,7 @@
             <span class="badge err">err</span>
             <span class="badge info">info</span>
         </div>
-        <div class="catalog-row" style="margin-top:8px;">
+        <div class="catalog-row" style="margin-top:var(--space-2);">
             <span class="chip chip-ok">success</span>
             <span class="chip chip-warn">degraded</span>
             <span class="chip chip-err">failed</span>
@@ -167,6 +175,19 @@
     </section>
 
     <section class="catalog-section">
+        <h2 class="catalog-section-h">TabStrip (3 tabs, bound state)</h2>
+        <TabStrip Tabs="_tabStripTabs" @bind-Active="_tabStripActive" AriaLabel="Catalog demo tabs" />
+        <div class="catalog-row" style="margin-top:var(--space-2);">
+            <span class="chip chip-info">active: @_tabStripActive</span>
+        </div>
+    </section>
+
+    <section class="catalog-section">
+        <h2 class="catalog-section-h">EmptyState</h2>
+        <EmptyState Title="No data yet" Hint="Run something to fill this." Icon="info" />
+    </section>
+
+    <section class="catalog-section">
         <h2 class="catalog-section-h">DesktopIcon</h2>
         <div class="catalog-row catalog-row-wrap">
             <DesktopIcon Title="Pipeline" Icon="play"             Caption="Run the 5-agent pipeline" Href="#" />
@@ -207,6 +228,15 @@
     private bool _dlg;
     private bool _t1 = true;
     private bool _t2;
+
+    private string _tabStripActive = "overview";
+
+    private readonly TabStrip.TabDef[] _tabStripTabs = new[]
+    {
+        new TabStrip.TabDef("overview", "Overview"),
+        new TabStrip.TabDef("runs", "Runs", "3"),
+        new TabStrip.TabDef("history", "History"),
+    };
 
     private readonly string[] _iconNames = new[]
     {

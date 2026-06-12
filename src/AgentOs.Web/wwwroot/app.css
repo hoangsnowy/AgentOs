@@ -435,6 +435,26 @@ button.ghost:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-s
 }
 .tab:hover { color: var(--txt); background: var(--bg-3); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--bg-2); }
+.tab { font-family: var(--font); }
+
+/* Btn loading state — inline spinner replaces the icon while the action is pending. */
+.btn-spinner {
+    width: 12px; height: 12px; border-radius: 999px;
+    border: 2px solid var(--line-strong); border-top-color: var(--accent);
+    display: inline-block; animation: btn-spin 0.7s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .btn-spinner { animation: none; } }
+
+/* EmptyState — the standard "nothing here yet" block (what's empty / why / how to fill it). */
+.empty-state {
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+    padding: var(--space-7) var(--space-5); text-align: center; color: var(--txt-dim);
+}
+.empty-state-ic { color: var(--txt-faint); }
+.empty-state-title { color: var(--txt-soft); font-weight: var(--fw-medium); font-size: var(--fs-sm); }
+.empty-state-hint { font-size: var(--fs-xs); max-width: 360px; }
+.empty-state-action { margin-top: var(--space-2); }
 .file-name { font-family: var(--mono); font-size: 12px; color: var(--accent); margin: 10px 0 4px; }
 pre.code {
     background: var(--bg-3); border: 1px solid var(--line); border-radius: 8px;

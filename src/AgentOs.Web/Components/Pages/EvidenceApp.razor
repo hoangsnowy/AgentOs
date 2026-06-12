@@ -32,7 +32,9 @@ else
     @if (_rows is null) { <Spinner /> }
     else if (_rows.Count == 0)
     {
-        <div class="muted spine-empty">No tool invocations recorded yet. Evidence appears here once an agent calls a tool.</div>
+        <EmptyState Icon="lock"
+                    Title="No tool invocations recorded yet"
+                    Hint="Evidence appears here once an agent calls a tool through the gateway." />
     }
     else
     {
