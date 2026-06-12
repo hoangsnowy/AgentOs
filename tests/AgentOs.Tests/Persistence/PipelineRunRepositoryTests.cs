@@ -84,6 +84,20 @@ public sealed class PipelineRunRepositoryTests
     }
 
     [Fact]
+    public void InMemoryMetricsCollector_OverCap_DropsOldest()
+    {
+        var collector = new InMemoryMetricsCollector();
+        for (var i = 0; i < InMemoryMetricsCollector.MaxRecords + 50; i++)
+        {
+            collector.Add(new RunMetric(
+                "run-1", "KC5", 1, "QaAgent", "claude-haiku-4-5", "Anthropic",
+                1, 1, 10.0, 0.001m, true, null, DateTimeOffset.UtcNow));
+        }
+
+        collector.Snapshot().Count.ShouldBe(InMemoryMetricsCollector.MaxRecords);
+    }
+
+    [Fact]
     public async Task ListAsync_WithOffset_SkipsNewestRows()
     {
         var options = NewOptions();

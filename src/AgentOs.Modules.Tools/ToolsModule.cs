@@ -87,6 +87,9 @@ public sealed class ToolsModule : IModule, IInitializableModule
         var db = scope.ServiceProvider.GetService<ToolsDbContext>();
         if (db is not null)
         {
+            // Advisory lock: serialise concurrent replicas racing the same migration at boot.
+            await using var migrationLock = await AgentOs.SharedKernel.Persistence.PgAdvisoryLock
+                .AcquireAsync(db.Database.GetConnectionString(), "agentos:migrate:tools", ct).ConfigureAwait(false);
             await db.Database.MigrateAsync(ct).ConfigureAwait(false);
         }
     }

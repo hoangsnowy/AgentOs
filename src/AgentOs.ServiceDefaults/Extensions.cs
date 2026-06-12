@@ -23,6 +23,7 @@ public static class Extensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
+        builder.AddAgentOsLogging();
         builder.ConfigureOpenTelemetry();
         builder.AddDefaultHealthChecks();
 
@@ -67,6 +68,8 @@ public static class Extensions
         {
             logging.IncludeFormattedMessage = true;
             logging.IncludeScopes = true;
+            // Mask credential-shaped substrings on every exported record (OTLP/App Insights).
+            logging.AddProcessor(new SecretMaskingLogProcessor());
         });
 
         builder.Services.AddOpenTelemetry()

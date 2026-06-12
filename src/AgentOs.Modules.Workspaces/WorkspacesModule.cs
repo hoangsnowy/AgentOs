@@ -67,6 +67,9 @@ public sealed class WorkspacesModule : IModule, IEndpointModule, IInitializableM
         var db = scope.ServiceProvider.GetService<WorkspacesDbContext>();
         if (db is not null)
         {
+            // Advisory lock: serialise concurrent replicas racing the same migration at boot.
+            await using var migrationLock = await AgentOs.SharedKernel.Persistence.PgAdvisoryLock
+                .AcquireAsync(db.Database.GetConnectionString(), "agentos:migrate:workspaces", ct).ConfigureAwait(false);
             await db.Database.MigrateAsync(ct).ConfigureAwait(false);
         }
     }

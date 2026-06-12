@@ -100,6 +100,9 @@ public sealed class PipelineModule : IModule, IEndpointModule, IInitializableMod
         var db = scope.ServiceProvider.GetService<PipelineDbContext>();
         if (db is not null)
         {
+            // Advisory lock: serialise concurrent replicas racing the same migration at boot.
+            await using var migrationLock = await AgentOs.SharedKernel.Persistence.PgAdvisoryLock
+                .AcquireAsync(db.Database.GetConnectionString(), "agentos:migrate:pipeline", ct).ConfigureAwait(false);
             await db.Database.MigrateAsync(ct).ConfigureAwait(false);
         }
     }

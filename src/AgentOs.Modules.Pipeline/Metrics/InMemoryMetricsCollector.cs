@@ -8,9 +8,14 @@ using AgentOs.Modules.Pipeline.Metrics;
 
 namespace AgentOs.Modules.Pipeline.Metrics;
 
-/// <summary>Stores RunMetric in a <see cref="ConcurrentQueue{T}"/>.</summary>
+/// <summary>Stores RunMetric in a <see cref="ConcurrentQueue{T}"/>, bounded to the newest
+/// <see cref="MaxRecords"/> entries — a long-lived singleton must not grow without limit
+/// (durable history is the Postgres run store; this is the in-process working set).</summary>
 public sealed class InMemoryMetricsCollector : IMetricsCollector
 {
+    /// <summary>Cap on retained metrics; oldest entries are dropped first.</summary>
+    public const int MaxRecords = 10_000;
+
     private readonly ConcurrentQueue<RunMetric> _records = new();
 
     /// <inheritdoc />
@@ -18,6 +23,10 @@ public sealed class InMemoryMetricsCollector : IMetricsCollector
     {
         System.ArgumentNullException.ThrowIfNull(metric);
         _records.Enqueue(metric);
+        while (_records.Count > MaxRecords && _records.TryDequeue(out _))
+        {
+            // Drop-oldest until back under the cap.
+        }
     }
 
     /// <inheritdoc />
