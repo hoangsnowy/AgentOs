@@ -27,6 +27,9 @@ public interface IWorkspaceRepository
     /// <summary>Get a board by id for an explicit tenant (circuit callers). Null if not found in that tenant.</summary>
     Task<WorkspaceEntity?> GetForTenantAsync(string tenantId, Guid id, CancellationToken ct = default);
 
+    /// <summary>Remove a board for an explicit tenant (circuit callers). Returns false if not found.</summary>
+    Task<bool> RemoveForTenantAsync(string tenantId, Guid id, CancellationToken ct = default);
+
     /// <summary>Persist a board whose <see cref="WorkspaceEntity.TenantId"/> is already set by the caller.</summary>
     Task AddForTenantAsync(WorkspaceEntity workspace, CancellationToken ct = default);
 

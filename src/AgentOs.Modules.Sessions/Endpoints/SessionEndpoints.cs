@@ -93,8 +93,20 @@ internal static class SessionEndpoints
     }
 
     private static async Task<IResult> CloseSessionAsync(
-        Guid id, ISessionRepository repo, TimeProvider clock, CancellationToken ct)
+        Guid id, ISessionRepository repo, ITenantContext tenant, System.Security.Claims.ClaimsPrincipal user,
+        TimeProvider clock, CancellationToken ct)
     {
+        // Ownership: a member closes only their own sessions; a tenant admin may close any.
+        var session = await repo.GetAsync(id, ct).ConfigureAwait(false);
+        if (session is null)
+        {
+            return Results.NotFound();
+        }
+        if (!user.IsInRole("admin") && !OwnedByCaller(session.MemberUserId, tenant.UserId))
+        {
+            return Results.Forbid();
+        }
+
         var closed = await repo.CloseAsync(id, clock.GetUtcNow(), ct).ConfigureAwait(false);
         return closed ? Results.NoContent() : Results.NotFound();
     }
@@ -130,11 +142,31 @@ internal static class SessionEndpoints
         return Results.Created($"/runners/{r.RunnerId}", new RunnerCreatedDto(r.RunnerId, r.Label, r.Token, r.Status));
     }
 
-    private static async Task<IResult> RevokeRunnerAsync(Guid id, IRunnerRepository repo, CancellationToken ct)
+    private static async Task<IResult> RevokeRunnerAsync(
+        Guid id, IRunnerRepository repo, ITenantContext tenant, System.Security.Claims.ClaimsPrincipal user,
+        CancellationToken ct)
     {
+        // Ownership: a member revokes only their own runners; a tenant admin may revoke any.
+        var runner = await repo.GetAsync(id, ct).ConfigureAwait(false);
+        if (runner is null)
+        {
+            return Results.NotFound();
+        }
+        if (!user.IsInRole("admin") && !OwnedByCaller(runner.OwnerUserId, tenant.UserId))
+        {
+            return Results.Forbid();
+        }
+
         var ok = await repo.SetStatusAsync(id, "Revoked", ct).ConfigureAwait(false);
         return ok ? Results.NoContent() : Results.NotFound();
     }
+
+    /// <summary>True when the resource's recorded owner matches the calling user. An ownerless row
+    /// (legacy/blank) stays admin-only rather than free-for-all.</summary>
+    private static bool OwnedByCaller(string? ownerUserId, string? callerUserId) =>
+        !string.IsNullOrEmpty(ownerUserId)
+        && !string.IsNullOrEmpty(callerUserId)
+        && string.Equals(ownerUserId, callerUserId, StringComparison.Ordinal);
 }
 
 /// <summary>Create-a-session request body.</summary>

@@ -1,0 +1,64 @@
+@* McpApp — read-only admin surface for the upstream MCP tool servers this host connected at
+   startup. Reads McpClientHost.Statuses (captured once during module init); a failed connect is
+   shown with its error so a dead toolset is visible rather than silently missing. Runtime CRUD is
+   deliberately out of scope — server config is appsettings-bound (Mcp:Servers); edit + restart. *@
+
+@using AgentOs.Modules.Mcp
+@inject McpClientHost Host
+
+<header class="page-head">
+    <div>
+        <h1 class="page-title">MCP</h1>
+        <p class="page-sub">Upstream MCP tool servers this host connected at startup. Configure in appsettings (<code>Mcp:Servers</code>) and restart — see docs/CONFIG.md.</p>
+    </div>
+</header>
+
+@if (Host.Statuses.Count == 0)
+{
+    <EmptyState Icon="arrow-square-out"
+                Title="No MCP servers configured"
+                Hint="Add server entries under Mcp:Servers in appsettings (name, transport, command or url), then restart the host — connections are established once at startup." />
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Transport</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in Host.Statuses)
+            {
+                <tr>
+                    <td>
+                        <div>@s.Name</div>
+                        @if (s.Enabled && !s.Connected && !string.IsNullOrEmpty(s.Error))
+                        {
+                            <div class="muted" title="@s.Error">@s.Error</div>
+                        }
+                    </td>
+                    <td><code>@s.Transport</code></td>
+                    <td>
+                        @if (s.Connected)
+                        {
+                            <Chip Variant="Chip.ChipVariant.Ok">connected · @s.ToolCount tools</Chip>
+                        }
+                        else if (s.Enabled)
+                        {
+                            <Chip Variant="Chip.ChipVariant.Err">failed</Chip>
+                        }
+                        else
+                        {
+                            <Chip>disabled</Chip>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<p class="muted">AgentOS also serves its own pipeline as MCP tools at <code>/mcp</code> on the Api host.</p>

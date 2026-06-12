@@ -27,6 +27,10 @@ public sealed class McpClientHost : IAsyncDisposable
     private readonly ILoggerFactory _loggerFactory;
     private readonly List<McpClient> _clients = new();
     private readonly List<string> _registeredNames = new();
+    private readonly List<McpServerStatus> _statuses = new();
+
+    /// <summary>Per-server connection status captured at startup — drives the MCP admin app.</summary>
+    public IReadOnlyList<McpServerStatus> Statuses => _statuses;
 
     public McpClientHost(
         IOptions<McpOptions> options,
@@ -54,12 +58,14 @@ public sealed class McpClientHost : IAsyncDisposable
             if (!server.Enabled)
             {
                 _logger.LogInformation("MCP server '{Name}' is disabled — skipping.", server.Name);
+                _statuses.Add(new McpServerStatus(server.Name, server.Transport, Enabled: false, Connected: false, 0, null));
                 continue;
             }
 
             try
             {
-                await ConnectServerAsync(server, cancellationToken).ConfigureAwait(false);
+                var toolCount = await ConnectServerAsync(server, cancellationToken).ConfigureAwait(false);
+                _statuses.Add(new McpServerStatus(server.Name, server.Transport, Enabled: true, Connected: true, toolCount, null));
             }
             catch (ModelContextProtocol.McpException ex) { OnConnectFailed(server, ex); }
             catch (System.ComponentModel.Win32Exception ex) { OnConnectFailed(server, ex); }
@@ -71,14 +77,21 @@ public sealed class McpClientHost : IAsyncDisposable
         }
 
         // One server's failure is logged and skipped — the rest of the host still boots.
-        void OnConnectFailed(McpServerOptions server, Exception ex) =>
+        // Status carries only the exception TYPE: ex.Message can leak paths/hosts/ports, and the
+        // status surfaces through the /mcp/servers endpoint + MCP app. Full detail stays in the log.
+        void OnConnectFailed(McpServerOptions server, Exception ex)
+        {
+            _statuses.Add(new McpServerStatus(
+                server.Name, server.Transport, Enabled: true, Connected: false, 0,
+                $"{ex.GetType().Name} — see the host log for detail."));
             _logger.LogWarning(ex,
                 "Failed to connect MCP server '{Name}' ({Transport}). The server's tools will be unavailable; "
                 + "the rest of the host continues to boot.",
                 server.Name, server.Transport);
+        }
     }
 
-    private async Task ConnectServerAsync(McpServerOptions server, CancellationToken cancellationToken)
+    private async Task<int> ConnectServerAsync(McpServerOptions server, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(server.Name))
         {
@@ -134,6 +147,8 @@ public sealed class McpClientHost : IAsyncDisposable
                     prefixedName);
             }
         }
+
+        return tools.Count;
     }
 
     private static IClientTransport BuildTransport(McpServerOptions server)
