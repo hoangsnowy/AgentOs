@@ -30,10 +30,26 @@ public static class AgentsServiceCollectionExtensions
         System.ArgumentNullException.ThrowIfNull(services);
         System.ArgumentNullException.ThrowIfNull(configuration);
 
+        // Fail-fast config: a bad agent/pipeline value aborts startup with a named error instead of
+        // surfacing mid-run as a 404 from the LLM provider or a zero-iteration pipeline.
         services.AddOptions<AgentsOptions>()
-            .Bind(configuration.GetSection(AgentsOptions.SectionName));
+            .Bind(configuration.GetSection(AgentsOptions.SectionName))
+            .Validate(
+                o => o.All().All(a =>
+                    !string.IsNullOrWhiteSpace(a.Provider)
+                    && !string.IsNullOrWhiteSpace(a.Model)
+                    && a.Temperature is >= 0 and <= 2
+                    && a.MaxTokens > 0),
+                "Agents:* — every agent needs a Provider and Model, Temperature in [0, 2], and MaxTokens > 0.")
+            .ValidateOnStart();
         services.AddOptions<PipelineOptions>()
-            .Bind(configuration.GetSection(PipelineOptions.SectionName));
+            .Bind(configuration.GetSection(PipelineOptions.SectionName))
+            .Validate(o => o.MaxIterations >= 1,
+                "Pipeline:MaxIterations must be >= 1.")
+            .Validate(o => string.Equals(o.Engine, "Classic", System.StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(o.Engine, "Workflow", System.StringComparison.OrdinalIgnoreCase),
+                "Pipeline:Engine must be 'Classic' or 'Workflow'.")
+            .ValidateOnStart();
 
         services.AddTransient<IRequirementAgent, RequirementAgent>();
         services.AddTransient<AgentOs.Domain.Sessions.IIssueWorkAgent, IssueWorkAgent>();

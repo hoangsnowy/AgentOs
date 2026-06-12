@@ -6,12 +6,14 @@
 @using AgentOs.Domain.Llm
 @using AgentOs.SharedKernel.Identity
 @using AgentOs.Web.Services
+@using AgentOs.Domain.Workspaces
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject IRuntimeOverrides Overrides
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
 @inject IHttpClientFactory HttpFactory
 @inject ILlmClientFactory LlmFactory
 @inject AuthSession Auth
+@inject ISourceProviderResolver SourceProviders
 
 @if (!_resolved)
 {
@@ -66,10 +68,14 @@ else
                     </select>
                 </div>
                 <div class="prefs-actions">
-                    <Btn Variant="Btn.ButtonVariant.Primary" OnClick="Save">Save</Btn>
-                    <Btn Variant="Btn.ButtonVariant.Ghost" OnClick="Clear">Reset</Btn>
+                    <Btn Variant="Btn.ButtonVariant.Primary" OnClick="Save" Disabled="_saving">@(_saving ? "Saving…" : "Save")</Btn>
+                    <Btn Variant="Btn.ButtonVariant.Ghost" OnClick="Clear" Disabled="_saving">Reset</Btn>
                 </div>
-                @if (_saved)
+                @if (_saveError is not null)
+                {
+                    <div class="prefs-saved"><Chip Variant="Chip.ChipVariant.Err">Not saved</Chip> @_saveError</div>
+                }
+                else if (_saved)
                 {
                     <div class="prefs-saved"><Chip Variant="Chip.ChipVariant.Ok">Saved</Chip> @SaveScopeLabel()</div>
                 }
@@ -112,10 +118,14 @@ else
                     <input type="text" @bind="_azureEndpoint" placeholder="https://your-resource.openai.azure.com" class="prefs-input" />
                 </div>
                 <div class="prefs-actions">
-                    <Btn Variant="Btn.ButtonVariant.Primary" OnClick="Save">Save</Btn>
-                    <Btn Variant="Btn.ButtonVariant.Ghost" OnClick="Clear">Reset</Btn>
+                    <Btn Variant="Btn.ButtonVariant.Primary" OnClick="Save" Disabled="_saving">@(_saving ? "Saving…" : "Save")</Btn>
+                    <Btn Variant="Btn.ButtonVariant.Ghost" OnClick="Clear" Disabled="_saving">Reset</Btn>
                 </div>
-                @if (_saved)
+                @if (_saveError is not null)
+                {
+                    <div class="prefs-saved"><Chip Variant="Chip.ChipVariant.Err">Not saved</Chip> @_saveError</div>
+                }
+                else if (_saved)
                 {
                     <div class="prefs-saved"><Chip Variant="Chip.ChipVariant.Ok">Saved</Chip> @SaveScopeLabel()</div>
                 }
@@ -143,11 +153,30 @@ else
                     <input type="text" @bind="_baseBranch" placeholder="main" class="prefs-input" />
                 </div>
                 <div class="prefs-actions">
-                    <Btn Variant="Btn.ButtonVariant.Primary" OnClick="SaveGithub">Save</Btn>
+                    <Btn Variant="Btn.ButtonVariant.Primary" OnClick="SaveGithub" Disabled="_savingGithub">@(_savingGithub ? "Saving…" : "Save")</Btn>
+                    <Btn OnClick="TestGithub" Disabled="_ghTesting || _savingGithub">@(_ghTesting ? "Testing…" : "Test")</Btn>
                 </div>
-                @if (_savedGithub)
+                @if (_saveErrorGithub is not null)
+                {
+                    <div class="prefs-saved"><Chip Variant="Chip.ChipVariant.Err">Not saved</Chip> @_saveErrorGithub</div>
+                }
+                else if (_savedGithub)
                 {
                     <div class="prefs-saved"><Chip Variant="Chip.ChipVariant.Ok">Saved</Chip> "Open PR" on the pipeline will use these.</div>
+                }
+                @if (_ghTestResult is not null)
+                {
+                    <div class="prefs-saved">
+                        @if (_ghTestOk)
+                        {
+                            <Chip Variant="Chip.ChipVariant.Ok">OK</Chip>
+                        }
+                        else
+                        {
+                            <Chip Variant="Chip.ChipVariant.Err">Failed</Chip>
+                        }
+                        @_ghTestResult
+                    </div>
                 }
                 break;
 
@@ -189,6 +218,8 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     private string _azureKey = "";
     private string _azureEndpoint = "";
     private bool _saved;
+    private bool _saving;
+    private string? _saveError;
     private bool _dbConnected;
 
     private string _githubPat = "";
@@ -196,6 +227,11 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     private string _repoName = "";
     private string _baseBranch = "";
     private bool _savedGithub;
+    private bool _savingGithub;
+    private string? _saveErrorGithub;
+    private bool _ghTesting;
+    private bool _ghTestOk;
+    private string? _ghTestResult;
 
     // When Api:BaseUrl is set the Web is a thin client; settings live in the API's encrypted
     // app_config store. Blank → single-process, settings are the in-memory overrides.
@@ -302,71 +338,241 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
         return client;
     }
 
-    private static async Task SetRemoteAsync(HttpClient client, string key, string? value)
-        => await client.PostAsJsonAsync("settings", new { key, value = value ?? "" });
+    // Mirrors the server-side SettingsKeyRegistry checks so an invalid value never round-trips
+    // (the API enforces the same rules — this is feedback, not the gate).
+    private string? ValidateLlmFields()
+    {
+        if (!string.IsNullOrWhiteSpace(_azureEndpoint)
+            && (!Uri.TryCreate(_azureEndpoint, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return "Azure OpenAI endpoint must be an absolute https:// URL.";
+        }
+        return null;
+    }
+
+    private string? ValidateGithubFields()
+    {
+        if (!string.IsNullOrWhiteSpace(_githubPat)
+            && !_githubPat.StartsWith("ghp_", StringComparison.Ordinal)
+            && !_githubPat.StartsWith("github_pat_", StringComparison.Ordinal)
+            && !_githubPat.StartsWith("gho_", StringComparison.Ordinal))
+        {
+            return "GitHub token must start with ghp_, github_pat_ or gho_.";
+        }
+        if (!string.IsNullOrWhiteSpace(_baseBranch) && _baseBranch.Contains(' ', StringComparison.Ordinal))
+        {
+            return "Base branch must not contain spaces.";
+        }
+        return null;
+    }
+
+    /// <summary>POSTs one setting; returns the server's validation error, or null on success.</summary>
+    private static async Task<string?> SetRemoteAsync(HttpClient client, string key, string? value)
+    {
+        using var resp = await client.PostAsJsonAsync("settings", new { key, value = value ?? "" });
+        if (resp.IsSuccessStatusCode)
+        {
+            return null;
+        }
+        try
+        {
+            var problem = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            if (problem.TryGetProperty("errors", out var errors))
+            {
+                foreach (var field in errors.EnumerateObject())
+                {
+                    foreach (var msg in field.Value.EnumerateArray())
+                    {
+                        return msg.GetString();
+                    }
+                }
+            }
+            if (problem.TryGetProperty("detail", out var detail))
+            {
+                return detail.GetString();
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Non-JSON error body — fall through to the status line.
+        }
+        return $"HTTP {(int)resp.StatusCode}";
+    }
 
     private async Task Save()
     {
-        if (Split)
+        _saved = false;
+        _saveError = ValidateLlmFields();
+        if (_saveError is not null)
         {
-            using var client = ApiClient();
-            await SetRemoteAsync(client, "Llm:ForceProvider", _forceProvider);
-            await SetRemoteAsync(client, "Llm:Claude:ApiKey", _anthropicKey);
-            await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", _azureKey);
-            await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", _azureEndpoint);
+            return;
         }
-        else
+        _saving = true;
+        try
         {
-            using var _ = TenantScope();
-            Overrides.ForceProvider = string.IsNullOrWhiteSpace(_forceProvider) ? null : _forceProvider;
-            Overrides.AnthropicApiKey = string.IsNullOrWhiteSpace(_anthropicKey) ? null : _anthropicKey;
-            Overrides.AzureApiKey = string.IsNullOrWhiteSpace(_azureKey) ? null : _azureKey;
-            Overrides.AzureEndpoint = string.IsNullOrWhiteSpace(_azureEndpoint) ? null : _azureEndpoint;
+            if (Split)
+            {
+                using var client = ApiClient();
+                _saveError ??= await SetRemoteAsync(client, "Llm:ForceProvider", _forceProvider);
+                _saveError ??= await SetRemoteAsync(client, "Llm:Claude:ApiKey", _anthropicKey);
+                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", _azureKey);
+                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", _azureEndpoint);
+            }
+            else
+            {
+                using var _ = TenantScope();
+                Overrides.ForceProvider = string.IsNullOrWhiteSpace(_forceProvider) ? null : _forceProvider;
+                Overrides.AnthropicApiKey = string.IsNullOrWhiteSpace(_anthropicKey) ? null : _anthropicKey;
+                Overrides.AzureApiKey = string.IsNullOrWhiteSpace(_azureKey) ? null : _azureKey;
+                Overrides.AzureEndpoint = string.IsNullOrWhiteSpace(_azureEndpoint) ? null : _azureEndpoint;
+            }
+            _saved = _saveError is null;
         }
-        _saved = true;
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            _saveError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task Clear()
     {
         _forceProvider = _anthropicKey = _azureKey = _azureEndpoint = "";
-        if (Split)
+        _saved = false;
+        _saveError = null;
+        _saving = true;
+        try
         {
-            using var client = ApiClient();
-            await SetRemoteAsync(client, "Llm:ForceProvider", "");
-            await SetRemoteAsync(client, "Llm:Claude:ApiKey", "");
-            await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", "");
-            await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", "");
+            if (Split)
+            {
+                using var client = ApiClient();
+                _saveError ??= await SetRemoteAsync(client, "Llm:ForceProvider", "");
+                _saveError ??= await SetRemoteAsync(client, "Llm:Claude:ApiKey", "");
+                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", "");
+                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", "");
+            }
+            else
+            {
+                using var _ = TenantScope();
+                Overrides.ForceProvider = null;
+                Overrides.AnthropicApiKey = null;
+                Overrides.AzureApiKey = null;
+                Overrides.AzureEndpoint = null;
+            }
+            _saved = _saveError is null;
         }
-        else
+        catch (System.Net.Http.HttpRequestException ex)
         {
-            using var _ = TenantScope();
-            Overrides.ForceProvider = null;
-            Overrides.AnthropicApiKey = null;
-            Overrides.AzureApiKey = null;
-            Overrides.AzureEndpoint = null;
+            _saveError = ex.Message;
         }
-        _saved = true;
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task SaveGithub()
     {
-        if (Split)
+        _savedGithub = false;
+        _saveErrorGithub = ValidateGithubFields();
+        if (_saveErrorGithub is not null)
         {
-            using var client = ApiClient();
-            await SetRemoteAsync(client, "Github:Pat", _githubPat);
-            await SetRemoteAsync(client, "Github:RepoOwner", _repoOwner);
-            await SetRemoteAsync(client, "Github:RepoName", _repoName);
-            await SetRemoteAsync(client, "Github:BaseBranch", _baseBranch);
+            return;
         }
-        else
+        _savingGithub = true;
+        try
         {
-            using var _ = TenantScope();
-            Overrides.GitHubPat = string.IsNullOrWhiteSpace(_githubPat) ? null : _githubPat;
-            Overrides.GitHubRepoOwner = string.IsNullOrWhiteSpace(_repoOwner) ? null : _repoOwner;
-            Overrides.GitHubRepoName = string.IsNullOrWhiteSpace(_repoName) ? null : _repoName;
-            Overrides.GitHubBaseBranch = string.IsNullOrWhiteSpace(_baseBranch) ? null : _baseBranch;
+            if (Split)
+            {
+                using var client = ApiClient();
+                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:Pat", _githubPat);
+                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:RepoOwner", _repoOwner);
+                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:RepoName", _repoName);
+                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:BaseBranch", _baseBranch);
+            }
+            else
+            {
+                using var _ = TenantScope();
+                Overrides.GitHubPat = string.IsNullOrWhiteSpace(_githubPat) ? null : _githubPat;
+                Overrides.GitHubRepoOwner = string.IsNullOrWhiteSpace(_repoOwner) ? null : _repoOwner;
+                Overrides.GitHubRepoName = string.IsNullOrWhiteSpace(_repoName) ? null : _repoName;
+                Overrides.GitHubBaseBranch = string.IsNullOrWhiteSpace(_baseBranch) ? null : _baseBranch;
+            }
+            _savedGithub = _saveErrorGithub is null;
         }
-        _savedGithub = true;
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            _saveErrorGithub = ex.Message;
+        }
+        finally
+        {
+            _savingGithub = false;
+        }
+    }
+
+    // Probe GitHub with the form's token + repo coordinates (nothing has to be saved first).
+    // In-process: the same ISourceProvider.ValidateAsync the Spine board-connect flow uses.
+    // Split mode: the API's token probe (POST /workspaces/repos) — validates the token's reach.
+    private async Task TestGithub()
+    {
+        _ghTestResult = null;
+        if (string.IsNullOrWhiteSpace(_githubPat))
+        {
+            _ghTestOk = false;
+            _ghTestResult = "Enter a token first.";
+            return;
+        }
+        _ghTesting = true;
+        try
+        {
+            if (Split)
+            {
+                using var client = ApiClient();
+                using var resp = await client.PostAsJsonAsync("workspaces/repos",
+                    new { kind = "GitHub", accessToken = _githubPat, owner = _repoOwner });
+                _ghTestOk = resp.IsSuccessStatusCode;
+                _ghTestResult = _ghTestOk
+                    ? "Token OK — it can list repositories. (Repo itself not checked in split mode.)"
+                    : $"Token rejected (HTTP {(int)resp.StatusCode}).";
+            }
+            else if (string.IsNullOrWhiteSpace(_repoOwner) || string.IsNullOrWhiteSpace(_repoName))
+            {
+                _ghTestOk = false;
+                _ghTestResult = "Enter the repo owner + name to test against.";
+            }
+            else
+            {
+                var descriptor = new WorkspaceDescriptor(
+                    Guid.NewGuid(),
+                    _tenantId.Length == 0 ? "default" : _tenantId,
+                    SourceProviderKind.GitHub,
+                    _repoOwner, _repoName, null,
+                    string.IsNullOrWhiteSpace(_baseBranch) ? "main" : _baseBranch,
+                    _githubPat);
+                var result = await SourceProviders.Resolve(SourceProviderKind.GitHub).ValidateAsync(descriptor);
+                _ghTestOk = result.Ok;
+                _ghTestResult = result.Ok
+                    ? $"{_repoOwner}/{_repoName} reachable — default branch {result.DefaultBranch}."
+                    : result.Error ?? "Validation failed.";
+            }
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            _ghTestOk = false;
+            _ghTestResult = ex.Message;
+        }
+        catch (System.InvalidOperationException ex)
+        {
+            _ghTestOk = false;
+            _ghTestResult = ex.Message;
+        }
+        finally
+        {
+            _ghTesting = false;
+        }
     }
 
     private async Task TestConnection()

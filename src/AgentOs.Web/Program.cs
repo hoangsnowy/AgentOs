@@ -104,6 +104,14 @@ if (string.IsNullOrWhiteSpace(keycloakClientSecret) && !builder.Environment.IsDe
 // Default true: code that forgets to override picks the secure setting. Dev overrides via
 // appsettings.Development.json or the AppHost env injection.
 var requireHttps = !bool.TryParse(keycloak["RequireHttpsMetadata"], out var rh) || rh;
+// Dev fallback only — resolved HERE (startup) so a production Web with real OIDC and no Authority
+// fails at boot, not on the first sign-in redirect to a localhost that doesn't exist.
+var oidcAuthority = keycloak["Authority"] is { Length: > 0 } configuredAuthority
+    ? configuredAuthority
+    : builder.Environment.IsDevelopment()
+        ? "http://localhost:8080/realms/agentic"
+        : throw new InvalidOperationException(
+            "Auth:Keycloak:Authority is required outside Development when DevAutoLogin is off.");
 builder.Services
     .AddAuthentication(options =>
     {
@@ -125,7 +133,7 @@ builder.Services
     })
     .AddOpenIdConnect(options =>
     {
-        options.Authority = keycloak["Authority"] ?? "http://localhost:8080/realms/agentic";
+        options.Authority = oidcAuthority;
         options.ClientId = keycloak["ClientId"] ?? "agentic-web";
         options.ClientSecret = keycloakClientSecret ?? string.Empty;
         options.ResponseType = "code";

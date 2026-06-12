@@ -1,0 +1,73 @@
+// The runtime-settings contract for the /settings endpoints. POST /settings used to accept ANY
+// key/value into the encrypted store — an admin typo created dead rows, and a bad provider name or
+// endpoint only surfaced when the next pipeline run failed. The registry whitelists the keys the
+// Settings UI actually owns and validates each value at save time.
+
+using System;
+using System.Collections.Generic;
+
+namespace AgentOs.Modules.AppConfig.Endpoints;
+
+internal static class SettingsKeyRegistry
+{
+    /// <summary>Prefixes <c>GET /settings/{prefix}</c> may enumerate.</summary>
+    private static readonly HashSet<string> ReadablePrefixes =
+        new(StringComparer.OrdinalIgnoreCase) { "Llm", "Github" };
+
+    /// <summary>Writable keys → value validator (null error = valid). Empty values are always
+    /// allowed — they clear the override back to the appsettings/platform fallback.</summary>
+    private static readonly Dictionary<string, Func<string, string?>> Keys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Llm:ForceProvider"] = ValidProvider,
+        ["Llm:Claude:ApiKey"] = _ => null,
+        ["Llm:AzureOpenAi:ApiKey"] = _ => null,
+        ["Llm:AzureOpenAi:Endpoint"] = ValidHttpsUrl,
+        ["Github:Pat"] = ValidGitHubPat,
+        ["Github:RepoOwner"] = ValidGitHubName,
+        ["Github:RepoName"] = ValidGitHubName,
+        ["Github:BaseBranch"] = ValidBranchName,
+    };
+
+    public static bool IsReadablePrefix(string prefix) => ReadablePrefixes.Contains(prefix);
+
+    public static bool IsKnownKey(string key) => Keys.ContainsKey(key);
+
+    /// <summary>Validates a value for a known key. Returns the error message, or null when valid.</summary>
+    public static string? ValidateValue(string key, string value)
+    {
+        if (!Keys.TryGetValue(key, out var validator))
+        {
+            return $"'{key}' is not a recognised runtime setting.";
+        }
+        return string.IsNullOrWhiteSpace(value) ? null : validator(value);
+    }
+
+    private static string? ValidProvider(string value) =>
+        value is "Claude" or "AzureOpenAI" or "MAF" or "RemoteAgent" or "Anthropic"
+            ? null
+            : "ForceProvider must be one of: Claude (alias: Anthropic), AzureOpenAI, MAF, RemoteAgent.";
+
+    private static string? ValidHttpsUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
+            ? null
+            : "Endpoint must be an absolute https:// URL.";
+
+    private static string? ValidGitHubPat(string value) =>
+        value.StartsWith("ghp_", StringComparison.Ordinal)
+        || value.StartsWith("github_pat_", StringComparison.Ordinal)
+        || value.StartsWith("gho_", StringComparison.Ordinal)
+            ? null
+            : "GitHub token must start with ghp_, github_pat_ or gho_.";
+
+    private static string? ValidGitHubName(string value) =>
+        value.Length <= 100 && value.AsSpan().IndexOfAnyExcept(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.".AsSpan()) < 0
+            ? null
+            : "Only letters, digits, '-', '_' and '.' are allowed.";
+
+    private static string? ValidBranchName(string value) =>
+        value.Length <= 250 && !value.Contains(' ', StringComparison.Ordinal)
+        && !value.Contains("..", StringComparison.Ordinal)
+            ? null
+            : "Branch name must not contain spaces or '..'.";
+}

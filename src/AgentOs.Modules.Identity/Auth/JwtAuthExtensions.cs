@@ -21,7 +21,19 @@ public static class JwtAuthExtensions
         ArgumentNullException.ThrowIfNull(config);
 
         var kc = config.GetSection("Auth:Keycloak");
-        var authority = kc["Authority"] ?? "http://localhost:8080/realms/agentic";
+        var environment = config["ASPNETCORE_ENVIRONMENT"] ?? config["DOTNET_ENVIRONMENT"];
+        var isDevelopment = string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase);
+
+        // The dev-Keycloak fallback is Development-only: a production host with no configured
+        // Authority must fail at startup, not silently try to validate tokens against localhost.
+        var authority = kc["Authority"];
+        if (string.IsNullOrWhiteSpace(authority))
+        {
+            authority = isDevelopment
+                ? "http://localhost:8080/realms/agentic"
+                : throw new InvalidOperationException(
+                    "Auth:Keycloak:Authority is required outside the Development environment.");
+        }
         var audience = kc["Audience"] ?? "agentic-api";
         // Default secure (true) — except for an http://localhost authority IN DEVELOPMENT, where
         // requiring HTTPS metadata makes the JwtBearer options-factory THROW on the first request and
@@ -29,8 +41,6 @@ public static class JwtAuthExtensions
         // exception is environment-gated so a reverse-proxied production deploy that points its
         // authority at loopback still fails loud rather than silently skipping metadata validation.
         // Explicit config wins.
-        var environment = config["ASPNETCORE_ENVIRONMENT"] ?? config["DOTNET_ENVIRONMENT"];
-        var isDevelopment = string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase);
         var requireHttps = bool.TryParse(kc["RequireHttpsMetadata"], out var rh)
             ? rh
             : !(isDevelopment && IsLoopbackHttp(authority));

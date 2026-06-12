@@ -1,0 +1,113 @@
+# AgentOS — Configuration Reference
+
+Every key an operator can set, where it's read, its default, and whether it can change at runtime.
+Sources merge in the usual ASP.NET Core order: `appsettings.json` → `appsettings.{Environment}.json`
+→ user-secrets (Development) → environment variables (`Section__Key`) → Aspire AppHost injection.
+
+**Validated at startup** = the host refuses to boot on an invalid value (`ValidateOnStart`).
+**Runtime (Settings UI)** = admins change it per-tenant in the desktop Settings app; stored encrypted
+in `config.app_config`; the allowlist lives in `SettingsKeyRegistry`.
+
+## Connection / persistence
+
+| Key | Default | Read by | Notes |
+|---|---|---|---|
+| `ConnectionStrings:DefaultConnection` | — | every module | Postgres. Absent → modules fall back to no-op repositories (stateless boot) unless `RequireDatabase` is true. Aspire injects it on the full stack. |
+| `Persistence:RequireDatabase` | Api `true`, Web `false` (`true` in Web Production) | module loaders | Fail-loud guard: refuse to boot stateless when a DB is expected. |
+
+## LLM gateway (`Llm:*`)
+
+| Key | Default | Validated at startup | Runtime (Settings UI) | Notes |
+|---|---|---|---|---|
+| `Llm:Provider` | `Claude` | ✔ (LlmOptions) | — | Default provider when an agent names none. |
+| `Llm:ForceProvider` | empty | ✔ | ✔ `Llm:ForceProvider` | Forces every agent to one provider: `Claude` / `AzureOpenAI` / `MAF` / `RemoteAgent`. |
+| `Llm:Claude:ApiKey` / `ApiKeys` | empty | ✔ | ✔ `Llm:Claude:ApiKey` | Platform fallback key(s). Per-tenant keys via Settings UI win. Set via user-secrets/env — never commit. |
+| `Llm:Claude:Endpoint` | `https://api.anthropic.com` | ✔ | — | |
+| `Llm:Claude:ApiVersion` | `2023-06-01` | ✔ | — | Anthropic API version header. |
+| `Llm:AzureOpenAi:ApiKey` / `ApiKeys` / `Endpoint` | empty | ✔ | ✔ same keys | Endpoint must be absolute `https://`. |
+| `Llm:*:TimeoutSeconds` | 60 | ✔ | — | |
+| `Llm:Fallbacks` | — | — | — | Ordered fallback provider list (FailoverLlmClient). |
+
+## Agents (`Agents:*`) — validated at startup
+
+Per agent (`Orchestrator`, `Requirement`, `Coding`, `Testing`, `Qa`, `IssueWork`, `Decomposer`):
+`Provider` (non-empty), `Model` (non-empty), `Temperature` (0–2), `MaxTokens` (>0),
+`IssueWork.MaxParallelRepos` (fan-out bound, clamped ≥1 at use).
+Keep model ids in sync with `CostCalculator`'s price table or cost reports show the model unpriced.
+
+## Pipeline (`Pipeline:*`) — validated at startup
+
+| Key | Default | Notes |
+|---|---|---|
+| `Pipeline:MaxIterations` | 3 | QA-loop cap when the story doesn't set `NMax`. Must be ≥ 1. |
+| `Pipeline:Engine` | `Classic` | `Classic` (in-process loop) or `Workflow` (MAF graph). |
+
+## Auth
+
+| Key | Default | Notes |
+|---|---|---|
+| `Auth:Mode` | keycloak | Keycloak OIDC is the only shipped mode. |
+| `Auth:Keycloak:Authority` | empty | **Required outside Development.** Dev fallback `http://localhost:8080/realms/agentic` applies in Development only; production boots refuse a missing value. |
+| `Auth:Keycloak:Audience` | `agentic-api` | JWT audience (Api). |
+| `Auth:Keycloak:ClientId` / `ClientSecret` | `agentic-web` / empty | Web OIDC client. Secret required outside Development; the dev default secret is rejected by `DevSecretGuard`. |
+| `Auth:Keycloak:RequireHttpsMetadata` | `true` | Explicit value always wins. Unset: defaults true, except an `http://localhost` authority in Development (otherwise every request, including probes, 500s on a standalone run). |
+| `Auth:Keycloak:Admin:BaseUrl` | empty | Keycloak admin API for member lifecycle. Empty → no-op client. Validated absolute URL at startup. |
+| `Auth:Keycloak:Admin:{Realm,Username,Password,ClientId}` | `agentic`/`admin`/`admin`/`admin-cli` | Use a service account + secrets in production. |
+| `Auth:DevAutoLogin` | `true` in Development only | Fixed-user auth for the standalone Web. Hard-throws outside Development; AppHost forces it off. |
+
+## Web split mode (`Api:*`)
+
+| Key | Default | Notes |
+|---|---|---|
+| `Api:BaseUrl` | empty | Empty = Web runs the engine in-process. Set = Web becomes a thin client of the Api host (settings, pipeline, health probes go over HTTP). Deployment-time only — not in the Settings UI. |
+| `Api:BearerToken` | empty | Static bearer for the split-mode client when no user token is forwarded. |
+
+## Tools & integration
+
+| Key | Default | Notes |
+|---|---|---|
+| `Tools:EnforceByDefault` | `true` in Production, else `false` | Fail-closed tool policy: deny unless on the tenant allowlist (`tools/allowlist` per-tenant config, Policy app). |
+| `Integration:BuildVerifier:Enabled` | `false` in Production | `build_verifier` runs MSBuild in-process — gated off in Production until the sandbox lands (audit #10). |
+| `Github:*` (Pat/RepoOwner/RepoName/BaseBranch) | — | Runtime Settings UI only (per-tenant, encrypted). PAT must start `ghp_`/`github_pat_`/`gho_`. |
+
+## MCP (`Mcp:*`) — validated at startup
+
+| Key | Default | Notes |
+|---|---|---|
+| `Mcp:CallTimeoutSeconds` | 60 | Per `tools/call` cap. Must be > 0. |
+| `Mcp:Servers[]` | empty | Each enabled server needs `Name`; `Transport` `stdio` needs `Command` (+`Args`/`Env`), `http` needs absolute `Url`. `Enabled:false` keeps the entry without connecting. |
+
+## Email (`Email:*`) — validated at startup
+
+| Key | Default | Notes |
+|---|---|---|
+| `Email:SmtpHost` | empty | Empty → NullEmailSender (logs instead of sending). Aspire injects MailHog in dev. |
+| `Email:SmtpPort` | 1025 | 1–65535. 587 + `UseStartTls:true` for STARTTLS providers; 465 = implicit TLS. |
+| `Email:From` / `FromName` | `noreply@agentic.local` / `AgentOS` | `From` required when `SmtpHost` is set. |
+| `Email:User` / `Password` | empty | Secrets in production. |
+
+## Misc
+
+| Key | Default | Notes |
+|---|---|---|
+| `Plugins:Path` | `plugins` | Folder scanned for `IAgentOsPlugin` assemblies. |
+| `Metrics:CsvPath` | — | Optional CSV export of per-run metrics. |
+| `Llm:Budget:*` | — | Monthly budget gate (BudgetGuard) on server-token entrypoints. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Enables OTLP trace/metric export when set. |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | — | Enables App Insights (Api). |
+
+## Runtime-settable keys (the `/settings` allowlist)
+
+`POST /settings` (admin-only) accepts exactly: `Llm:ForceProvider`, `Llm:Claude:ApiKey`,
+`Llm:AzureOpenAi:ApiKey`, `Llm:AzureOpenAi:Endpoint`, `Github:Pat`, `Github:RepoOwner`,
+`Github:RepoName`, `Github:BaseBranch`. Anything else → 400. Values are validated (provider names,
+https URL shape, PAT prefix). An empty value clears the override back to the platform fallback.
+`GET /settings/{prefix}` reads the `Llm` and `Github` prefixes only.
+
+## Notes
+
+- Environment detection for the dev-only fallbacks reads `ASPNETCORE_ENVIRONMENT` first, then
+  `DOTNET_ENVIRONMENT` (standard ASP.NET Core precedence).
+- **Removed (0.6.0):** the dead `Auth:Bearer` section (`Issuer`/`Audience`/`Secret`/`OperatorPassword`)
+  and `Pipeline:EnableHumanInTheLoop` — neither was read by any code path. Keycloak OIDC is the only
+  shipped auth mode; the human-in-the-loop gate is roadmap work and will return as a real feature.

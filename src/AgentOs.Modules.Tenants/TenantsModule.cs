@@ -28,8 +28,16 @@ public sealed class TenantsModule : IModule, IEndpointModule, IInitializableModu
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
+        // Fail-fast config: a malformed admin BaseUrl otherwise dies on the first member-management
+        // call inside the Users app's circuit. Empty stays allowed (no-op client, standalone/CI).
         services.AddOptions<KeycloakAdminOptions>()
-            .Bind(configuration.GetSection(KeycloakAdminOptions.SectionName));
+            .Bind(configuration.GetSection(KeycloakAdminOptions.SectionName))
+            .Validate(o => string.IsNullOrWhiteSpace(o.BaseUrl)
+                    || Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _),
+                "Auth:Keycloak:Admin:BaseUrl must be an absolute URL when set.")
+            .Validate(o => !string.IsNullOrWhiteSpace(o.Realm),
+                "Auth:Keycloak:Admin:Realm must not be empty.")
+            .ValidateOnStart();
 
         // Real admin client only when a Keycloak server is configured. Without a BaseUrl (standalone
         // Web / CI) the typed HttpClient has no BaseAddress and the real client throws on first call,
@@ -49,7 +57,13 @@ public sealed class TenantsModule : IModule, IEndpointModule, IInitializableModu
         // App-sent email (invitation links). Real MailKit sender when an SMTP host is configured
         // (full stack injects MailHog; prod injects a real provider via secrets); otherwise a no-op
         // logger so standalone dev / CI still boot. Keycloak's own auth emails are separate.
-        services.AddOptions<EmailOptions>().Bind(configuration.GetSection(EmailOptions.SectionName));
+        services.AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName))
+            .Validate(o => o.SmtpPort is > 0 and <= 65535,
+                "Email:SmtpPort must be in [1, 65535].")
+            .Validate(o => string.IsNullOrWhiteSpace(o.SmtpHost) || !string.IsNullOrWhiteSpace(o.From),
+                "Email:From is required when Email:SmtpHost is set.")
+            .ValidateOnStart();
         var smtpHost = configuration.GetSection(EmailOptions.SectionName)["SmtpHost"];
         if (!string.IsNullOrWhiteSpace(smtpHost))
         {
