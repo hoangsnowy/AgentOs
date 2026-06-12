@@ -30,12 +30,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.Logging.AddSimpleConsole(options =>
+// Console format + per-request tenant/traceId scopes come from ServiceDefaults (AddAgentOsLogging):
+// JSON console in Production, human-readable elsewhere.
+
+// App Insights when a connection string is provided (parity with the Api host).
+if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
 {
-    options.IncludeScopes = true;
-    options.SingleLine = false;
-    options.TimestampFormat = "HH:mm:ss.fff ";
-});
+    builder.Services.AddApplicationInsightsTelemetry();
+}
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -229,6 +231,9 @@ if (!app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
+
+// Tenant + traceId on every log line written during the request (after auth: needs the claim).
+app.UseAgentOsRequestLogContext();
 
 // /health (readiness: self + postgres + keycloak when configured) and /alive (liveness) come from
 // ServiceDefaults — real dependency probes with a JSON body naming each failing check.

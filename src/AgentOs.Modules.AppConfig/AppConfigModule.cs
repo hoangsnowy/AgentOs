@@ -50,15 +50,29 @@ public sealed class AppConfigModule : IModule, IEndpointModule, IInitializableMo
         var db = scope.ServiceProvider.GetService<AppConfigDbContext>();
         if (db is not null)
         {
+            // Advisory lock: serialise concurrent replicas racing the same migration at boot.
+            await using var migrationLock = await AgentOs.SharedKernel.Persistence.PgAdvisoryLock
+                .AcquireAsync(db.Database.GetConnectionString(), "agentos:migrate:config", ct).ConfigureAwait(false);
             await db.Database.MigrateAsync(ct).ConfigureAwait(false);
-        }
 
-        // The shared DataProtection key ring (registered by AddAgentOsDataProtection on the host) lives in
-        // the same `config` schema; migrate it here so the keys table exists before the first protect call.
-        var dpDb = scope.ServiceProvider.GetService<DataProtectionDbContext>();
-        if (dpDb is not null)
+            // The shared DataProtection key ring (registered by AddAgentOsDataProtection on the host) lives in
+            // the same `config` schema; migrate it here so the keys table exists before the first protect call.
+            var dpDb = scope.ServiceProvider.GetService<DataProtectionDbContext>();
+            if (dpDb is not null)
+            {
+                await dpDb.Database.MigrateAsync(ct).ConfigureAwait(false);
+            }
+        }
+        else
         {
-            await dpDb.Database.MigrateAsync(ct).ConfigureAwait(false);
+            // No relational AppConfig context (stateless boot) — the key-ring context may still exist.
+            var dpDb = scope.ServiceProvider.GetService<DataProtectionDbContext>();
+            if (dpDb is not null)
+            {
+                await using var migrationLock = await AgentOs.SharedKernel.Persistence.PgAdvisoryLock
+                    .AcquireAsync(dpDb.Database.GetConnectionString(), "agentos:migrate:config", ct).ConfigureAwait(false);
+                await dpDb.Database.MigrateAsync(ct).ConfigureAwait(false);
+            }
         }
     }
 }

@@ -92,6 +92,13 @@ public sealed class MafChatClient : ILlmClient
         var inputTokens = (int)(response.Usage?.InputTokenCount ?? 0);
         var outputTokens = (int)(response.Usage?.OutputTokenCount ?? 0);
         var cost = CostCalculator.Calculate(request.Model, inputTokens, outputTokens);
+        if (!CostCalculator.IsKnown(request.Model))
+        {
+            // Unpriced model = the budget gate and the Cost app are blind to this spend.
+            _logger.LogWarning(
+                "Cost: model {Model} is not in the price table — call recorded UNPRICED ($0). Update CostCalculator.",
+                LogSafe.Scrub(request.Model));
+        }
         LlmTelemetry.RecordSuccess(activity, genAiSystem, deployment, response.ModelId ?? deployment,
             inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalSeconds);
         _logger.LogInformation(

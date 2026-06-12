@@ -32,12 +32,8 @@ builder.AddServiceDefaults();
 // effect outside Development — those values are public (in git) and must never authenticate a real deploy.
 AgentOs.SharedKernel.Security.DevSecretGuard.EnsureNoDevDefaults(builder.Configuration, builder.Environment.EnvironmentName);
 
-builder.Logging.AddSimpleConsole(options =>
-{
-    options.IncludeScopes = true;
-    options.SingleLine = false;
-    options.TimestampFormat = "HH:mm:ss.fff ";
-});
+// Console format + per-request tenant/traceId scopes come from ServiceDefaults (AddAgentOsLogging):
+// JSON console in Production, human-readable elsewhere.
 
 builder.Services.AddOpenApi();
 // RFC 7807 error contract: unhandled endpoint exceptions become application/problem+json (status,
@@ -149,6 +145,9 @@ app.UseAuthorization();
 
 // After auth so the per-tenant partition can read the tenant claim (S2).
 app.UseRateLimiter();
+
+// Tenant + traceId on every log line written during the request (after auth: needs the claim).
+app.UseAgentOsRequestLogContext();
 
 if (!app.Environment.IsProduction())
 {

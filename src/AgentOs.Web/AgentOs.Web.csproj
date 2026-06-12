@@ -30,6 +30,8 @@
   <ItemGroup>
     <PackageReference Include="Z.Blazor.Diagrams" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+    <!-- Telemetry parity with the Api host (conditional on APPLICATIONINSIGHTS_CONNECTION_STRING). -->
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" />
   </ItemGroup>
 
 </Project>

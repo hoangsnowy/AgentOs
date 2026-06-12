@@ -105,6 +105,10 @@ public sealed class TenantsModule : IModule, IEndpointModule, IInitializableModu
         var db = scope.ServiceProvider.GetService<TenantsDbContext>();
         if (db is not null)
         {
+            // Advisory lock: serialise concurrent replicas racing the same migration at boot.
+            // Held through the seed below so the existence-check + insert can't race either.
+            await using var migrationLock = await PgAdvisoryLock
+                .AcquireAsync(db.Database.GetConnectionString(), "agentos:migrate:tenants", ct).ConfigureAwait(false);
             await db.Database.MigrateAsync(ct).ConfigureAwait(false);
 
             // Seed the 'default' tenant so operator-mode invitations can always be accepted.
