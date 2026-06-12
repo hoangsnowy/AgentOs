@@ -91,6 +91,17 @@ public sealed class RemoteAgentTransport : IHostedService
 
         try
         {
+            // Same governance seam as the full-prompt path: a tool call (runner_shell = arbitrary
+            // shell on the paired machine) must pass the approver before it crosses the wire.
+            if (!await _approver.ApproveToolCallAsync(dispatch.Call).ConfigureAwait(false))
+            {
+                _logger.LogWarning("[RemoteAgent] tool call {ToolCallId} ({Tool}) denied by approval gate.",
+                    dispatch.Call.ToolCallId, dispatch.Call.ToolName);
+                _broker.CompleteToolCall(new RunnerToolResult(
+                    dispatch.Call.RequestId, dispatch.Call.ToolCallId, false, string.Empty,
+                    "Denied by approval gate."));
+                return;
+            }
             await _hub.Clients.Client(dispatch.ConnectionId)
                 .SendAsync("ExecuteToolCall", dispatch.Call)
                 .ConfigureAwait(false);

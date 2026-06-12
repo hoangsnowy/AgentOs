@@ -97,6 +97,21 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
         return true;
     }
 
+    public async Task<bool> RemoveForTenantAsync(string tenantId, Guid id, CancellationToken ct = default)
+    {
+        var row = await _db.Workspaces
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(w => w.TenantId == tenantId && w.Id == id, ct)
+            .ConfigureAwait(false);
+        if (row is null)
+        {
+            return false;
+        }
+        _db.Workspaces.Remove(row);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return true;
+    }
+
     // ── Repos under a board ──────────────────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<WorkspaceRepoEntity>> ListReposForTenantAsync(string tenantId, Guid workspaceId, CancellationToken ct = default)

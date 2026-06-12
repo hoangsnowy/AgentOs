@@ -30,6 +30,9 @@ internal sealed class NullWorkspaceRepository : IWorkspaceRepository
     public Task<WorkspaceEntity?> GetForTenantAsync(string tenantId, Guid id, CancellationToken ct = default)
         => Task.FromResult<WorkspaceEntity?>(null);
 
+    public Task<bool> RemoveForTenantAsync(string tenantId, Guid id, CancellationToken ct = default)
+        => Task.FromResult(false);
+
     public Task AddForTenantAsync(WorkspaceEntity workspace, CancellationToken ct = default)
         => Task.CompletedTask;
 

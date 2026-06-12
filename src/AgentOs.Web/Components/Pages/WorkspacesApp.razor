@@ -1,0 +1,309 @@
+@* WorkspacesApp — standalone admin surface for connected boards (Workspaces module): every board
+   the tenant has connected, the repos under each, and a destructive remove that also deletes the
+   board's stored credential (same cleanup as WorkspaceEndpoints.RemoveAsync). Boards are CONNECTED
+   in the Spine app — this surface only inspects and retires them.
+   A Blazor Server circuit has no HttpContext, so ITenantContext is blank here — we read the tenant
+   from AuthenticationState and call the repositories via tenant-explicit overloads. *@
+
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Domain.Workspaces
+@using AgentOs.Modules.AppConfig
+@using AgentOs.Modules.Workspaces.Persistence
+@using AgentOs.Modules.Workspaces.Persistence.Entities
+@inject IWorkspaceRepository Workspaces
+@inject IAppConfigStore ConfigStore
+@inject AgentOs.Web.Services.ToastService Toasts
+@inject AgentOs.Web.Services.WindowManagerService WM
+@inject AgentOs.SharedKernel.Persistence.DatabaseAvailability Db
+
+<header class="page-head">
+    <div>
+        <h1 class="page-title">Workspaces</h1>
+        <p class="page-sub">Connected boards and the repositories under them. Connect new boards in the Spine app.</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:var(--space-2)">
+        <Btn Variant="Btn.ButtonVariant.Ghost" OnClick="OpenSpine">
+            Open Spine <Icon Name="arrow-right" Size="13" />
+        </Btn>
+        <Btn OnClick="LoadBoards" Disabled="@(!Db.IsConfigured || _loading)">
+            <Icon Name="arrow-clockwise" Size="14" /> Refresh
+        </Btn>
+    </div>
+</header>
+
+@if (!Db.IsConfigured)
+{
+    @* Honest degraded mode — without Postgres every "remove" would fake-success into a no-op repo. *@
+    <EmptyState Icon="info" Title="Requires a database"
+                Hint="Run the full stack (dotnet run --project infra/AgentOs.AppHost) — without Postgres this app would fake-success into no-op repositories." />
+}
+else if (!_resolved)
+{
+    <Spinner />
+}
+else if (_tenantId.Length == 0)
+{
+    @* Fail closed — an authenticated principal without a tenant claim must never read the `default`
+       tenant's boards (same rule as SpineApp + HttpTenantContext). *@
+    <EmptyState Icon="warning" Title="No tenant on this sign-in"
+                Hint="Your session carries no tenant claim, so tenant-scoped data is unavailable. Sign out and back in; if it persists, the realm token mapping is misconfigured." />
+}
+else if (_boards is null)
+{
+    <Spinner />
+}
+else if (_boards.Count == 0)
+{
+    <EmptyState Icon="squares-four" Title="No boards connected"
+                Hint="Connect a GitHub Projects or Azure DevOps board in the Spine app — it shows up here with the repositories under it.">
+        <Action>
+            <Btn Variant="Btn.ButtonVariant.Primary" OnClick="OpenSpine">
+                Open Spine <Icon Name="arrow-right" Size="13" />
+            </Btn>
+        </Action>
+    </EmptyState>
+}
+else
+{
+    <Panel Title="Boards">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Kind</th>
+                    <th>Board</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th class="num">Repos</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in _boards)
+                {
+                    var repos = ReposFor(b.Id);
+                    <tr>
+                        <td><strong>@b.Name</strong></td>
+                        <td><Badge>@KindLabel(b.Kind)</Badge></td>
+                        <td>
+                            <code>@b.ProjectOwner</code>
+                            @if (b.ProjectNumber is not null)
+                            {
+                                <span class="muted"> @b.ProjectScope #@b.ProjectNumber</span>
+                            }
+                            else
+                            {
+                                <span class="muted"> · repos only</span>
+                            }
+                        </td>
+                        <td><Badge>@b.Status</Badge></td>
+                        <td>@b.CreatedAtUtc.ToString("u")</td>
+                        <td class="num">@repos.Count</td>
+                        <td class="actions">
+                            <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => ToggleRepos(b.Id))">
+                                <Icon Name="squares-four" Size="13" /> @(_expanded.Contains(b.Id) ? "Hide repos" : "Repos")
+                            </Btn>
+                            <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Danger"
+                                 OnClick="@(() => AskRemove(b))" Disabled="_removing">
+                                <Icon Name="trash" Size="13" /> Remove
+                            </Btn>
+                        </td>
+                    </tr>
+                    @if (_expanded.Contains(b.Id))
+                    {
+                        <tr>
+                            <td colspan="7">
+                                @if (repos.Count == 0)
+                                {
+                                    <p class="muted" style="margin:var(--space-2) 0">No repositories under this board yet — add the services it spans in the Spine app.</p>
+                                }
+                                else
+                                {
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Repository</th>
+                                                <th>Default branch</th>
+                                                <th>Visibility</th>
+                                                <th>Added</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var r in repos)
+                                            {
+                                                <tr>
+                                                    <td><code>@r.Owner/@r.Repo</code></td>
+                                                    <td>@r.DefaultBranch</td>
+                                                    <td><Badge>@(r.Private ? "private" : "public")</Badge></td>
+                                                    <td>@r.AddedAtUtc.ToString("u")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </Panel>
+}
+
+@* ── Remove confirmation — destructive: backdrop clicks never dismiss ───────────────────────── *@
+<Dialog Show="@(_removeTarget is not null)" Destructive="true" Title="Remove board" OnClose="CloseRemoveDialog">
+    <ChildContent>
+        <p>Remove <strong>@_removeTarget?.Name</strong>?</p>
+        <p class="muted">
+            This disconnects the board, deletes its stored access token, and drops the
+            @(_removeTarget is null ? 0 : ReposFor(_removeTarget.Id).Count) repository record(s) under it.
+            Nothing on GitHub / Azure DevOps is touched.
+        </p>
+    </ChildContent>
+    <Footer>
+        <Btn OnClick="CloseRemoveDialog" Disabled="_removing">Cancel</Btn>
+        <Btn Variant="Btn.ButtonVariant.Danger" Loading="_removing" OnClick="ConfirmRemove">Remove board</Btn>
+    </Footer>
+</Dialog>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _resolved;
+    private bool _loading;
+    private string _tenantId = "";
+
+    // ── Data ────────────────────────────────────────────────────────────────────────────────────
+    private IReadOnlyList<WorkspaceEntity>? _boards;
+    private Dictionary<Guid, IReadOnlyList<WorkspaceRepoEntity>> _reposByBoard = new();
+    private readonly HashSet<Guid> _expanded = new();
+
+    // ── Remove dialog ───────────────────────────────────────────────────────────────────────────
+    private WorkspaceEntity? _removeTarget;
+    private bool _removing;
+
+    // ── Lifecycle ───────────────────────────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : string.Empty;
+        }
+        _resolved = true;
+        // No DB → degraded notice; no tenant claim → fail closed (never read the `default` tenant).
+        if (!Db.IsConfigured || _tenantId.Length == 0) { return; }
+        await LoadBoards();
+    }
+
+    private async Task LoadBoards()
+    {
+        _loading = true;
+        try
+        {
+            _boards = await Workspaces.ListForTenantAsync(_tenantId);
+            // Preload the repos under every board so the count column + expansion need no lazy load.
+            var map = new Dictionary<Guid, IReadOnlyList<WorkspaceRepoEntity>>();
+            foreach (var board in _boards)
+            {
+                map[board.Id] = await Workspaces.ListReposForTenantAsync(_tenantId, board.Id);
+            }
+            _reposByBoard = map;
+        }
+        catch (System.Data.Common.DbException ex) { HandleLoadError(ex); }
+        catch (InvalidOperationException ex) { HandleLoadError(ex); }
+        catch (System.IO.IOException ex) { HandleLoadError(ex); }
+        catch (TimeoutException ex) { HandleLoadError(ex); }
+        finally
+        {
+            _loading = false;
+        }
+
+        void HandleLoadError(Exception ex) =>
+            Toasts.Show("Workspaces", $"Load failed: {ex.Message}", ToastKind.Err);
+    }
+
+    private IReadOnlyList<WorkspaceRepoEntity> ReposFor(Guid boardId) =>
+        _reposByBoard.TryGetValue(boardId, out var repos) ? repos : Array.Empty<WorkspaceRepoEntity>();
+
+    private static string KindLabel(SourceProviderKind kind) => kind switch
+    {
+        SourceProviderKind.GitHub => "GitHub Projects",
+        SourceProviderKind.AzureDevOps => "Azure DevOps",
+        _ => kind.ToString(),
+    };
+
+    private void ToggleRepos(Guid boardId)
+    {
+        if (!_expanded.Remove(boardId)) { _expanded.Add(boardId); }
+    }
+
+    // ── Remove a board ──────────────────────────────────────────────────────────────────────────
+
+    private void AskRemove(WorkspaceEntity board) => _removeTarget = board;
+
+    private void CloseRemoveDialog()
+    {
+        if (_removing) { return; }
+        _removeTarget = null;
+    }
+
+    private async Task ConfirmRemove()
+    {
+        if (_removing || _removeTarget is null) { return; }
+        _removing = true;
+        try
+        {
+            // Tenant-correct path: the circuit has no ambient ITenantContext, so both the lookup
+            // and the delete use the tenant-explicit overloads — a false result is an honest
+            // "nothing removed in this tenant", never a cross-tenant delete.
+            var row = await Workspaces.GetForTenantAsync(_tenantId, _removeTarget.Id);
+            if (row is null)
+            {
+                Toasts.Show("Workspaces", "Board not found — it may already be removed.", ToastKind.Warn);
+                _removeTarget = null;
+                await LoadBoards();
+                return;
+            }
+
+            var removed = await Workspaces.RemoveForTenantAsync(_tenantId, row.Id);
+            if (!removed)
+            {
+                Toasts.Show("Workspaces", "The board could not be removed.", ToastKind.Err);
+                return;
+            }
+
+            // Same cleanup as WorkspaceEndpoints.RemoveAsync — the encrypted credential row would
+            // otherwise orphan. Tenant-explicit overload: see the circuit note at the top.
+            if (!string.IsNullOrEmpty(row.CredentialRef))
+            {
+                await ConfigStore.DeleteForTenantAsync(_tenantId, row.CredentialRef);
+            }
+
+            Toasts.Show("Workspaces", $"Removed {row.Name}.", ToastKind.Ok);
+            _expanded.Remove(row.Id);
+            _removeTarget = null;
+            await LoadBoards();
+        }
+        catch (System.Data.Common.DbException ex) { HandleRemoveError(ex); }
+        catch (InvalidOperationException ex) { HandleRemoveError(ex); }
+        catch (System.IO.IOException ex) { HandleRemoveError(ex); }
+        catch (TimeoutException ex) { HandleRemoveError(ex); }
+        finally
+        {
+            _removing = false;
+        }
+
+        void HandleRemoveError(Exception ex) =>
+            Toasts.Show("Workspaces", $"Remove failed: {ex.Message}", ToastKind.Err);
+    }
+
+    // ── Cross-link — boards are connected in Spine; this app only inspects + retires them ───────
+    private void OpenSpine()
+    {
+        var app = AgentOs.Web.Services.AppCatalog.Find("spine");
+        if (app is null) { return; }
+        WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
+    }
+}

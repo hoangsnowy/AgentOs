@@ -31,6 +31,11 @@ public static class ModuleLoader
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(assemblies);
 
+        // Honest degraded mode: surfaces whether the no-op-repository boot is active so UIs can
+        // say "requires a database" instead of fake-succeeding into a no-op repo.
+        services.AddSingleton(new Persistence.DatabaseAvailability(
+            !string.IsNullOrWhiteSpace(configuration.GetConnectionString("DefaultConnection"))));
+
         foreach (var module in DiscoverModules(assemblies))
         {
             services.AddSingleton(module);

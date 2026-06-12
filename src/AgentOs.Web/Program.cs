@@ -10,6 +10,7 @@ using AgentOs.Modules.Identity;
 using AgentOs.Modules.Identity.Auth;
 using AgentOs.Modules.Integration;
 using AgentOs.Modules.Llm;
+using AgentOs.Modules.Mcp;
 using AgentOs.Modules.Pipeline;
 using AgentOs.Modules.Sessions;
 using AgentOs.Modules.Tenants;
@@ -180,7 +181,10 @@ builder.Services.AddModulesFromAssemblies(builder.Configuration,
     typeof(IntegrationModule).Assembly,
     typeof(WorkspacesModule).Assembly,
     typeof(SessionsModule).Assembly,
-    typeof(ToolsModule).Assembly);
+    typeof(ToolsModule).Assembly,
+    // MCP client: the in-process pipeline gets upstream MCP tools too (previously Api-only),
+    // and the MCP admin app can read the connection statuses.
+    typeof(McpModule).Assembly);
 
 // Runtime plugins: discover IAgentOsPlugin assemblies dropped in the plugins folder (Plugins:Path,
 // default "plugins" under the content root). A missing folder is a no-op.

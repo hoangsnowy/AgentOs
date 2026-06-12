@@ -8,12 +8,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Mcp.Configuration;
 using AgentOs.SharedKernel.Modularity;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentOs.Modules.Mcp;
 
-public sealed class McpModule : IModule, IInitializableModule
+public sealed class McpModule : IModule, IEndpointModule, IInitializableModule
 {
     public void AddServices(IServiceCollection services, IConfiguration configuration)
     {
@@ -39,6 +42,19 @@ public sealed class McpModule : IModule, IInitializableModule
             .ValidateOnStart();
 
         services.AddSingleton<McpClientHost>();
+    }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+
+        // Read-only admin surface: which configured upstream servers connected at startup.
+        // Runtime CRUD is deliberately out of scope (config is appsettings-bound; edit + restart).
+        endpoints.MapGet("/mcp/servers", (McpClientHost host) => Results.Ok(host.Statuses))
+            .WithName("McpServers")
+            .WithSummary("Configured upstream MCP servers + startup connection status")
+            .WithTags("Mcp")
+            .RequireAuthorization("Admin");
     }
 
     public async Task InitializeAsync(IServiceProvider services, CancellationToken ct)
