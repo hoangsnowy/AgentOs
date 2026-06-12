@@ -29,6 +29,16 @@ pooled-client per-call tenant fix (#73).
 **Still NOT done (other open items):** #10 build_verifier RCE *sandbox* (prod-gate is interim only);
 backlog: member can revoke another's runner/session, LLM-gateway edge bugs, observability backend.
 
+**Re-verified on main (2026-06-12, enterprise-grade review):** the following are confirmed CLOSED by
+#72 — SSRF on workspace connect/repos/boards (`SsrfGuard.CreateHardenedHandler` on every outbound
+GitHub/ADO client, incl. `GitHubProjectsClient`); tool policy fail-closed in Production
+(`ToolsModule` defaults `Tools:EnforceByDefault` to `IsProduction`); workspace cross-tenant reads
+(repo-layer Dapper `WHERE "TenantId"` + instance-member EF query filters); missing `tenant` claim no
+longer falls open to `default` (`HttpTenantContext` returns empty ⇒ scoped reads match nothing).
+Batch 1 of the remediation plan additionally closed: `/Error` page (branded Web crash screen),
+honest `/health` readiness (Postgres + Keycloak probes), `IssueWorkAgent.ParseOutcome` brace
+mis-parse, `/runs` pagination, RFC 7807 error contract + boundary validation on module endpoints.
+
 > Open items are **scheduled in [ROADMAP.md](../ROADMAP.md) Q1 (Live on Azure)**; this audit remains
 > the blocker-level tracker for the `azd up` round-trip.
 

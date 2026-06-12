@@ -1,7 +1,7 @@
-// Per-tenant tool allowlist. Replaces the permissive default: each tool call is checked against the
-// tenant's allowlist read from the encrypted AppConfig KV store. DEFAULT-PERMISSIVE — when enforcement
-// is off (or no config store is wired, e.g. unit tests / no-DB standalone), every call is allowed, so
-// the gate adds zero friction until an admin turns it on in the Policy app.
+// Per-tenant tool allowlist read from the encrypted AppConfig KV store. Enforcement defaults are
+// environment-driven (ToolsModule): FAIL-CLOSED in Production (deny unless the tool is on the tenant's
+// allowlist), permissive in Development / when no config store is wired (unit tests, no-DB standalone)
+// so the gate adds zero friction until an admin turns it on in the Policy app.
 
 using System;
 using System.Linq;

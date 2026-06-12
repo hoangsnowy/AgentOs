@@ -10,7 +10,7 @@ internal sealed class NullPipelineRunRepository : IPipelineRunRepository
     public Task<PipelineRunRecord?> GetAsync(Guid id, CancellationToken ct = default) =>
         Task.FromResult<PipelineRunRecord?>(null);
 
-    public Task<IReadOnlyList<PipelineRunSummary>> ListAsync(int limit = 50, CancellationToken ct = default) =>
+    public Task<IReadOnlyList<PipelineRunSummary>> ListAsync(int limit = 50, int offset = 0, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<PipelineRunSummary>>([]);
 
     public Task<CostSummary> GetCostSummaryForTenantAsync(

@@ -16,6 +16,8 @@
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
     <PackageReference Include="Aspire.Hosting.Azure.PostgreSQL" />
     <PackageReference Include="Aspire.Hosting.Keycloak" />
+    <!-- Transitive promotion: Aspire.Hosting's MessagePack 2.5.192 is vulnerable (GHSA-hv8m-jj95-wg3x). -->
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 
   <ItemGroup>

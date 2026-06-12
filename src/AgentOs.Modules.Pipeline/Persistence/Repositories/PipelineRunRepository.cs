@@ -111,11 +111,12 @@ internal sealed class PipelineRunRepository(
             entity.CompletedAtUtc ?? entity.CreatedAtUtc);
     }
 
-    public async Task<IReadOnlyList<PipelineRunSummary>> ListAsync(int limit = 50, CancellationToken ct = default)
+    public async Task<IReadOnlyList<PipelineRunSummary>> ListAsync(int limit = 50, int offset = 0, CancellationToken ct = default)
     {
         return await db.PipelineRuns
             .AsNoTracking()
             .OrderByDescending(x => x.CreatedAtUtc)
+            .Skip(offset)
             .Take(limit)
             .Select(x => new PipelineRunSummary(
                 x.Id,

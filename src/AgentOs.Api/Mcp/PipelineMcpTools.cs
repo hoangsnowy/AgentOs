@@ -62,7 +62,7 @@ public static class PipelineMcpTools
     {
         ArgumentNullException.ThrowIfNull(repository);
         var take = Math.Clamp(limit ?? 20, 1, 100);
-        return repository.ListAsync(take, cancellationToken);
+        return repository.ListAsync(take, offset: 0, cancellationToken);
     }
 
     [McpServerTool(Name = "get_run"), Description(

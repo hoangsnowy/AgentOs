@@ -21,6 +21,8 @@
     <ProjectReference Include="..\..\src\AgentOs.Modules.Integration\AgentOs.Modules.Integration.csproj" />
     <ProjectReference Include="..\..\src\AgentOs.Modules.RemoteAgent\AgentOs.Modules.RemoteAgent.csproj" />
     <ProjectReference Include="..\..\src\AgentOs.Modules.Sessions\AgentOs.Modules.Sessions.csproj" />
+    <ProjectReference Include="..\..\src\AgentOs.ServiceDefaults\AgentOs.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\src\AgentOs.Web\AgentOs.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>
