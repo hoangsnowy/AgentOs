@@ -176,9 +176,9 @@
 
     <section class="catalog-section">
         <h2 class="catalog-section-h">TabStrip (3 tabs, bound state)</h2>
-        <TabStrip Tabs="_tabStripTabs" @bind-Active="_tabStripActive" AriaLabel="Catalog demo tabs" />
+        <TabStrip Tabs="_tabStripTabs" @bind-Active="TabStripActive" AriaLabel="Catalog demo tabs" />
         <div class="catalog-row" style="margin-top:var(--space-2);">
-            <span class="chip chip-info">active: @_tabStripActive</span>
+            <span class="chip chip-info">active: @TabStripActive</span>
         </div>
     </section>
 
@@ -229,7 +229,9 @@
     private bool _t1 = true;
     private bool _t2;
 
-    private string _tabStripActive = "overview";
+    // Property (not a field) so the Razor @bind-generated setter is visible to analyzers —
+    // a one-way-bound field reads as "never reassigned" and trips cs/missed-readonly-modifier.
+    private string TabStripActive { get; set; } = "overview";
 
     private readonly TabStrip.TabDef[] _tabStripTabs = new[]
     {

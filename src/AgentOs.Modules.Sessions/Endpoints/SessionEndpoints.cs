@@ -62,12 +62,19 @@ internal static class SessionEndpoints
         TimeProvider clock,
         CancellationToken ct)
     {
+        if (request is null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [""] = ["A JSON request body is required."],
+            });
+        }
         var errors = new Dictionary<string, string[]>();
-        if (request is null || string.IsNullOrWhiteSpace(request.Title))
+        if (string.IsNullOrWhiteSpace(request.Title))
         {
             errors["title"] = ["A session title is required."];
         }
-        if (request is null || request.WorkspaceId == Guid.Empty)
+        if (request.WorkspaceId == Guid.Empty)
         {
             errors["workspaceId"] = ["A workspace id is required."];
         }
@@ -80,7 +87,7 @@ internal static class SessionEndpoints
         {
             Id = Guid.NewGuid(),
             TenantId = tenant.TenantId,
-            WorkspaceId = request!.WorkspaceId,
+            WorkspaceId = request.WorkspaceId,
             MemberUserId = tenant.UserId ?? string.Empty,
             Title = request.Title,
             Status = "Draft",
