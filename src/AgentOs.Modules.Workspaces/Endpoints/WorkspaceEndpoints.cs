@@ -168,12 +168,16 @@ internal static class WorkspaceEndpoints
     private static async Task<IResult> AddRepoAsync(
         Guid id, AddRepoRequest? request, IWorkspaceConnector connector, ITenantContext tenant, CancellationToken ct)
     {
+        if (request is null)
+        {
+            return Results.Problem(detail: "A JSON request body is required.", statusCode: StatusCodes.Status400BadRequest);
+        }
         var errors = new Dictionary<string, string[]>();
-        if (request is null || string.IsNullOrWhiteSpace(request.Owner))
+        if (string.IsNullOrWhiteSpace(request.Owner))
         {
             errors["owner"] = ["The repository owner is required."];
         }
-        if (request is null || string.IsNullOrWhiteSpace(request.Repo))
+        if (string.IsNullOrWhiteSpace(request.Repo))
         {
             errors["repo"] = ["The repository name is required."];
         }
@@ -182,7 +186,7 @@ internal static class WorkspaceEndpoints
             return Results.ValidationProblem(errors);
         }
 
-        var result = await connector.AddRepoAsync(tenant.TenantId, id, request!.Owner, request.Repo, request.DefaultBranch, ct)
+        var result = await connector.AddRepoAsync(tenant.TenantId, id, request.Owner, request.Repo, request.DefaultBranch, ct)
             .ConfigureAwait(false);
         return result.Ok && result.Repo is not null
             ? Results.Created($"/workspaces/{id}/repos/{result.Repo.Id}", RepoDto.From(result.Repo))

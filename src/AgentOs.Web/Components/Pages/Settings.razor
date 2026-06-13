@@ -413,7 +413,9 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             if (Split)
             {
                 using var client = ApiClient();
-                _saveError ??= await SetRemoteAsync(client, "Llm:ForceProvider", _forceProvider);
+                // _saveError is null here (the validation guard above returned otherwise) — the first
+                // write assigns, the rest short-circuit on the first error.
+                _saveError = await SetRemoteAsync(client, "Llm:ForceProvider", _forceProvider);
                 _saveError ??= await SetRemoteAsync(client, "Llm:Claude:ApiKey", _anthropicKey);
                 _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", _azureKey);
                 _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", _azureEndpoint);
@@ -449,7 +451,7 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             if (Split)
             {
                 using var client = ApiClient();
-                _saveError ??= await SetRemoteAsync(client, "Llm:ForceProvider", "");
+                _saveError = await SetRemoteAsync(client, "Llm:ForceProvider", "");
                 _saveError ??= await SetRemoteAsync(client, "Llm:Claude:ApiKey", "");
                 _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", "");
                 _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", "");
@@ -488,7 +490,8 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             if (Split)
             {
                 using var client = ApiClient();
-                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:Pat", _githubPat);
+                // _saveErrorGithub is null here (guard above returned otherwise) — first write assigns.
+                _saveErrorGithub = await SetRemoteAsync(client, "Github:Pat", _githubPat);
                 _saveErrorGithub ??= await SetRemoteAsync(client, "Github:RepoOwner", _repoOwner);
                 _saveErrorGithub ??= await SetRemoteAsync(client, "Github:RepoName", _repoName);
                 _saveErrorGithub ??= await SetRemoteAsync(client, "Github:BaseBranch", _baseBranch);
