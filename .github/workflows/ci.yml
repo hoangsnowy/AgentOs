@@ -43,6 +43,28 @@ jobs:
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults
 
+      # ---- Coverage gate -------------------------------------------------------------------------
+      # Coverage was collected but never enforced — a deleted test or a gutted assertion could
+      # silently drop coverage on main. This fails the build below MIN_LINE_RATE. The floor sits a
+      # few points under the current baseline (unit-only line rate ~29%; the Razor UI is exercised by
+      # the dev-auth E2E below + the manual real-auth suite, so it isn't in this number). RATCHET it
+      # upward as unit coverage grows — never downward to make a red build pass.
+      - name: Coverage gate
+        env:
+          MIN_LINE_RATE: "25"
+        run: |
+          report=$(find ./TestResults -name 'coverage.cobertura.xml' | head -n1)
+          if [ -z "$report" ]; then echo "No cobertura report found."; exit 1; fi
+          python3 - "$report" "$MIN_LINE_RATE" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          report, floor = sys.argv[1], float(sys.argv[2])
+          rate = float(ET.parse(report).getroot().get("line-rate", "0")) * 100
+          print(f"Line coverage: {rate:.1f}%  (floor {floor:.0f}%)")
+          if rate + 1e-9 < floor:
+              print(f"::error::Line coverage {rate:.1f}% is below the {floor:.0f}% floor.")
+              sys.exit(1)
+          PY
+
       # ---- Lightweight UI E2E (dev-auth) ----------------------------------------------------------
       # Boots the Web standalone (Auth:DevAutoLogin, no Keycloak/Postgres/Docker) and drives it with
       # Playwright. Fast (~2 min) and reuses the Release build. This is the per-PR regression guard —

@@ -1,12 +1,16 @@
 # Real-auth end-to-end against the FULL Aspire stack (Postgres + Keycloak + MailHog + Api + Web).
-# Booting Keycloak + Docker containers + Playwright in CI is heavy and slow (~10-15 min), so this is
-# MANUAL-ONLY (workflow_dispatch) — an on-demand "verify the whole real-service path" button, run
-# before a release or after touching auth/email, never auto on push/PR/schedule. The fast per-PR
-# guard is the lightweight dev-auth UI E2E (standalone Web, no Keycloak/Docker) in ci.yml.
+# Booting Keycloak + Docker containers + Playwright in CI is heavy and slow (~10-15 min), so it does
+# NOT run per-PR — the fast per-PR guard is the lightweight dev-auth UI E2E (standalone Web, no
+# Keycloak/Docker) in ci.yml. This suite runs NIGHTLY (so a real-service regression on main surfaces
+# within a day) and on-demand via the manual button (before a release or after touching auth/email).
 name: E2E (real-auth, full stack)
 
 on:
   workflow_dispatch:
+  schedule:
+    # 02:30 UTC nightly — exercises the real OIDC login, tenant isolation, and invitation email
+    # paths the dev-auth PR guard cannot reach. GitHub skips scheduled runs on forks automatically.
+    - cron: '30 2 * * *'
 
 # Least privilege: this job only checks out + builds; no write scopes needed.
 permissions:
