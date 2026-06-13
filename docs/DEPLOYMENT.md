@@ -82,6 +82,7 @@ export KEYCLOAK_BASE_URL="https://$KC_FQDN"
 export WEB_BASE_URL="https://$WEB_FQDN"
 export KEYCLOAKADMINPASSWORD="$(azd env get-value KeycloakAdminPassword)"
 export KEYCLOAKADMINUSERNAME="$(azd env get-value KeycloakAdminUsername)"
+export KEYCLOAKWEBCLIENTSECRET="$(azd env get-value KeycloakWebClientSecret)"
 
 bash infra/hooks/postprovision.sh
 ```
@@ -189,6 +190,7 @@ After `azd up`, patch the KC redirect URIs automatically:
     export KEYCLOAK_BASE_URL="https://$KC"
     export WEB_BASE_URL="https://$WEB"
     export KEYCLOAKADMINPASSWORD="${{ secrets.KEYCLOAKADMINPASSWORD }}"
+    export KEYCLOAKWEBCLIENTSECRET="${{ secrets.KEYCLOAKWEBCLIENTSECRET }}"
     bash infra/hooks/postprovision.sh
 ```
 
