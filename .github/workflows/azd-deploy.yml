@@ -56,8 +56,42 @@ jobs:
             --tenant-id "$AZURE_TENANT_ID" \
             --federated-credential-provider "github"
 
+      # `az` (not just `azd`) must be authed: the KC redirect patch below calls `az containerapp show`.
+      - name: az login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Push secrets into the azd env so they reach the containers. Without this the KC admin password
+      # and the agentic-web client secret stay at their (public) appsettings defaults → login fails.
+      - name: Select azd env + inject deploy secrets
+        run: |
+          azd env select "$AZURE_ENV_NAME" 2>/dev/null || azd env new "$AZURE_ENV_NAME" --no-prompt
+          azd env set KeycloakAdminPassword    "${{ secrets.KEYCLOAKADMINPASSWORD }}"
+          azd env set KeycloakWebClientSecret  "${{ secrets.KEYCLOAKWEBCLIENTSECRET }}"
+          # LLM keys are per-tenant (set in-app via Settings → API keys). Only set a shared platform
+          # fallback for a dev/demo deploy — leave unset for a real BYO-key multi-tenant deploy.
+          if [ -n "${{ secrets.LLM__CLAUDE__APIKEY }}" ]; then
+            azd env set Llm__Claude__ApiKey    "${{ secrets.LLM__CLAUDE__APIKEY }}"
+          fi
+
       - name: Provision + deploy
         run: azd up --no-prompt
+
+      # The realm import hardcodes https://localhost:5180 + a public client secret. Patch both to the
+      # real ACA Web FQDN / the injected secret, or every login fails (Invalid redirect_uri / mismatch).
+      - name: Patch Keycloak redirect URIs + client secret
+        run: |
+          RG=$(azd env get-values | sed -n 's/^AZURE_RESOURCE_GROUP=//p' | tr -d '"')
+          KC=$(az containerapp show -n keycloak -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+          WEB=$(az containerapp show -n web     -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+          export KEYCLOAK_BASE_URL="https://$KC"
+          export WEB_BASE_URL="https://$WEB"
+          export KEYCLOAKADMINPASSWORD="${{ secrets.KEYCLOAKADMINPASSWORD }}"
+          export KEYCLOAKWEBCLIENTSECRET="${{ secrets.KEYCLOAKWEBCLIENTSECRET }}"
+          bash infra/hooks/postprovision.sh
 
       - name: Smoke — API /health
         id: smoke
