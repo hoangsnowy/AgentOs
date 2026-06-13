@@ -2,15 +2,21 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "aspire",
+      "name": "web",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "infra/AgentOs.AppHost", "--launch-profile", "https", "-c", "Release"],
+      "runtimeArgs": ["run", "--project", "src/AgentOs.Web", "-c", "Release", "--launch-profile", "preview"],
       "port": 5180
     },
     {
-      "name": "web",
+      "name": "api",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/AgentOs.Web", "--launch-profile", "http", "--", "--Persistence:RequireDatabase=false"],
+      "runtimeArgs": ["run", "--project", "src/AgentOs.Api", "-c", "Release", "--", "--urls", "http://localhost:5080", "--environment", "Development", "--Persistence:RequireDatabase=false"],
+      "port": 5080
+    },
+    {
+      "name": "aspire",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "infra/AgentOs.AppHost", "--launch-profile", "https", "-c", "Release"],
       "port": 5180
     }
   ]
