@@ -365,7 +365,10 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full deployment guide and
 Issues and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and
 [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
 
-- Build + test: `dotnet test AgentOs.slnx -c Release`. CI runs the same on every push and PR.
+- Build + test: `dotnet test AgentOs.slnx -c Release`. CI runs the same on every push and PR, then
+  a **coverage gate** (fails under a line-rate floor) and a **dev-auth UI E2E** that opens every
+  desktop app to catch circuit-crash regressions. The heavy **real-auth full-stack E2E** (real
+  Keycloak + Postgres) runs **nightly** and on-demand (`workflow_dispatch`).
 - Style: `Nullable` + `TreatWarningsAsErrors` are on across the solution.
 - Commits: [Conventional Commits](https://www.conventionalcommits.org/).
 - The repo ships project-specific Claude Code skills under [`.claude/skills/`](.claude/skills/)
