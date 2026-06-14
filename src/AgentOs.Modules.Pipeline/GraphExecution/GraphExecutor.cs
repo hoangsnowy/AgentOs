@@ -134,7 +134,7 @@ public sealed class GraphExecutor
                         e.ExecutorId, GraphNodePhase.Done, state.NodeMeta.GetValueOrDefault(e.ExecutorId), null)).ConfigureAwait(false);
                     break;
                 case ExecutorFailedEvent e when supported.Contains(e.ExecutorId):
-                    failure ??= (e.Data as Exception)?.Message ?? "node failed";
+                    failure ??= e.Data?.Message ?? "node failed";
                     await onNode(new GraphNodeEvent(e.ExecutorId, GraphNodePhase.Failed, null, failure)).ConfigureAwait(false);
                     break;
             }
