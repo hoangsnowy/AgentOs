@@ -477,7 +477,7 @@
 
         try
         {
-            var result = await GraphRunner.RunAsync(_graph, story, nMax, ev => InvokeAsync(() =>
+            var result = await GraphRunner.RunAsync(_graph, story, nMax, _tenantId, ev => InvokeAsync(() =>
             {
                 var node = _graph.Nodes.FirstOrDefault(n => n.Id == ev.NodeId);
                 if (node is not null)

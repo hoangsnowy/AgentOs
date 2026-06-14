@@ -93,8 +93,21 @@ public static class GraphPlanner
                         $"Agent role '{n.AgentRole}' is not one of Requirement/Coding/Testing/Qa.");
             case "Evaluator":
                 return new NodeValidation(n.Id, NodeSupport.Supported, "QA gate");
+            // Data / leaf nodes the MAF executors run directly (no control-flow fan-out needed).
+            case "Llm":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "raw LLM");
+            case "Tool":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "tool (gated)");
+            case "Transform":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "transform");
+            case "ExtractJson":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "extract JSON");
+            case "Print":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "print");
             case "End":
                 return new NodeValidation(n.Id, NodeSupport.Supported, "end");
+            // Control-flow (Parallel/Merge/Loop/IfElse/Switch) + Human land in later milestones — they
+            // map to MAF fan-out/fan-in/RequestPort, not a single linear executor.
             default:
                 return new NodeValidation(n.Id, NodeSupport.UnsupportedType, $"Node type '{n.StepType}' is not supported yet.");
         }
