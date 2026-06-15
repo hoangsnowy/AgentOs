@@ -100,7 +100,7 @@
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.6.0" />
     <!-- Transitive of Aspire.Hosting — its default 2.5.192 carries GHSA-hv8m-jj95-wg3x (NU1903).
          Promoted to a direct reference in AppHost + E2E.Tests to force the patched version. -->
-    <PackageVersion Include="MessagePack" Version="2.5.301" />
+    <PackageVersion Include="MessagePack" Version="3.1.7" />
 
     <!-- OpenTelemetry (instrumentation pinned to 1.15.x line) -->
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
