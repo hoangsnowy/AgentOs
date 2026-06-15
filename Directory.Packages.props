@@ -14,12 +14,12 @@
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <PackageVersion Include="Anthropic.SDK" Version="5.10.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.9" />
 
     <!-- Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.9.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.9.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.9.0" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.10.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.10.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.10.0" />
 
     <!-- JSON schema validation. JsonSchema.Net 9 reworked the evaluation API: Evaluate runs on
          JsonElement (not JsonNode), EvaluationResults.HasErrors/HasDetails were removed, and
@@ -27,41 +27,41 @@
     <PackageVersion Include="JsonSchema.Net" Version="9.*" />
 
     <!-- Microsoft.Extensions (.NET 10) -->
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
 
     <!-- Persistence: EF Core + Npgsql. Pin the EF runtime to 10.0.8 explicitly so transitive
          consumers (Microsoft.Agents.AI* pulls 10.0.4) unify against the version Npgsql 10.0.2
          + EFCore.Relational 10.0.8 actually deploy. Without the explicit pin, MSBuild warns
          MSB3277 and the test host fails to load Microsoft.EntityFrameworkCore.Relational 10.0.8. -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.9" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
     <!-- Raw Npgsql (pinned to the version the EF provider 10.0.2 resolves) + Dapper for the read-side:
          hot projections/aggregations/pagination run as hand-tuned SQL; EF still owns writes, migrations,
          change-tracking, and entity-graph loads. See INpgsqlConnectionFactory (SharedKernel). -->
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Dapper" Version="2.1.79" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.9" />
 
     <!-- Phase 8.4b — encrypt app_config values at rest -->
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="10.0.8" />
     <!-- Durable, shared DataProtection key ring (persisted to Postgres) so encrypted tenant secrets +
          auth/OIDC cookies survive restart/scale and decrypt across the Api + Web hosts. -->
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.9" />
 
     <!-- API host: OpenAPI + Scalar + App Insights -->
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.14.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.3" />
     <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.1.2" />
 
     <!-- Phase 8 — JWT bearer auth (API host) + OpenID Connect cookie/code flow (Web host) -->
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.9" />
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.19.1" />
 
     <!-- Web host: Blazor diagram editor -->
@@ -91,23 +91,23 @@
     <!-- Aspire orchestration + service defaults (.NET 10). Stable 13.3.3 for the core stack; the
          Keycloak integration ships preview-only on the 13.3.x line, so it stays on the matching
          preview tag (its >=13.3.3 floor is satisfied by the stable 13.3.3 above). -->
-    <PackageVersion Include="Aspire.Hosting" Version="13.4.2" />
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.2" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.2" />
-    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.4.2" />
+    <PackageVersion Include="Aspire.Hosting" Version="13.4.3" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.3" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.3" />
+    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.4.3" />
     <PackageVersion Include="Aspire.Hosting.Keycloak" Version="13.3.5-preview.1.26270.6" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.2" />
-    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.6.0" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.3" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
     <!-- Transitive of Aspire.Hosting — its default 2.5.192 carries GHSA-hv8m-jj95-wg3x (NU1903).
          Promoted to a direct reference in AppHost + E2E.Tests to force the patched version. -->
-    <PackageVersion Include="MessagePack" Version="2.5.301" />
+    <PackageVersion Include="MessagePack" Version="2.5.302" />
 
     <!-- OpenTelemetry (instrumentation pinned to 1.15.x line) -->
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
 
     <!-- E2E (browser) -->
     <PackageVersion Include="Microsoft.Playwright" Version="1.60.0" />
