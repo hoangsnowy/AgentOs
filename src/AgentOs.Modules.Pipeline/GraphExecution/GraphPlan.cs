@@ -6,8 +6,22 @@ using System.Collections.Generic;
 
 namespace AgentOs.Modules.Pipeline.GraphExecution;
 
-/// <summary>Minimal mirror of a canvas node — only what the executor needs.</summary>
-public sealed record PlanNode(string Id, string StepType, string? AgentRole, string Title, int MaxIterations, bool IsStart);
+/// <summary>Minimal mirror of a canvas node — only what the executor needs. The free-form fields
+/// (<paramref name="Description"/>/<paramref name="Input"/>/<paramref name="Output"/>) drive the
+/// non-agent nodes: an Llm node reads its prompt from <paramref name="Description"/>, a Tool node reads
+/// its <c>{"tool","input"}</c> JSON from <paramref name="Description"/>, and every node writes its result
+/// into the shared state under <paramref name="Output"/> (and reads inputs from <paramref name="Input"/>).</summary>
+public sealed record PlanNode(
+    string Id,
+    string StepType,
+    string? AgentRole,
+    string Title,
+    int MaxIterations,
+    bool IsStart,
+    string Description = "",
+    string Input = "",
+    string Output = "",
+    IReadOnlyList<string>? Routes = null);
 
 /// <summary>Minimal mirror of a canvas edge.</summary>
 public sealed record PlanEdge(string Id, string SourceId, string TargetId, string Label);

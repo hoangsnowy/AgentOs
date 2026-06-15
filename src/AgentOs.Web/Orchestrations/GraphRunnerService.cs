@@ -27,7 +27,9 @@ public sealed class GraphRunnerService
     {
         ArgumentNullException.ThrowIfNull(graph);
         var nodes = graph.Nodes
-            .Select(n => new PlanNode(n.Id, n.Type.ToString(), n.AgentRole, n.Title, n.MaxIterations, n.IsStart))
+            .Select(n => new PlanNode(
+                n.Id, n.Type.ToString(), n.AgentRole, n.Title, n.MaxIterations, n.IsStart,
+                n.Description, n.Input, n.Output, n.Routes))
             .ToList();
         var edges = graph.Edges
             .Select(e => new PlanEdge(e.Id, e.SourceId, e.TargetId, e.Label))
@@ -38,11 +40,13 @@ public sealed class GraphRunnerService
     /// <summary>LLM-free validation — drives the pre-run gate + per-node Skipped status.</summary>
     public static GraphValidationResult Validate(OrchestrationGraph graph) => GraphPlanner.Plan(ToPlan(graph));
 
-    /// <summary>Run the graph against the real agents, pushing per-node status to <paramref name="onNode"/>.</summary>
+    /// <summary>Run the graph against the real agents, pushing per-node status to <paramref name="onNode"/>.
+    /// <paramref name="tenantId"/> is passed explicitly (a Blazor circuit has no <c>ITenantContext</c>) so a
+    /// Tool node's policy + evidence are partitioned to the signed-in tenant.</summary>
     public Task<GraphRunResult> RunAsync(
-        OrchestrationGraph graph, string userStoryText, int nMax, Func<GraphNodeEvent, Task> onNode, CancellationToken ct)
+        OrchestrationGraph graph, string userStoryText, int nMax, string tenantId, Func<GraphNodeEvent, Task> onNode, CancellationToken ct)
     {
         var executor = _services.GetRequiredService<GraphExecutor>(); // lazy: constructs the agents only at run time
-        return executor.RunAsync(ToPlan(graph), userStoryText, nMax, onNode, ct);
+        return executor.RunAsync(ToPlan(graph), userStoryText, nMax, tenantId, onNode, ct);
     }
 }
