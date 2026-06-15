@@ -102,6 +102,7 @@
          Promoted to a direct reference in AppHost + E2E.Tests to force the patched version. -->
     <PackageVersion Include="MessagePack" Version="3.1.7" />
 
+
     <!-- OpenTelemetry (instrumentation pinned to 1.15.x line) -->
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
