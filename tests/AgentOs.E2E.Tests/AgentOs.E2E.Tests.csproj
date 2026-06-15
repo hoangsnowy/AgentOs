@@ -16,6 +16,7 @@
     <PackageReference Include="Aspire.Hosting.Testing" />
     <!-- Transitive promotion: Aspire.Hosting's MessagePack 2.5.192 is vulnerable (GHSA-hv8m-jj95-wg3x). -->
     <PackageReference Include="MessagePack" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Playwright" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.v3" />

@@ -91,17 +91,16 @@
     <!-- Aspire orchestration + service defaults (.NET 10). Stable 13.3.3 for the core stack; the
          Keycloak integration ships preview-only on the 13.3.x line, so it stays on the matching
          preview tag (its >=13.3.3 floor is satisfied by the stable 13.3.3 above). -->
-    <PackageVersion Include="Aspire.Hosting" Version="13.4.3" />
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.3" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.3" />
-    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.4.3" />
+    <PackageVersion Include="Aspire.Hosting" Version="13.4.4" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.4" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.4" />
+    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.4.4" />
     <PackageVersion Include="Aspire.Hosting.Keycloak" Version="13.3.5-preview.1.26270.6" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.3" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.4" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
     <!-- Transitive of Aspire.Hosting — its default 2.5.192 carries GHSA-hv8m-jj95-wg3x (NU1903).
          Promoted to a direct reference in AppHost + E2E.Tests to force the patched version. -->
     <PackageVersion Include="MessagePack" Version="3.1.7" />
-
 
     <!-- OpenTelemetry (instrumentation pinned to 1.15.x line) -->
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
