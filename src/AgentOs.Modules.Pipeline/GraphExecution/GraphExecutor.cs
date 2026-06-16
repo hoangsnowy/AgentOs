@@ -458,7 +458,7 @@ public sealed class GraphExecutor
     private async ValueTask<string?> RunDecisionAsync(
         PlanNode node, IReadOnlyList<string> routeOptions, GraphState s, CancellationToken ct)
     {
-        var source = routeOptions.Count > 0 ? routeOptions : (node.Routes ?? (IReadOnlyList<string>)[]);
+        var source = routeOptions.Count > 0 ? routeOptions : node.Routes ?? [];
         var routes = source.Where(r => !string.IsNullOrWhiteSpace(r))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (routes.Count == 0)
