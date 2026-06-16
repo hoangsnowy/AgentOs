@@ -1,7 +1,9 @@
 // Pure, LLM-free graph validation + execution-order planning. The unit-test target. Given a PlanGraph it
 // classifies every node, finds graph-level blockers, and computes the forward execution order from Start.
-// A graph is runnable iff: exactly one Start, no dangling edges, and every node on the forward path is
-// Supported (a known-role Agent, the QA Evaluator gate, or End).
+// A graph is runnable iff: exactly one Start, no dangling edges, and every node REACHABLE from Start is
+// Supported. Supported node types: known-role Agent (Requirement/Coding/Testing/Qa), the QA Evaluator gate,
+// Llm, Tool, Transform, ExtractJson, Print, End, plus the control-flow set IfElse/Switch/Loop (conditional
+// routing), Parallel (fan-out) / Merge (fan-in barrier), and Human (operator checkpoint).
 
 using System;
 using System.Collections.Generic;
@@ -52,30 +54,31 @@ public static class GraphPlanner
         var verdicts = graph.Nodes.Select(Classify).ToList();
         var verdictById = verdicts.ToDictionary(v => v.NodeId, StringComparer.Ordinal);
 
-        // Forward execution order from Start: follow edges to not-yet-visited nodes (back-edges ignored).
+        // Reachability from Start, following EVERY out-edge (branch-aware, not just the first) so a Parallel
+        // fan-out or an If/Else branch is fully covered. Back-edges to already-visited nodes are skipped
+        // (cycle-safe). `order` is a best-effort BFS ordering used for output-node fallback.
         var order = new List<string>();
         if (start is not null)
         {
             var visited = new HashSet<string>(StringComparer.Ordinal);
-            var cursor = start;
-            var guard = 0;
-            while (cursor is not null && guard++ <= graph.Nodes.Count)
+            var queue = new Queue<string>();
+            queue.Enqueue(start.Id);
+            visited.Add(start.Id);
+            while (queue.Count > 0)
             {
-                if (!visited.Add(cursor.Id))
+                var id = queue.Dequeue();
+                order.Add(id);
+                foreach (var e in graph.Edges.Where(e => e.SourceId == id))
                 {
-                    break; // cycle guard — order is best-effort
+                    if (byId.ContainsKey(e.TargetId) && visited.Add(e.TargetId))
+                    {
+                        queue.Enqueue(e.TargetId);
+                    }
                 }
-                order.Add(cursor.Id);
-
-                var nextId = graph.Edges
-                    .Where(e => e.SourceId == cursor.Id)
-                    .Select(e => e.TargetId)
-                    .FirstOrDefault(t => byId.ContainsKey(t) && !visited.Contains(t));
-                cursor = nextId is null ? null : byId[nextId];
             }
         }
 
-        // Runnable iff no graph errors, a single start, and no unsupported node ON the forward path.
+        // Runnable iff no graph errors, a single start, and no unsupported node REACHABLE from Start.
         var unsupportedOnPath = order.Any(id => verdictById.TryGetValue(id, out var v) && v.Support != NodeSupport.Supported);
         var isRunnable = errors.Count == 0 && starts.Count == 1 && !unsupportedOnPath;
 
@@ -106,10 +109,22 @@ public static class GraphPlanner
                 return new NodeValidation(n.Id, NodeSupport.Supported, "print");
             case "End":
                 return new NodeValidation(n.Id, NodeSupport.Supported, "end");
-            // Control-flow (Parallel/Merge/Loop/IfElse/Switch) + Human land in later milestones — they
-            // map to MAF fan-out/fan-in/RequestPort, not a single linear executor.
+            // Control-flow: routing (If/Else, Switch, Loop) compiles to MAF conditional edges; Parallel/Merge
+            // compile to MAF fan-out / fan-in-barrier edges; Human pauses the run for an operator decision.
+            case "IfElse":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "if/else branch");
+            case "Switch":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "switch branch");
+            case "Loop":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "loop");
+            case "Parallel":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "parallel fan-out");
+            case "Merge":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "merge fan-in");
+            case "Human":
+                return new NodeValidation(n.Id, NodeSupport.Supported, "human checkpoint");
             default:
-                return new NodeValidation(n.Id, NodeSupport.UnsupportedType, $"Node type '{n.StepType}' is not supported yet.");
+                return new NodeValidation(n.Id, NodeSupport.UnsupportedType, $"Node type '{n.StepType}' is not supported.");
         }
     }
 }

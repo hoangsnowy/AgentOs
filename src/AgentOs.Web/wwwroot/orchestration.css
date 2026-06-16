@@ -146,6 +146,7 @@ a.syn-nav-item { text-decoration: none; }
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
 }
 .syn-btn:hover:not(:disabled) { background: var(--syn-panel-2); border-color: var(--syn-border-2); }
+.syn-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .syn-btn:disabled { opacity: .5; cursor: not-allowed; }
 .syn-btn.green { background: var(--syn-green-bg); border-color: var(--syn-green-border); color: var(--syn-green-fg); }
 .syn-btn.green:hover:not(:disabled) { filter: brightness(1.1); }
@@ -264,6 +265,24 @@ a.syn-nav-item { text-decoration: none; }
     border-radius: 7px; padding: 7px; cursor: pointer; font-family: inherit; font-size: 12px;
 }
 .syn-inspector .ins-del:hover { filter: brightness(1.08); }
+
+/* human-in-the-loop checkpoint — a floating card the run pauses on until the operator answers */
+.syn-human {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    width: min(520px, calc(100% - 36px)); z-index: 7;
+    background: var(--syn-panel); border: 1px solid var(--syn-purple-border); border-radius: 10px;
+    padding: 14px 16px; box-shadow: 0 14px 40px var(--syn-shadow-strong);
+}
+.syn-human .hm-head { display: flex; align-items: center; gap: 8px; color: var(--syn-purple-fg); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+.syn-human .hm-q { color: var(--syn-text-strong); font-size: 13px; margin-bottom: 6px; }
+.syn-human .hm-ctx { color: var(--syn-muted); font-size: 11.5px; margin-bottom: 10px; white-space: pre-wrap; max-height: 80px; overflow: auto; }
+.syn-human .hm-note {
+    width: 100%; background: var(--syn-input-bg); color: var(--syn-text);
+    border: 1px solid var(--syn-border); border-radius: 6px; padding: 7px 9px;
+    font-family: inherit; font-size: 12px; outline: none; box-sizing: border-box; margin-bottom: 10px;
+}
+.syn-human .hm-note:focus { border-color: var(--syn-blue); }
+.syn-human .hm-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* link labels */
 .diagram-canvas .link-label, .syn-canvas .diagram-link-label {

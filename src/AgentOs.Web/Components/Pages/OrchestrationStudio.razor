@@ -123,6 +123,23 @@
                     <button class="ins-del" @onclick="DeleteSelectedNode"><Icon Name="trash" Size="13" /> Delete node</button>
                 </div>
             }
+
+            @if (_humanRequest is not null)
+            {
+                <div class="syn-human">
+                    <div class="hm-head"><Icon Name="user" Size="12" /> Human checkpoint · @_humanRequest.Title</div>
+                    <div class="hm-q">@_humanRequest.Question</div>
+                    @if (!string.IsNullOrWhiteSpace(_humanRequest.Context))
+                    {
+                        <div class="hm-ctx">@_humanRequest.Context</div>
+                    }
+                    <input class="hm-note" @bind="_humanNote" @bind:event="oninput" placeholder="Optional note / answer…" />
+                    <div class="hm-actions">
+                        <button class="syn-btn ghost" @onclick="RejectHuman"><Icon Name="x" Size="13" /> Reject</button>
+                        <button class="syn-btn green" @onclick="ApproveHuman"><Icon Name="check" Size="13" /> Approve</button>
+                    </div>
+                </div>
+            }
         </div>
 
         <!-- bottom panel — collapsible -->
@@ -203,6 +220,12 @@
     private readonly List<string> _runLog = [];
     private bool _running;
     private int _recentRuns;
+
+    // Human-in-the-loop: a Human node pauses the run here until the operator Approves/Rejects. The executor
+    // awaits the TCS; the buttons complete it. Per-circuit state (the studio service is scoped).
+    private GraphHumanRequest? _humanRequest;
+    private string _humanNote = string.Empty;
+    private TaskCompletionSource<GraphHumanReply>? _humanTcs;
 
     private string ActiveProvider => string.IsNullOrWhiteSpace(LlmOpts.Value.ForceProvider)
         ? LlmOpts.Value.Provider
@@ -439,6 +462,7 @@
             return;
         }
         _bottomTab = 2;
+        _bottomOpen = true;   // surface the Run Log so progress + any human checkpoint are visible
         ResetRunState();
         _running = true;
         using var runCts = new CancellationTokenSource();
@@ -496,7 +520,7 @@
                 else if (ev.Phase == GraphNodePhase.Done) { Log($"✓ {NodeTitle(ev.NodeId)}{(string.IsNullOrEmpty(ev.Meta) ? "" : "  ·  " + ev.Meta)}"); }
                 else if (ev.Phase == GraphNodePhase.Failed) { Log($"✖ {NodeTitle(ev.NodeId)}: {ev.Message}"); }
                 StateHasChanged();
-            }), ct);
+            }), HumanPromptAsync, ct);
 
             Log(result.Completed ? "■ Workflow complete." : $"✖ Stopped: {result.FailureMessage}");
         }
@@ -543,6 +567,11 @@
     private void ResetRunState()
     {
         _runLog.Clear();
+        // Release any prior pending checkpoint so a re-run never deadlocks on a stale TCS.
+        _humanTcs?.TrySetResult(new GraphHumanReply(false, "Run restarted."));
+        _humanTcs = null;
+        _humanRequest = null;
+        _humanNote = string.Empty;
         foreach (var m in _nodeModels.Values)
         {
             m.RunState = NodeRunState.Idle;
@@ -551,9 +580,45 @@
         }
     }
 
+    // The executor calls this when a Human node is reached; it shows the checkpoint card and awaits the
+    // operator's decision (Approve/Reject), which completes the TCS and lets the run continue.
+    private async Task<GraphHumanReply> HumanPromptAsync(GraphHumanRequest request)
+    {
+        var tcs = new TaskCompletionSource<GraphHumanReply>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await InvokeAsync(() =>
+        {
+            _humanTcs = tcs;
+            _humanRequest = request;
+            _humanNote = string.Empty;
+            Log($"⏸ Waiting for operator — {request.Title}: {request.Question}");
+            StateHasChanged();
+        });
+        return await tcs.Task;
+    }
+
+    private void ApproveHuman() => ResolveHuman(approved: true);
+
+    private void RejectHuman() => ResolveHuman(approved: false);
+
+    private void ResolveHuman(bool approved)
+    {
+        var tcs = _humanTcs;
+        var req = _humanRequest;
+        var note = _humanNote?.Trim() ?? string.Empty;
+        _humanTcs = null;
+        _humanRequest = null;
+        _humanNote = string.Empty;
+        if (req is not null)
+        {
+            var verb = approved ? "✅ approved" : "⛔ rejected";
+            Log($"{verb} — {req.Title}{(string.IsNullOrEmpty(note) ? "" : "  ·  " + note)}");
+        }
+        tcs?.TrySetResult(new GraphHumanReply(approved, note));
+    }
+
     private void Log(string line) => _runLog.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
 
-    public void Dispose() { }
+    public void Dispose() => _humanTcs?.TrySetResult(new GraphHumanReply(false, "Editor closed."));
 
     // ---- palette helpers ----
     private static string StepName(StepType t) => t switch

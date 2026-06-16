@@ -59,5 +59,14 @@ public enum GraphNodePhase { Pending, Running, Done, Failed, Skipped }
 /// <summary>One node-status update (node-id correlated, unlike the 5-value PipelineStage).</summary>
 public sealed record GraphNodeEvent(string NodeId, GraphNodePhase Phase, string? Meta, string? Message);
 
+/// <summary>A Human node is asking the operator to approve/answer before the run continues. Surfaced to the
+/// caller via the run's human callback; the run pauses at the node until a <see cref="GraphHumanReply"/> is
+/// returned.</summary>
+public sealed record GraphHumanRequest(string NodeId, string Title, string Question, string Context);
+
+/// <summary>The operator's answer to a <see cref="GraphHumanRequest"/>. <paramref name="Approved"/> = false
+/// stops the run at that node (rejection); <paramref name="Note"/> is an optional free-text answer/reason.</summary>
+public sealed record GraphHumanReply(bool Approved, string? Note = null);
+
 /// <summary>The outcome of a graph run.</summary>
 public sealed record GraphRunResult(bool Completed, string? FailureMessage);

@@ -80,16 +80,190 @@ public sealed class GraphExecutorTests
     {
         var (exec, agents) = Build();
         var graph = new PlanGraph("g", "x",
-            [N("req", "Agent", "Requirement", start: true), N("par", "Parallel"), N("end", "End")],
-            [E("req", "par"), E("par", "end")]);
+            [N("req", "Agent", "Requirement", start: true), N("hook", "Webhook"), N("end", "End")],
+            [E("req", "hook"), E("hook", "end")]);
 
         var events = new List<GraphNodeEvent>();
         var result = await exec.RunAsync(graph, "s", 3, "t", e => { events.Add(e); return Task.CompletedTask; });
 
         result.Completed.ShouldBeFalse();
         result.FailureMessage!.ShouldContain("not runnable");
-        events.ShouldContain(e => e.NodeId == "par" && e.Phase == GraphNodePhase.Skipped);
+        events.ShouldContain(e => e.NodeId == "hook" && e.Phase == GraphNodePhase.Skipped);
         await agents.Requirement.DidNotReceive().RunAsync(Arg.Any<UserStory>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_ParallelFanOutThenMerge_RunsBothBranchesAndJoins()
+    {
+        var (exec, _) = Build(llmReply: "ok", yieldLlm: true);   // yield → branches truly run in parallel
+        // s -> P (fan-out) -> a, b ; a, b -> M (fan-in barrier) -> end
+        var graph = new PlanGraph("g", "par",
+            [
+                N("s", "Llm", start: true), N("p", "Parallel"),
+                N("a", "Llm"), N("b", "Llm"), N("m", "Merge"), N("end", "End"),
+            ],
+            [E("s", "p"), E("p", "a"), E("p", "b"), E("a", "m"), E("b", "m"), E("m", "end")]);
+
+        var done = new List<string>();
+        var running = new List<string>();
+        var result = await exec.RunAsync(graph, "story", 3, "t", e =>
+        {
+            if (e.Phase == GraphNodePhase.Done) { done.Add(e.NodeId); }
+            if (e.Phase == GraphNodePhase.Running) { running.Add(e.NodeId); }
+            return Task.CompletedTask;
+        });
+
+        result.Completed.ShouldBeTrue();
+        done.ShouldContain("a");
+        done.ShouldContain("b");
+        done.ShouldContain("m");
+        done.ShouldContain("end");
+        // The fan-in collapses both branches into ONE downstream emission — end must run exactly once, not
+        // once per branch (regression guard for the merge double-fire).
+        running.Count(n => n == "end").ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task RunAsync_IfElse_TakesOnlyTheChosenRoute()
+    {
+        // The (stubbed) router LLM answers "b" → only the b-branch runs.
+        var (exec, _) = Build(llmReply: "b");
+        var graph = new PlanGraph("g", "if",
+            [N("gate", "IfElse", start: true), N("na", "Llm"), N("nb", "Llm")],
+            [E("gate", "na", "a"), E("gate", "nb", "b")]);
+
+        var running = new List<string>();
+        var result = await exec.RunAsync(graph, "pick", 3, "t",
+            e => { if (e.Phase == GraphNodePhase.Running) { running.Add(e.NodeId); } return Task.CompletedTask; });
+
+        result.Completed.ShouldBeTrue();
+        running.ShouldContain("nb");
+        running.ShouldNotContain("na");
+    }
+
+    [Fact]
+    public async Task RunAsync_Loop_RepeatsBodyUntilCapThenExits()
+    {
+        var (exec, _) = Build(llmReply: "x");
+        // s -> L ; L --loop--> B -> L ; L --(cap)--> end. cap = 3 ⇒ body runs twice (passes 1,2), exits on 3.
+        var graph = new PlanGraph("g", "loop",
+            [N("s", "Llm", start: true), N("l", "Loop", maxIter: 3), N("b", "Llm"), N("end", "End")],
+            [E("s", "l"), E("l", "b", "loop"), E("b", "l"), E("l", "end")]);
+
+        var bRuns = 0;
+        var result = await exec.RunAsync(graph, "go", 5, "t",
+            e => { if (e.NodeId == "b" && e.Phase == GraphNodePhase.Running) { bRuns++; } return Task.CompletedTask; });
+
+        result.Completed.ShouldBeTrue();
+        bRuns.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task RunAsync_HumanNode_AutoApprovesWhenNoOperatorAttached()
+    {
+        var (exec, _) = Build(llmReply: "ok");
+        var graph = new PlanGraph("g", "human",
+            [N("s", "Llm", start: true), N("h", "Human"), N("end", "End")],
+            [E("s", "h"), E("h", "end")]);
+
+        var done = new List<string>();
+        var result = await exec.RunAsync(graph, "go", 3, "t",
+            e => { if (e.Phase == GraphNodePhase.Done) { done.Add(e.NodeId); } return Task.CompletedTask; });
+
+        result.Completed.ShouldBeTrue();
+        done.ShouldContain("h");
+        done.ShouldContain("end");
+    }
+
+    [Fact]
+    public async Task RunAsync_IfElse_SubstringRoute_PicksWholeWordNotPrefix()
+    {
+        // routes ["no","now"]; the LLM replies "now" — must pick "now", not the earlier substring "no".
+        var (exec, _) = Build(llmReply: "now");
+        var graph = new PlanGraph("g", "if",
+            [N("gate", "IfElse", start: true), N("na", "Llm"), N("nb", "Llm")],
+            [E("gate", "na", "no"), E("gate", "nb", "now")]);
+
+        var running = new List<string>();
+        var result = await exec.RunAsync(graph, "pick", 3, "t",
+            e => { if (e.Phase == GraphNodePhase.Running) { running.Add(e.NodeId); } return Task.CompletedTask; });
+
+        result.Completed.ShouldBeTrue();
+        running.ShouldContain("nb");
+        running.ShouldNotContain("na");
+    }
+
+    [Fact]
+    public async Task RunAsync_EvaluatorLoopsBackOverNonCodingPath_StillTerminatesAtCap()
+    {
+        // The QA gate loops back to Testing (NOT Coding), so the global coding counter never advances. The
+        // per-gate counter must still bound the loop — otherwise it spins forever (regression for the
+        // shared-Iteration bug). cap=2 ⇒ the gate runs twice then exits.
+        var (exec, agents) = Build(qaConsistent: false);
+        var graph = new PlanGraph("g", "gate",
+            [
+                N("req", "Agent", "Requirement", start: true), N("cod", "Agent", "Coding"),
+                N("tst", "Agent", "Testing"), N("qa", "Evaluator", maxIter: 2), N("end", "End"),
+            ],
+            [E("req", "cod"), E("cod", "tst"), E("tst", "qa"), E("qa", "tst", "fail"), E("qa", "end", "pass")]);
+
+        var result = await exec.RunAsync(graph, "s", nMax: 5, "t", _ => Task.CompletedTask);
+
+        result.Completed.ShouldBeTrue();
+        await agents.Coding.Received(1).RunAsync(Arg.Any<RequirementSpec>(), Arg.Any<QaReport?>(), Arg.Any<CancellationToken>());
+        await agents.Testing.Received(2).RunAsync(
+            Arg.Any<RequirementSpec>(), Arg.Any<CodeArtifact>(), Arg.Any<QaReport?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_QaBeforeCoding_FailsWithClearMessage()
+    {
+        var (exec, _) = Build();
+        var graph = new PlanGraph("g", "x",
+            [N("req", "Agent", "Requirement", start: true), N("qa", "Evaluator"), N("end", "End")],
+            [E("req", "qa"), E("qa", "end")]);
+
+        var result = await exec.RunAsync(graph, "s", 3, "t", _ => Task.CompletedTask);
+
+        result.Completed.ShouldBeFalse();
+        result.FailureMessage!.ShouldContain("Coding");
+    }
+
+    [Fact]
+    public async Task RunAsync_RouterIntoBarrierMerge_SkippedBranch_DoesNotReportFalseSuccess()
+    {
+        // An If/Else picks ONE branch, but both branches feed a Merge (fan-in barrier needs BOTH). The skipped
+        // branch never delivers, so the merge + End never run. The run must NOT report success.
+        var (exec, _) = Build(llmReply: "a");
+        var graph = new PlanGraph("g", "x",
+            [
+                N("gate", "IfElse", start: true), N("na", "Llm"), N("nb", "Llm"),
+                N("m", "Merge"), N("end", "End"),
+            ],
+            [E("gate", "na", "a"), E("gate", "nb", "b"), E("na", "m"), E("nb", "m"), E("m", "end")]);
+
+        var result = await exec.RunAsync(graph, "s", 3, "t", _ => Task.CompletedTask);
+
+        result.Completed.ShouldBeFalse();
+        result.FailureMessage!.ShouldContain("End");
+    }
+
+    [Fact]
+    public async Task RunAsync_HumanNode_OperatorRejection_StopsTheRun()
+    {
+        var (exec, _) = Build(llmReply: "ok");
+        var graph = new PlanGraph("g", "human",
+            [N("s", "Llm", start: true), N("h", "Human"), N("end", "End")],
+            [E("s", "h"), E("h", "end")]);
+
+        var events = new List<GraphNodeEvent>();
+        var result = await exec.RunAsync(graph, "go", 3, "t",
+            e => { events.Add(e); return Task.CompletedTask; },
+            onHuman: _ => Task.FromResult(new GraphHumanReply(false, "not now")));
+
+        result.Completed.ShouldBeFalse();
+        events.ShouldContain(e => e.NodeId == "h" && e.Phase == GraphNodePhase.Failed);
+        events.ShouldNotContain(e => e.NodeId == "end" && e.Phase == GraphNodePhase.Done);
     }
 
     // req(Requirement,start) -> cod(Coding) -> tst(Testing) -> qa(Evaluator) -> end; qa loops to cod on fail.
@@ -112,7 +286,7 @@ public sealed class GraphExecutorTests
 
     private sealed record Agents(IRequirementAgent Requirement, ICodingAgent Coding, ITestingAgent Testing, IQaAgent Qa);
 
-    private static (GraphExecutor Exec, Agents Agents) Build(bool qaConsistent = true)
+    private static (GraphExecutor Exec, Agents Agents) Build(bool qaConsistent = true, string? llmReply = null, bool yieldLlm = false)
     {
         var req = Substitute.For<IRequirementAgent>();
         req.RunAsync(Arg.Any<UserStory>(), Arg.Any<CancellationToken>()).Returns(StubSpec());
@@ -128,9 +302,30 @@ public sealed class GraphExecutorTests
         qa.RunAsync(Arg.Any<RequirementSpec>(), Arg.Any<CodeArtifact>(), Arg.Any<TestArtifact>(), Arg.Any<CancellationToken>())
           .Returns(StubQa(qaConsistent));
 
+        // Raw-LLM / decision nodes resolve a client from the factory. When llmReply is given, every SendAsync
+        // returns it (lets a router test steer the chosen route); otherwise the factory is bare.
+        var factory = Substitute.For<ILlmClientFactory>();
+        if (llmReply is not null)
+        {
+            var llm = Substitute.For<ILlmClient>();
+            var resp = new LlmResponse(llmReply, 1, 1, 0m, System.TimeSpan.Zero, "m", "Offline");
+            if (yieldLlm)
+            {
+                // Force a real async suspension on the threadpool so fan-out branches genuinely run in
+                // parallel — exercises the concurrent-state-access path (ConcurrentDictionary/interlocked).
+                llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(_ => Task.Run(async () => { await Task.Delay(5); return resp; }));
+            }
+            else
+            {
+                llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>()).Returns(resp);
+            }
+            factory.Create(Arg.Any<string>()).Returns(llm);
+        }
+
         var exec = new GraphExecutor(
             req, coding, testing, qa,
-            Substitute.For<ILlmClientFactory>(),
+            factory,
             Substitute.For<IToolRegistry>(),
             Substitute.For<IToolGateway>(),
             Options.Create(new AgentsOptions()),

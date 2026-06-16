@@ -32,6 +32,16 @@ public sealed class LlmOptions
     public System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<string>> Fallbacks { get; set; }
         = new(System.StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// When true, the gateway appends a keyless, deterministic <c>Offline</c> provider to the END of every
+    /// provider's failover chain. A real provider still answers whenever a key is configured; only when it
+    /// throws an <see cref="LlmException"/> (e.g. no API key) does the request fall through to canned,
+    /// schema-valid offline output — so the Workflow studio + 5-agent pipeline RUN on a fresh checkout with
+    /// no secrets (demo, E2E, first launch). Defaults to false; the standalone Web dev config turns it on,
+    /// Production turns it off so a missing cloud key fails loudly instead of silently serving canned data.
+    /// </summary>
+    public bool OfflineFallback { get; set; }
+
     /// <summary>Claude (Anthropic) client configuration.</summary>
     public ClaudeOptions Claude { get; set; } = new();
 

@@ -36,6 +36,10 @@ public sealed class LlmModule : IModule
         // MAF — keyed ILlmClient under canonical name.
         services.AddKeyedTransient<ILlmClient, MafChatClient>("MAF");
 
+        // Offline — keyless, deterministic canned output. Always registered (no deps); the factory only puts
+        // it on a provider's failover chain when Llm:OfflineFallback is on (standalone dev / E2E / demo).
+        services.AddKeyedSingleton<ILlmClient>(OfflineLlmClient.ProviderName, (_, _) => new OfflineLlmClient());
+
         // Claude (Anthropic.SDK) + Azure OpenAI (Azure.AI.OpenAI) — pooled keyed clients with
         // round-robin + rate-limit failover across the (runtime override + appsettings) key pool.
         services.AddKeyedSingleton<ILlmClient>("Claude", (sp, _) =>
