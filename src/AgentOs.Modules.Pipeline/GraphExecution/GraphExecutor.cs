@@ -78,6 +78,7 @@ public sealed class GraphExecutor
         int nMax,
         string tenantId,
         Func<GraphNodeEvent, Task> onNode,
+        Func<GraphHumanRequest, Task<GraphHumanReply>>? onHuman = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(graph);
@@ -113,7 +114,7 @@ public sealed class GraphExecutor
         Workflow workflow;
         try
         {
-            workflow = BuildWorkflow(graph, plan, supported, clampedNMax);
+            workflow = BuildWorkflow(graph, plan, supported, clampedNMax, onHuman);
         }
         catch (InvalidOperationException ex)
         {
@@ -145,9 +146,23 @@ public sealed class GraphExecutor
 
     // ---- compile PlanGraph -> MAF Workflow ----
 
-    private Workflow BuildWorkflow(PlanGraph graph, GraphValidationResult plan, HashSet<string> supported, int nMax)
+    private Workflow BuildWorkflow(
+        PlanGraph graph, GraphValidationResult plan, HashSet<string> supported, int nMax,
+        Func<GraphHumanRequest, Task<GraphHumanReply>>? onHuman)
     {
         var byId = graph.Nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
+
+        // Per-node distinct outgoing edge labels — the route options a decision (If/Else, Switch) node picks
+        // among. Edge labels are authoritative (the runner must choose a route an edge actually carries);
+        // node.Routes is the fallback when no edge is labelled.
+        var outLabels = graph.Nodes.ToDictionary(
+            n => n.Id,
+            n => (IReadOnlyList<string>)graph.Edges
+                .Where(e => e.SourceId == n.Id && !string.IsNullOrWhiteSpace(e.Label))
+                .Select(e => e.Label)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            StringComparer.Ordinal);
 
         // One MAF executor per supported node. The executor id IS the node id, so the canvas can correlate
         // MAF's ExecutorInvoked/Completed/Failed events back to the node that emitted them.
@@ -155,27 +170,71 @@ public sealed class GraphExecutor
         foreach (var id in supported)
         {
             var node = byId[id];
-            exec[id] = new NodeExecutor(id, RunnerFor(node));
+            exec[id] = new NodeExecutor(id, RunnerFor(node, onHuman, outLabels.GetValueOrDefault(id) ?? []));
         }
 
         var start = exec[plan.StartNodeId!];
         var builder = new WorkflowBuilder(start);
 
+        // A Merge node's INCOMING edges become a single MAF fan-in barrier (the merge waits for every branch
+        // to arrive). Those edges are wired here and EXCLUDED from the per-source pass below so they're never
+        // double-wired.
+        var mergeIds = graph.Nodes
+            .Where(n => supported.Contains(n.Id) && Is(n, "Merge"))
+            .Select(n => n.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var mergeId in mergeIds)
+        {
+            var sources = graph.Edges
+                .Where(e => e.TargetId == mergeId && exec.ContainsKey(e.SourceId) && e.SourceId != mergeId)
+                .Select(e => e.SourceId)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (sources.Count > 0)
+            {
+                builder.AddFanInBarrierEdge(
+                    sources.Select(id => (ExecutorBinding)exec[id]).ToList(), exec[mergeId]);
+            }
+        }
+
         foreach (var node in graph.Nodes.Where(n => supported.Contains(n.Id)))
         {
+            // Outgoing edges to supported targets, EXCLUDING edges into a Merge (handled by its fan-in above).
             var outs = graph.Edges
-                .Where(e => e.SourceId == node.Id && exec.ContainsKey(e.TargetId))
+                .Where(e => e.SourceId == node.Id && exec.ContainsKey(e.TargetId) && !mergeIds.Contains(e.TargetId))
                 .ToList();
             if (outs.Count == 0)
             {
                 continue;
             }
 
-            var isGate = string.Equals(node.StepType, "Evaluator", StringComparison.Ordinal)
-                || RoleOf(node) == "Qa";
-            if (isGate)
+            if (Is(node, "Parallel"))
+            {
+                // Fan-out: the same state is delivered to every branch (runs sequentially across MAF
+                // supersteps under the in-process runtime, so the shared state is mutated race-free).
+                builder.AddFanOutEdge(
+                    exec[node.Id], outs.Select(e => (ExecutorBinding)exec[e.TargetId]).ToList());
+            }
+            else if (Is(node, "Evaluator") || RoleOf(node) == "Qa")
             {
                 WireGate(builder, exec, node, outs, nMax);
+            }
+            else if (Is(node, "IfElse") || Is(node, "Switch"))
+            {
+                WireRouter(builder, exec, node, outs);
+            }
+            else if (Is(node, "Loop"))
+            {
+                WireLoop(builder, exec, node, outs, nMax);
+            }
+            else if (Is(node, "Merge"))
+            {
+                var branches = graph.Edges
+                    .Where(e => e.TargetId == node.Id && exec.ContainsKey(e.SourceId) && e.SourceId != node.Id)
+                    .Select(e => e.SourceId)
+                    .Distinct(StringComparer.Ordinal)
+                    .Count();
+                WireMergeOut(builder, exec, node, outs, Math.Max(1, branches));
             }
             else
             {
@@ -234,14 +293,95 @@ public sealed class GraphExecutor
         }
     }
 
+    // A "router" node (If/Else, Switch) sends the state to the one outgoing edge whose label matches the
+    // route the node chose (case-insensitive). Unlabelled edges act as the default branch (taken when the
+    // chosen route matches no labelled edge). With no labelled edges at all the node is a pass-through.
+    private static void WireRouter(
+        WorkflowBuilder builder, Dictionary<string, NodeExecutor> exec, PlanNode node, List<PlanEdge> outs)
+    {
+        var nodeId = node.Id;
+        var labeled = outs.Where(e => !string.IsNullOrWhiteSpace(e.Label)).ToList();
+        if (labeled.Count == 0)
+        {
+            foreach (var e in outs)
+            {
+                builder.AddEdge(exec[node.Id], exec[e.TargetId]);
+            }
+            return;
+        }
+
+        foreach (var e in labeled)
+        {
+            var label = e.Label;
+            builder.AddEdge<GraphState>(exec[node.Id], exec[e.TargetId],
+                s => s is not null && s.Routes.TryGetValue(nodeId, out var r)
+                    && string.Equals(r, label, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var labels = labeled.Select(e => e.Label).ToList();
+        foreach (var e in outs.Where(e => string.IsNullOrWhiteSpace(e.Label)))
+        {
+            builder.AddEdge<GraphState>(exec[node.Id], exec[e.TargetId],
+                s => s is not null && (!s.Routes.TryGetValue(nodeId, out var r)
+                    || !labels.Exists(l => string.Equals(l, r, StringComparison.OrdinalIgnoreCase))));
+        }
+    }
+
+    // A Loop node repeats its loop-labelled back-edge while a per-node counter is under the cap, then takes
+    // the forward edge(s). The Loop runner increments the counter on each pass, so exactly one branch fires
+    // and the loop always terminates at the cap. With no loop-labelled edge the node is a pass-through.
+    private static void WireLoop(
+        WorkflowBuilder builder, Dictionary<string, NodeExecutor> exec, PlanNode node, List<PlanEdge> outs, int nMax)
+    {
+        var nodeId = node.Id;
+        var cap = node.MaxIterations > 0 ? Math.Min(nMax, node.MaxIterations) : nMax;
+        var back = outs.FirstOrDefault(e => IsLoopLabel(e.Label));
+        if (back is null)
+        {
+            foreach (var e in outs)
+            {
+                builder.AddEdge(exec[node.Id], exec[e.TargetId]);
+            }
+            return;
+        }
+
+        builder.AddEdge<GraphState>(exec[node.Id], exec[back.TargetId],
+            s => s is not null && s.Counters.GetValueOrDefault(nodeId) < cap);
+        foreach (var e in outs.Where(e => e != back))
+        {
+            builder.AddEdge<GraphState>(exec[node.Id], exec[e.TargetId],
+                s => s is not null && s.Counters.GetValueOrDefault(nodeId) >= cap);
+        }
+    }
+
+    // A Merge's fan-in barrier delivers one message per branch, so the merge executor fires once per branch.
+    // Its outgoing edges only fire on the final delivery (counter == branch total), collapsing the N branch
+    // messages into a SINGLE downstream emission — the join's whole point.
+    private static void WireMergeOut(
+        WorkflowBuilder builder, Dictionary<string, NodeExecutor> exec, PlanNode node, List<PlanEdge> outs, int branches)
+    {
+        var nodeId = node.Id;
+        foreach (var e in outs)
+        {
+            builder.AddEdge<GraphState>(exec[node.Id], exec[e.TargetId],
+                s => s is not null && s.Counters.GetValueOrDefault(nodeId) >= branches);
+        }
+    }
+
+    private static bool Is(PlanNode node, string type) => string.Equals(node.StepType, type, StringComparison.Ordinal);
+
     private static bool IsLoopLabel(string label)
         => label.Contains("fail", StringComparison.OrdinalIgnoreCase)
         || label.Contains("loop", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("again", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("repeat", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("retry", StringComparison.OrdinalIgnoreCase)
         || label.Contains("regenerate", StringComparison.OrdinalIgnoreCase);
 
     // ---- per-node work (the executor body) ----
 
-    private Func<GraphState, CancellationToken, ValueTask<string?>> RunnerFor(PlanNode node)
+    private Func<GraphState, CancellationToken, ValueTask<string?>> RunnerFor(
+        PlanNode node, Func<GraphHumanRequest, Task<GraphHumanReply>>? onHuman, IReadOnlyList<string> routeOptions)
     {
         if (string.Equals(node.StepType, "Evaluator", StringComparison.Ordinal))
         {
@@ -266,8 +406,102 @@ public sealed class GraphExecutor
             "Transform" => (s, _) => new ValueTask<string?>(RunTransform(node, s)),
             "ExtractJson" => (s, _) => new ValueTask<string?>(RunExtractJson(node, s)),
             "Print" => (s, _) => new ValueTask<string?>(ResolveInput(node.Input, s)),
+            // Control-flow: the runner produces the *decision* (route / counter / approval); the MAF edges
+            // wired in BuildWorkflow act on the state the runner mutates. Parallel/Merge are pass-throughs —
+            // the fan-out / fan-in-barrier topology IS their behaviour.
+            "IfElse" or "Switch" => (s, ct) => RunDecisionAsync(node, routeOptions, s, ct),
+            "Loop" => (s, _) => new ValueTask<string?>(RunLoop(node, s)),
+            "Parallel" => (_, _) => new ValueTask<string?>("fork"),
+            "Merge" => (s, _) => new ValueTask<string?>(RunMerge(node, s)),
+            "Human" => (s, ct) => RunHumanAsync(node, onHuman, s, ct),
             _ => (_, _) => throw new LlmException($"Node type '{node.StepType}' is not runnable."),
         };
+    }
+
+    // If/Else + Switch: choose one route. The LLM is asked to pick among the available route labels; any
+    // failure (no provider, no match) falls back to the FIRST route so the branch always advances. The
+    // chosen route is stored in state for the conditional edges (see WireRouter).
+    private async ValueTask<string?> RunDecisionAsync(
+        PlanNode node, IReadOnlyList<string> routeOptions, GraphState s, CancellationToken ct)
+    {
+        var source = routeOptions.Count > 0 ? routeOptions : (node.Routes ?? (IReadOnlyList<string>)[]);
+        var routes = source.Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (routes.Count == 0)
+        {
+            return "no routes";
+        }
+
+        var chosen = routes[0];
+        try
+        {
+            var sys = "You are a routing function in a workflow. Read the context and choose EXACTLY ONE "
+                + "option from this list, replying with ONLY that word: " + string.Join(", ", routes) + ".";
+            var question = Interpolate(string.IsNullOrWhiteSpace(node.Description) ? node.Title : node.Description, s);
+            var prompt = $"{question}\n\nContext: {Truncate(ResolveInput(node.Input, s), 1500)}"
+                + $"\n\nReply with exactly one of: {string.Join(", ", routes)}";
+            var opt = _agents.Orchestrator;
+            var request = new LlmRequest(sys, prompt, opt.Model, opt.Temperature, opt.MaxTokens);
+            request.Validate();
+            var response = await _llmFactory.Create(opt.Provider).SendAsync(request, ct).ConfigureAwait(false);
+            var match = routes.Find(r => response.Content.Contains(r, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                chosen = match;
+            }
+        }
+        catch (LlmException)
+        {
+            // No provider / unparseable answer — keep the deterministic first-route default.
+        }
+
+        s.Routes[node.Id] = chosen;
+        WriteOut(node, s, chosen);
+        return $"→ {chosen}";
+    }
+
+    private static string RunLoop(PlanNode node, GraphState s)
+    {
+        var n = s.Counters.GetValueOrDefault(node.Id) + 1;
+        s.Counters[node.Id] = n;
+        return $"pass {n}";
+    }
+
+    // A Merge sits behind a MAF fan-in barrier, which delivers ONE message per branch — so the executor runs
+    // once per branch. We count those deliveries here; the merge's outgoing edges only fire once the count
+    // reaches the branch total (see WireMergeOut), so downstream runs exactly once after every branch joins.
+    private static string RunMerge(PlanNode node, GraphState s)
+    {
+        var n = s.Counters.GetValueOrDefault(node.Id) + 1;
+        s.Counters[node.Id] = n;
+        return $"joined {n}";
+    }
+
+    // Human checkpoint: pause the run and ask the operator. With no callback (headless Api / tests) it
+    // auto-approves so the workflow still terminates; a rejection stops the run at this node.
+    private static async ValueTask<string?> RunHumanAsync(
+        PlanNode node, Func<GraphHumanRequest, Task<GraphHumanReply>>? onHuman, GraphState s, CancellationToken ct)
+    {
+        var question = Interpolate(string.IsNullOrWhiteSpace(node.Description) ? node.Title : node.Description, s);
+        var context = ResolveInput(node.Input, s);
+        if (onHuman is null)
+        {
+            WriteOut(node, s, "approved (no operator attached)");
+            return "auto-approved";
+        }
+
+        ct.ThrowIfCancellationRequested();
+        var reply = await onHuman(new GraphHumanRequest(node.Id, node.Title, question, context)).ConfigureAwait(false);
+        var note = reply.Note?.Trim();
+        if (!reply.Approved)
+        {
+            WriteOut(node, s, string.IsNullOrEmpty(note) ? "rejected" : $"rejected: {note}");
+            throw new LlmException(
+                $"Human checkpoint '{node.Title}' was rejected" + (string.IsNullOrEmpty(note) ? "." : $": {note}"));
+        }
+
+        WriteOut(node, s, string.IsNullOrEmpty(note) ? "approved" : note);
+        return string.IsNullOrEmpty(note) ? "approved" : $"approved · {Truncate(note, 40)}";
     }
 
     private async ValueTask<string?> RunRequirementAsync(GraphState s, CancellationToken ct)
@@ -457,6 +691,12 @@ public sealed class GraphExecutor
         public bool LastConsistent => LastQa?.IsConsistent ?? false;
         public Dictionary<string, string> Bag { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, string?> NodeMeta { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Decision-node id → the route it chose (drives If/Else + Switch conditional edges).</summary>
+        public Dictionary<string, string> Routes { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Loop-node id → number of passes so far (drives the loop back-edge under its cap).</summary>
+        public Dictionary<string, int> Counters { get; } = new(StringComparer.Ordinal);
     }
 
     /// <summary>A MAF executor whose body is the node's work delegate. Returns the (mutated) state so MAF

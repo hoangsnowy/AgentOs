@@ -44,8 +44,23 @@ public sealed class LlmClientFactory : ILlmClientFactory
 
         var primary = ResolveRequired(effective, providerName);
 
-        // No fallbacks declared → return the bare client, identical to the pre-failover behavior.
         var fallbacks = ResolveFallbacks(effective);
+
+        // Keyless offline safety net: when enabled (standalone dev / E2E / demo), append the Offline provider
+        // to the END of the chain so a no-key LlmException falls through to canned schema-valid output instead
+        // of failing the run. Skipped when the effective provider already IS Offline, or it's already a
+        // configured fallback, so it never appears twice.
+        if (_options.OfflineFallback
+            && !string.Equals(NormalizeKey(effective), OfflineLlmClient.ProviderName, StringComparison.Ordinal))
+        {
+            var offline = _services.GetKeyedService<ILlmClient>(OfflineLlmClient.ProviderName);
+            if (offline is not null && !fallbacks.Exists(c => c.Provider == OfflineLlmClient.ProviderName))
+            {
+                fallbacks.Add(offline);
+            }
+        }
+
+        // No fallbacks declared → return the bare client, identical to the pre-failover behavior.
         if (fallbacks.Count == 0)
         {
             return primary;

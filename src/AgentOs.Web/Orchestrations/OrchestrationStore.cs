@@ -203,7 +203,57 @@ public sealed class OrchestrationStore
     private static IEnumerable<OrchestrationGraph> SeedDefaults()
     {
         yield return SeedSdlcPipeline();
+        yield return SeedControlFlowDemo();
         yield return SeedStrictDeveloper();
+    }
+
+    /// <summary>A small, fully-runnable graph that exercises EVERY control-flow node — Parallel fan-out,
+    /// Merge fan-in, an If/Else branch, and a Human checkpoint — using raw LLM steps so it runs end-to-end
+    /// with no API key (offline fallback). The showcase for "the drawn graph actually executes".</summary>
+    private static OrchestrationGraph SeedControlFlowDemo()
+    {
+        string draft = "cf_draft", split = "cf_split", pros = "cf_pros", cons = "cf_cons",
+            join = "cf_join", gate = "cf_gate", human = "cf_human", end = "cf_end";
+        return new OrchestrationGraph
+        {
+            Id = "control-flow-demo",
+            Name = "Control-Flow Demo",
+            Description = "Parallel + Merge + If/Else + Human checkpoint. Runs end-to-end with no API key.",
+            StateSchemaJson = "{\n  \"input\": \"string\",\n  \"draft\": \"string\",\n  \"decision\": \"proceed | revise\"\n}",
+            Guardrails = ["Human signs off before completion", "If/Else gate decides proceed vs revise"],
+            Nodes =
+            [
+                new GraphNode { Id = draft, Type = StepType.Llm, Title = "Draft idea", X = 60, Y = 240, IsStart = true,
+                    Description = "Draft an approach for: ${userStory}", Input = "userStory", Output = "draft" },
+                new GraphNode { Id = split, Type = StepType.Parallel, Title = "Fork analysis", X = 320, Y = 240,
+                    Description = "Run pros + cons in parallel", Input = "draft", Output = "fork" },
+                new GraphNode { Id = pros, Type = StepType.Llm, Title = "Analyze pros", X = 560, Y = 130,
+                    Description = "List the strengths of: ${draft}", Input = "draft", Output = "pros" },
+                new GraphNode { Id = cons, Type = StepType.Llm, Title = "Analyze cons", X = 560, Y = 360,
+                    Description = "List the risks of: ${draft}", Input = "draft", Output = "cons" },
+                new GraphNode { Id = join, Type = StepType.Merge, Title = "Combine", X = 820, Y = 240,
+                    Description = "Merge pros + cons", Input = "pros, cons", Output = "analysis" },
+                new GraphNode { Id = gate, Type = StepType.IfElse, Title = "Worth it?", X = 1060, Y = 240,
+                    Description = "Given the analysis, should we proceed?", Input = "analysis", Output = "decision",
+                    Routes = ["proceed", "revise"] },
+                new GraphNode { Id = human, Type = StepType.Human, Title = "Operator sign-off", X = 1300, Y = 140,
+                    Description = "Approve the plan before finishing.", Input = "analysis", Output = "approval", MaxIterations = 1 },
+                new GraphNode { Id = end, Type = StepType.End, Title = "Done", X = 1540, Y = 240,
+                    Description = "Finalize", Input = "all", Output = "result" },
+            ],
+            Edges =
+            [
+                new GraphEdge { Id = "c1", SourceId = draft, TargetId = split, Label = "" },
+                new GraphEdge { Id = "c2", SourceId = split, TargetId = pros, Label = "pros" },
+                new GraphEdge { Id = "c3", SourceId = split, TargetId = cons, Label = "cons" },
+                new GraphEdge { Id = "c4", SourceId = pros, TargetId = join, Label = "" },
+                new GraphEdge { Id = "c5", SourceId = cons, TargetId = join, Label = "" },
+                new GraphEdge { Id = "c6", SourceId = join, TargetId = gate, Label = "" },
+                new GraphEdge { Id = "c7", SourceId = gate, TargetId = human, Label = "proceed" },
+                new GraphEdge { Id = "c8", SourceId = gate, TargetId = end, Label = "revise" },
+                new GraphEdge { Id = "c9", SourceId = human, TargetId = end, Label = "" },
+            ],
+        };
     }
 
     /// <summary>Graph mapping the 5-agent pipeline — "Run" actually executes.</summary>

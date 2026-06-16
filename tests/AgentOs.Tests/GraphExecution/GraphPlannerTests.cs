@@ -69,17 +69,56 @@ public sealed class GraphPlannerTests
         var graph = new PlanGraph("g", "x",
             [
                 N("req", "Agent", "Requirement", start: true),
-                N("par", "Parallel"),
+                N("hook", "Webhook"),   // not a known node type
                 N("agg", "End"),
             ],
-            [E("req", "par"), E("par", "agg")]);
+            [E("req", "hook"), E("hook", "agg")]);
 
         var result = GraphPlanner.Plan(graph);
 
         result.IsRunnable.ShouldBeFalse();
-        var par = result.Nodes.Single(n => n.NodeId == "par");
-        par.Support.ShouldBe(NodeSupport.UnsupportedType);
-        par.Reason.ShouldContain("Parallel");
+        var hook = result.Nodes.Single(n => n.NodeId == "hook");
+        hook.Support.ShouldBe(NodeSupport.UnsupportedType);
+        hook.Reason.ShouldContain("Webhook");
+    }
+
+    [Theory]
+    [InlineData("IfElse")]
+    [InlineData("Switch")]
+    [InlineData("Loop")]
+    [InlineData("Parallel")]
+    [InlineData("Merge")]
+    [InlineData("Human")]
+    public void Plan_ControlFlowNode_IsSupported(string type)
+    {
+        var graph = new PlanGraph("g", "x",
+            [N("a", "Llm", start: true), N("flow", type), N("end", "End")],
+            [E("a", "flow"), E("flow", "end")]);
+
+        var result = GraphPlanner.Plan(graph);
+
+        result.Nodes.Single(n => n.NodeId == "flow").Support.ShouldBe(NodeSupport.Supported);
+        result.IsRunnable.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Plan_BranchWithUnsupportedNodeOnSecondBranch_BlocksRun()
+    {
+        // A Parallel fans out to two branches; the SECOND branch holds an unsupported node. The branch-aware
+        // (BFS) reachability must catch it, not just the first edge.
+        var graph = new PlanGraph("g", "x",
+            [
+                N("p", "Parallel", start: true),
+                N("ok", "Llm"),
+                N("bad", "Webhook"),
+                N("end", "End"),
+            ],
+            [E("p", "ok"), E("p", "bad"), E("ok", "end"), E("bad", "end")]);
+
+        var result = GraphPlanner.Plan(graph);
+
+        result.IsRunnable.ShouldBeFalse();
+        result.Nodes.Single(n => n.NodeId == "bad").Support.ShouldBe(NodeSupport.UnsupportedType);
     }
 
     [Fact]
