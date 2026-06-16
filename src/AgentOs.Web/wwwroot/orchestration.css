@@ -146,6 +146,7 @@ a.syn-nav-item { text-decoration: none; }
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
 }
 .syn-btn:hover:not(:disabled) { background: var(--syn-panel-2); border-color: var(--syn-border-2); }
+.syn-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .syn-btn:disabled { opacity: .5; cursor: not-allowed; }
 .syn-btn.green { background: var(--syn-green-bg); border-color: var(--syn-green-border); color: var(--syn-green-fg); }
 .syn-btn.green:hover:not(:disabled) { filter: brightness(1.1); }

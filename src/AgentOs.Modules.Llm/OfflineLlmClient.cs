@@ -40,12 +40,22 @@ public sealed class OfflineLlmClient : ILlmClient
         return Task.FromResult(response);
     }
 
-    // Route on the agent identity carried in the system prompt's OPENING line ("You are the <X> Agent …" —
-    // the documented routing key). Match the full opening phrase, not a bare mention, so a prompt that
-    // references another agent in its body (e.g. Testing's "code produced by the Coding Agent") is not
-    // mis-routed.
+    // Route to the canned payload for the agent behind this request. Prefer the out-of-band AgentRole hint
+    // (set by LlmAgentBase from its fixed PromptKey) so routing survives a tenant prompt override; fall back
+    // to the system prompt's OPENING line ("You are the <X> Agent …" — the documented routing key) for callers
+    // that don't set the hint. Match the full opening phrase, not a bare mention, so a prompt that references
+    // another agent in its body (e.g. Testing's "code produced by the Coding Agent") is not mis-routed.
     private static string Render(LlmRequest request)
     {
+        switch (request.AgentRole)
+        {
+            case "Requirement": return RequirementJson(request.UserPrompt);
+            case "Coding": return CodeJson();
+            case "Testing": return TestJson();
+            case "Qa": return QaJson();
+            default: break;
+        }
+
         var sys = request.SystemPrompt ?? string.Empty;
         if (sys.Contains("You are the Requirement Agent", StringComparison.OrdinalIgnoreCase))
         {

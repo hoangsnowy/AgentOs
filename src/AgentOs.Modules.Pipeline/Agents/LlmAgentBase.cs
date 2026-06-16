@@ -84,7 +84,12 @@ public abstract class LlmAgentBase
             ? DefaultSystemPrompt
             : await _prompts.ResolveAsync(PromptKey, DefaultSystemPrompt, ct).ConfigureAwait(false);
 
-        var request = new LlmRequest(systemPrompt, userPrompt, _options.Model, _options.Temperature, _options.MaxTokens);
+        var request = new LlmRequest(systemPrompt, userPrompt, _options.Model, _options.Temperature, _options.MaxTokens)
+        {
+            // Carry the fixed agent role out-of-band so providers (notably the offline one) can identify the
+            // agent without parsing the system prompt — robust against per-tenant prompt overrides.
+            AgentRole = PromptKey,
+        };
         var response = await _llm.SendAsync(request, ct).ConfigureAwait(false);
 
         var parsed = Parse(response, validateDto);

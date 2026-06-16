@@ -45,6 +45,14 @@ public sealed record LlmRequest(
     string? Cli = null)
 {
     /// <summary>
+    /// Optional canonical agent role behind this request (<c>"Requirement"</c>/<c>"Coding"</c>/<c>"Testing"</c>/
+    /// <c>"Qa"</c>), set by the specialist agents. Lets a provider identify the agent WITHOUT parsing the system
+    /// prompt — the offline provider uses it so canned-output routing survives a tenant prompt override that
+    /// rewords the prompt's opening line. Null for raw/ad-hoc calls.
+    /// </summary>
+    public string? AgentRole { get; init; }
+
+    /// <summary>
     /// Validates required values. Throws <see cref="System.ArgumentException"/> if invalid.
     /// </summary>
     public void Validate()

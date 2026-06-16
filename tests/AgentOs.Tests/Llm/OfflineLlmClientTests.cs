@@ -91,6 +91,23 @@ public sealed class OfflineLlmClientTests
         response.Content.ShouldContain("offline");
     }
 
+    [Fact]
+    public async Task AgentRoleHint_RoutesEvenWhenSystemPromptOpeningLineIsReworded()
+    {
+        // A tenant prompt override removes the "You are the Requirement Agent" opening line; the AgentRole hint
+        // (set by LlmAgentBase from its fixed PromptKey) must still route to the requirement payload.
+        var client = new OfflineLlmClient();
+        var request = new LlmRequest("As a senior analyst, produce the spec.", "Build a todo app", "m")
+        {
+            AgentRole = "Requirement",
+        };
+        request.Validate();
+
+        var response = await client.SendAsync(request);
+
+        response.Content.ShouldContain("acceptanceCriteria");   // the requirement payload, not the echo
+    }
+
     private static RequirementSpec StubSpec() => new(
         Title: "T", Summary: "S", Stakeholders: [], FunctionalRequirements: [], NonFunctionalRequirements: [],
         Entities: [new EntityDescriptor("E", [])], Endpoints: [new EndpointDescriptor("GET", "/", "root")],

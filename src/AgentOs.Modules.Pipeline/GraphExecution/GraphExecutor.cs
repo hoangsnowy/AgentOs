@@ -7,6 +7,7 @@
 // isn't runnable (unsupported nodes on the path) before any executor runs.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -33,7 +34,7 @@ namespace AgentOs.Modules.Pipeline.GraphExecution;
 /// component ctor — this executor is resolved lazily at run time, see <c>GraphRunnerService</c>).</summary>
 public sealed class GraphExecutor
 {
-    // Backstop against a runaway cyclic graph the cap logic somehow doesn't bound.
+    // Tenant used when the caller passes none (operator/standalone mode).
     private const string OperatorTenant = "operator";
 
     private readonly IRequirementAgent _requirement;
@@ -122,23 +123,46 @@ public sealed class GraphExecutor
         }
 
         string? failure = null;
-        var run = await InProcessExecution.RunStreamingAsync(workflow, state, runId, ct).ConfigureAwait(false);
+        // Explicit End nodes are the designated terminals. If the graph HAS an End but the run quiesces without
+        // any End completing (e.g. a fan-in barrier fed by a branch an If/Else skipped — MAF returns normally),
+        // we must NOT report success. Empty when the graph has no End (then we don't second-guess completion).
+        var terminals = TerminalNodeIds(graph, supported);
+        var terminalReached = false;
+        // Backstop against a non-terminating graph (a cyclic gate/loop the cap logic somehow doesn't bound):
+        // cap total node activations generously, then abort with a clear failure rather than spin forever.
+        var invoked = 0;
+        var activationBudget = Math.Max(200, graph.Nodes.Count * (clampedNMax + 2) * 4);
+
+        await using var run = await InProcessExecution.RunStreamingAsync(workflow, state, runId, ct).ConfigureAwait(false);
         await foreach (var evt in run.WatchStreamAsync(ct).ConfigureAwait(false))
         {
-            switch (evt)
+            if (evt is ExecutorInvokedEvent ie && supported.Contains(ie.ExecutorId))
             {
-                case ExecutorInvokedEvent e when supported.Contains(e.ExecutorId):
-                    await onNode(new GraphNodeEvent(e.ExecutorId, GraphNodePhase.Running, null, null)).ConfigureAwait(false);
+                if (++invoked > activationBudget)
+                {
+                    failure ??= "Run exceeded its execution budget — a loop or join is not terminating. Check the graph's cycles/caps.";
+                    try { await run.CancelRunAsync().ConfigureAwait(false); }
+                    catch (InvalidOperationException) { /* already finished */ }
                     break;
-                case ExecutorCompletedEvent e when supported.Contains(e.ExecutorId):
-                    await onNode(new GraphNodeEvent(
-                        e.ExecutorId, GraphNodePhase.Done, state.NodeMeta.GetValueOrDefault(e.ExecutorId), null)).ConfigureAwait(false);
-                    break;
-                case ExecutorFailedEvent e when supported.Contains(e.ExecutorId):
-                    failure ??= e.Data?.Message ?? "node failed";
-                    await onNode(new GraphNodeEvent(e.ExecutorId, GraphNodePhase.Failed, null, failure)).ConfigureAwait(false);
-                    break;
+                }
+                await onNode(new GraphNodeEvent(ie.ExecutorId, GraphNodePhase.Running, null, null)).ConfigureAwait(false);
             }
+            else if (evt is ExecutorCompletedEvent ce && supported.Contains(ce.ExecutorId))
+            {
+                if (terminals.Contains(ce.ExecutorId)) { terminalReached = true; }
+                await onNode(new GraphNodeEvent(
+                    ce.ExecutorId, GraphNodePhase.Done, state.NodeMeta.GetValueOrDefault(ce.ExecutorId), null)).ConfigureAwait(false);
+            }
+            else if (evt is ExecutorFailedEvent fe && supported.Contains(fe.ExecutorId))
+            {
+                failure ??= fe.Data?.Message ?? "node failed";
+                await onNode(new GraphNodeEvent(fe.ExecutorId, GraphNodePhase.Failed, null, failure)).ConfigureAwait(false);
+            }
+        }
+
+        if (failure is null && terminals.Count > 0 && !terminalReached)
+        {
+            failure = "Workflow stopped before reaching End — a branch or join did not complete (check Merge / If-Else wiring).";
         }
 
         return new GraphRunResult(failure is null, failure);
@@ -210,8 +234,9 @@ public sealed class GraphExecutor
 
             if (Is(node, "Parallel"))
             {
-                // Fan-out: the same state is delivered to every branch (runs sequentially across MAF
-                // supersteps under the in-process runtime, so the shared state is mutated race-free).
+                // Fan-out: the SAME GraphState is delivered to every branch, and MAF's off-thread runtime runs
+                // the branches as CONCURRENT tasks within one superstep — so the shared state must be (and is)
+                // thread-safe (see GraphState's concurrent collections + interlocked counters).
                 builder.AddFanOutEdge(
                     exec[node.Id], outs.Select(e => (ExecutorBinding)exec[e.TargetId]).ToList());
             }
@@ -247,10 +272,7 @@ public sealed class GraphExecutor
 
         // Output from the End node(s); fall back to the last node in linear order so a graph without an
         // explicit End still produces a terminating output rather than idling.
-        var ends = graph.Nodes
-            .Where(n => supported.Contains(n.Id) && string.Equals(n.StepType, "End", StringComparison.Ordinal))
-            .Select(n => exec[n.Id])
-            .ToList();
+        var ends = TerminalNodeIds(graph, supported).Select(id => exec[id]).ToList();
         if (ends.Count == 0 && plan.LinearOrder.Count > 0)
         {
             var lastId = plan.LinearOrder.LastOrDefault(supported.Contains);
@@ -269,10 +291,13 @@ public sealed class GraphExecutor
 
     // QA / Evaluator gate: a "fail/loop/regenerate"-labelled edge loops back while inconsistent and under the
     // iteration cap; the forward edge(s) fire once consistent OR the cap is exhausted — so exactly one branch
-    // is always taken and the workflow terminates.
+    // is always taken and the workflow terminates. The cap counts THIS gate's own passes (s.Counters[gateId],
+    // bumped by RunQaAsync), NOT the global coding count — so a gate whose loop-back path has no Coding node
+    // still terminates, and two gates in series each get their own independent cap.
     private static void WireGate(
         WorkflowBuilder builder, Dictionary<string, NodeExecutor> exec, PlanNode node, List<PlanEdge> outs, int nMax)
     {
+        var nodeId = node.Id;
         var cap = node.MaxIterations > 0 ? Math.Min(nMax, node.MaxIterations) : nMax;
         var loop = outs.FirstOrDefault(e => IsLoopLabel(e.Label));
         if (loop is null)
@@ -285,11 +310,11 @@ public sealed class GraphExecutor
         }
 
         builder.AddEdge<GraphState>(exec[node.Id], exec[loop.TargetId],
-            s => s is not null && !s.LastConsistent && s.Iteration < cap);
+            s => s is not null && !s.LastConsistent && s.Counters.GetValueOrDefault(nodeId) < cap);
         foreach (var e in outs.Where(e => e != loop))
         {
             builder.AddEdge<GraphState>(exec[node.Id], exec[e.TargetId],
-                s => s is not null && (s.LastConsistent || s.Iteration >= cap));
+                s => s is not null && (s.LastConsistent || s.Counters.GetValueOrDefault(nodeId) >= cap));
         }
     }
 
@@ -355,8 +380,10 @@ public sealed class GraphExecutor
     }
 
     // A Merge's fan-in barrier delivers one message per branch, so the merge executor fires once per branch.
-    // Its outgoing edges only fire on the final delivery (counter == branch total), collapsing the N branch
-    // messages into a SINGLE downstream emission — the join's whole point.
+    // Its outgoing edges fire only on the LAST delivery of each wave of N (counter % branches == 0) — collapsing
+    // the N branch messages into a SINGLE downstream emission. Using the monotonic counter modulo the branch
+    // count (rather than `>= branches`) keeps it correct when the merge sits inside a loop and is re-entered:
+    // wave 1 fires at N, wave 2 at 2N, etc., instead of firing on every delivery after the first wave.
     private static void WireMergeOut(
         WorkflowBuilder builder, Dictionary<string, NodeExecutor> exec, PlanNode node, List<PlanEdge> outs, int branches)
     {
@@ -364,11 +391,18 @@ public sealed class GraphExecutor
         foreach (var e in outs)
         {
             builder.AddEdge<GraphState>(exec[node.Id], exec[e.TargetId],
-                s => s is not null && s.Counters.GetValueOrDefault(nodeId) >= branches);
+                s => s is not null && s.Counters.GetValueOrDefault(nodeId) is var c && c > 0 && c % branches == 0);
         }
     }
 
     private static bool Is(PlanNode node, string type) => string.Equals(node.StepType, type, StringComparison.Ordinal);
+
+    // The explicit End nodes that are supported — the designated workflow terminals.
+    private static HashSet<string> TerminalNodeIds(PlanGraph graph, HashSet<string> supported)
+        => graph.Nodes
+            .Where(n => supported.Contains(n.Id) && string.Equals(n.StepType, "End", StringComparison.Ordinal))
+            .Select(n => n.Id)
+            .ToHashSet(StringComparer.Ordinal);
 
     private static bool IsLoopLabel(string label)
         => label.Contains("fail", StringComparison.OrdinalIgnoreCase)
@@ -385,7 +419,7 @@ public sealed class GraphExecutor
     {
         if (string.Equals(node.StepType, "Evaluator", StringComparison.Ordinal))
         {
-            return (s, ct) => RunQaAsync(s, ct);
+            return (s, ct) => RunQaAsync(node.Id, s, ct);
         }
         if (string.Equals(node.StepType, "End", StringComparison.Ordinal))
         {
@@ -398,7 +432,7 @@ public sealed class GraphExecutor
                 "Requirement" => (s, ct) => RunRequirementAsync(s, ct),
                 "Coding" => (s, ct) => RunCodingAsync(s, ct),
                 "Testing" => (s, ct) => RunTestingAsync(s, ct),
-                "Qa" => (s, ct) => RunQaAsync(s, ct),
+                "Qa" => (s, ct) => RunQaAsync(node.Id, s, ct),
                 _ => (_, _) => throw new LlmException($"Agent role '{node.AgentRole}' is not runnable."),
             },
             "Llm" => (s, ct) => RunLlmAsync(node, s, ct),
@@ -444,7 +478,7 @@ public sealed class GraphExecutor
             var request = new LlmRequest(sys, prompt, opt.Model, opt.Temperature, opt.MaxTokens);
             request.Validate();
             var response = await _llmFactory.Create(opt.Provider).SendAsync(request, ct).ConfigureAwait(false);
-            var match = routes.Find(r => response.Content.Contains(r, StringComparison.OrdinalIgnoreCase));
+            var match = MatchRoute(response.Content, routes);
             if (match is not null)
             {
                 chosen = match;
@@ -460,22 +494,30 @@ public sealed class GraphExecutor
         return $"→ {chosen}";
     }
 
-    private static string RunLoop(PlanNode node, GraphState s)
+    // Pick the route an LLM reply names. Tiered so a route that is a substring of another (e.g. "no" vs
+    // "now", "pass" vs "passfail") is never mis-selected: exact match → whole-word match → longest substring.
+    private static string? MatchRoute(string? content, List<string> routes)
     {
-        var n = s.Counters.GetValueOrDefault(node.Id) + 1;
-        s.Counters[node.Id] = n;
-        return $"pass {n}";
+        var reply = (content ?? string.Empty).Trim();
+        if (reply.Length == 0)
+        {
+            return null;
+        }
+        return routes.Find(r => string.Equals(reply, r, StringComparison.OrdinalIgnoreCase))
+            ?? routes.Find(r => System.Text.RegularExpressions.Regex.IsMatch(
+                reply, $@"\b{System.Text.RegularExpressions.Regex.Escape(r)}\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            ?? routes.Where(r => reply.Contains(r, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(r => r.Length).FirstOrDefault();
     }
 
+    private static string RunLoop(PlanNode node, GraphState s) => $"pass {s.Bump(node.Id)}";
+
     // A Merge sits behind a MAF fan-in barrier, which delivers ONE message per branch — so the executor runs
-    // once per branch. We count those deliveries here; the merge's outgoing edges only fire once the count
-    // reaches the branch total (see WireMergeOut), so downstream runs exactly once after every branch joins.
-    private static string RunMerge(PlanNode node, GraphState s)
-    {
-        var n = s.Counters.GetValueOrDefault(node.Id) + 1;
-        s.Counters[node.Id] = n;
-        return $"joined {n}";
-    }
+    // once per branch. We count those deliveries (atomically — branches resume on the threadpool); the merge's
+    // outgoing edges fire once per WAVE of N (see WireMergeOut), so downstream runs exactly once each pass even
+    // when the merge sits inside a loop.
+    private static string RunMerge(PlanNode node, GraphState s) => $"joined {s.Bump(node.Id)}";
 
     // Human checkpoint: pause the run and ask the operator. With no callback (headless Api / tests) it
     // auto-approves so the workflow still terminates; a rejection stops the run at this node.
@@ -513,7 +555,7 @@ public sealed class GraphExecutor
 
     private async ValueTask<string?> RunCodingAsync(GraphState s, CancellationToken ct)
     {
-        s.Iteration++;   // a coding pass starts each iteration of the QA loop
+        s.IncrementIteration();   // a coding pass starts each iteration of the QA loop
         EnsureSpec(s);
         s.Code = await _coding.RunAsync(s.Spec!, s.LastQa, ct).ConfigureAwait(false);
         s.Bag["code"] = $"{s.Code.Files.Count} files";
@@ -523,16 +565,25 @@ public sealed class GraphExecutor
     private async ValueTask<string?> RunTestingAsync(GraphState s, CancellationToken ct)
     {
         EnsureSpec(s);
+        EnsureCode(s, "Testing");
         s.Tests = await _testing.RunAsync(s.Spec!, s.Code!, s.LastQa, ct).ConfigureAwait(false);
         s.Bag["tests"] = $"{s.Tests.TotalCount} tests";
         return Metric(s.Tests.Metrics);
     }
 
-    private async ValueTask<string?> RunQaAsync(GraphState s, CancellationToken ct)
+    // nodeId lets a QA/Evaluator GATE count its own passes (s.Counters[nodeId]) so its loop cap is per-gate,
+    // independent of the global coding count and of any other gate.
+    private async ValueTask<string?> RunQaAsync(string nodeId, GraphState s, CancellationToken ct)
     {
         EnsureSpec(s);
+        EnsureCode(s, "QA");
+        if (s.Tests is null)
+        {
+            throw new LlmException("A QA node ran before a Testing node produced tests — wire a Testing node upstream first.");
+        }
         s.LastQa = await _qa.RunAsync(s.Spec!, s.Code!, s.Tests!, ct).ConfigureAwait(false);
         s.Bag["qa"] = s.LastQa.Score.ToString("0.00", CultureInfo.InvariantCulture);
+        s.Bump(nodeId);
         return $"{Metric(s.LastQa.Metrics)} · consistent={s.LastQa.IsConsistent}";
     }
 
@@ -666,6 +717,14 @@ public sealed class GraphExecutor
         }
     }
 
+    private static void EnsureCode(GraphState s, string who)
+    {
+        if (s.Code is null)
+        {
+            throw new LlmException($"A {who} node ran before a Coding node produced code — wire a Coding node upstream first.");
+        }
+    }
+
     private static string Metric(AgentMetrics m)
         => $"{m.InputTokens}→{m.OutputTokens} tok · ${m.CostUsd.ToString("0.0000", CultureInfo.InvariantCulture)}";
 
@@ -677,26 +736,39 @@ public sealed class GraphExecutor
 
     // ---- the message threaded along every edge + the MAF executor wrapper ----
 
-    /// <summary>Mutable run state passed node-to-node along the workflow edges (one instance per run).</summary>
+    /// <summary>Mutable run state passed node-to-node along the workflow edges (one instance per run).
+    /// IMPORTANT: MAF's default in-process runtime is OFF-THREAD — a Parallel fan-out delivers this SAME
+    /// instance to every branch and runs the branches as concurrent Tasks within one superstep, and the
+    /// event-watcher reads <see cref="NodeMeta"/> on a different thread from the run loop. So every shared
+    /// collection here is concurrent and the pass counter is interlocked — plain Dictionary / <c>++</c>
+    /// would corrupt/throw under that concurrency.</summary>
     internal sealed class GraphState(string userStory, int nMax, string tenantId, string runId)
     {
         public UserStory Story { get; } = new(userStory, NMax: nMax);
         public string TenantId { get; } = tenantId;
         public string RunId { get; } = runId;
-        public int Iteration { get; set; }
+
+        // Coding-pass count, bumped from executor bodies that may run concurrently → interlocked field.
+        private int _iteration;
+        public int Iteration => Volatile.Read(ref _iteration);
+        public int IncrementIteration() => Interlocked.Increment(ref _iteration);
+
         public RequirementSpec? Spec { get; set; }
         public CodeArtifact? Code { get; set; }
         public TestArtifact? Tests { get; set; }
         public QaReport? LastQa { get; set; }
         public bool LastConsistent => LastQa?.IsConsistent ?? false;
-        public Dictionary<string, string> Bag { get; } = new(StringComparer.Ordinal);
-        public Dictionary<string, string?> NodeMeta { get; } = new(StringComparer.Ordinal);
+        public ConcurrentDictionary<string, string> Bag { get; } = new(StringComparer.Ordinal);
+        public ConcurrentDictionary<string, string?> NodeMeta { get; } = new(StringComparer.Ordinal);
 
         /// <summary>Decision-node id → the route it chose (drives If/Else + Switch conditional edges).</summary>
-        public Dictionary<string, string> Routes { get; } = new(StringComparer.Ordinal);
+        public ConcurrentDictionary<string, string> Routes { get; } = new(StringComparer.Ordinal);
 
-        /// <summary>Loop-node id → number of passes so far (drives the loop back-edge under its cap).</summary>
-        public Dictionary<string, int> Counters { get; } = new(StringComparer.Ordinal);
+        /// <summary>Gate / Loop / Merge node id → monotonic pass count (drives loop caps + the merge join).</summary>
+        public ConcurrentDictionary<string, int> Counters { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Atomically increment a node's counter and return the new value.</summary>
+        public int Bump(string nodeId) => Counters.AddOrUpdate(nodeId, 1, static (_, v) => v + 1);
     }
 
     /// <summary>A MAF executor whose body is the node's work delegate. Returns the (mutated) state so MAF
