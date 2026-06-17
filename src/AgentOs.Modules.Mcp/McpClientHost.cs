@@ -28,6 +28,9 @@ public sealed class McpClientHost : IAsyncDisposable
     private readonly List<McpClient> _clients = new();
     private readonly List<string> _registeredNames = new();
     private readonly List<McpServerStatus> _statuses = new();
+    // Each HTTP/SSE transport gets a dedicated SsrfGuard-hardened HttpClient owned by THIS host
+    // (transport built with ownsHttpClient: false); disposed in DisposeAsync after the MCP clients.
+    private readonly List<System.Net.Http.HttpClient> _httpClients = new();
 
     /// <summary>Per-server connection status captured at startup — drives the MCP admin app.</summary>
     public IReadOnlyList<McpServerStatus> Statuses => _statuses;
@@ -164,14 +167,16 @@ public sealed class McpClientHost : IAsyncDisposable
             // metadata (169.254.169.254), 127.0.0.1, or an internal service and make the host fetch it on their
             // behalf. Pin the transport to an SsrfGuard-hardened HttpClient (connect-time refusal of
             // private/loopback/link-local targets, DNS-rebind safe) — the same defense GitHub/Azure DevOps
-            // outbound calls already use. ownsHttpClient: the transport disposes the client on connection close.
+            // outbound calls already use. This host owns the client (tracked in _httpClients, disposed in
+            // DisposeAsync), so the transport is built with ownsHttpClient: false.
             var hardened = new System.Net.Http.HttpClient(
                 AgentOs.SharedKernel.Security.SsrfGuard.CreateHardenedHandler());
+            _httpClients.Add(hardened);
             return new HttpClientTransport(
                 new HttpClientTransportOptions { Endpoint = new Uri(server.Url) },
                 hardened,
                 _loggerFactory,
-                ownsHttpClient: true);
+                ownsHttpClient: false);
         }
 
         if (!string.Equals(server.Transport, "stdio", StringComparison.OrdinalIgnoreCase))
@@ -214,6 +219,14 @@ public sealed class McpClientHost : IAsyncDisposable
             catch (InvalidOperationException ex) { OnDisposeFailed(ex); }
         }
         _clients.Clear();
+
+        // Dispose the hardened HttpClients AFTER their MCP clients/transports — the transports were built with
+        // ownsHttpClient: false, so this host owns and releases them here.
+        foreach (var http in _httpClients)
+        {
+            http.Dispose();
+        }
+        _httpClients.Clear();
 
         void OnDisposeFailed(Exception ex) => _logger.LogWarning(ex, "Failed to dispose MCP client cleanly.");
     }
