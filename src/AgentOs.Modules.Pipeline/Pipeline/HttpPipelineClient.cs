@@ -54,7 +54,9 @@ public sealed class HttpPipelineClient : IPipelineClient
     {
         ArgumentNullException.ThrowIfNull(story);
 
-        using var client = _httpFactory.CreateClient(HttpClientName);
+        // Do NOT dispose a client from IHttpClientFactory — the factory pools and rotates the underlying
+        // handler; disposing it here breaks connection pooling and handler lifetime for the next call.
+        var client = _httpFactory.CreateClient(HttpClientName);
         using var req = new HttpRequestMessage(HttpMethod.Post, "pipeline/stream")
         {
             Content = JsonContent.Create(story, options: JsonOpts),

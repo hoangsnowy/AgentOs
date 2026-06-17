@@ -97,6 +97,12 @@ internal sealed class RunnerRepository : IRunnerRepository
     public async Task AddForTenantAsync(RunnerEntity runner, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(runner);
+        // Tenant-scoped write seam (caller stamps TenantId). Fail loudly on an empty value rather than persist
+        // an orphan row that no tenant's query filter matches — a silent cross-tenant-isolation hole.
+        if (string.IsNullOrWhiteSpace(runner.TenantId))
+        {
+            throw new InvalidOperationException("RunnerEntity.TenantId must be set before AddForTenantAsync.");
+        }
         _db.Runners.Add(runner);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
     }

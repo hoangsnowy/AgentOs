@@ -98,6 +98,12 @@ internal sealed class SessionRepository : ISessionRepository
     public async Task AddForTenantAsync(RemoteSessionEntity session, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(session);
+        // Tenant-scoped write seam (caller stamps TenantId). Fail loudly on an empty value rather than persist
+        // an orphan row that no tenant's query filter matches — a silent cross-tenant-isolation hole.
+        if (string.IsNullOrWhiteSpace(session.TenantId))
+        {
+            throw new InvalidOperationException("RemoteSessionEntity.TenantId must be set before AddForTenantAsync.");
+        }
         _db.Sessions.Add(session);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
@@ -167,6 +173,10 @@ internal sealed class SessionRepository : ISessionRepository
     public async Task AddRepoForTenantAsync(SessionRepoEntity repo, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(repo);
+        if (string.IsNullOrWhiteSpace(repo.TenantId))
+        {
+            throw new InvalidOperationException("SessionRepoEntity.TenantId must be set before AddRepoForTenantAsync.");
+        }
         _db.SessionRepos.Add(repo);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
     }

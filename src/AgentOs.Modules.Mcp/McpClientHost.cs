@@ -151,7 +151,7 @@ public sealed class McpClientHost : IAsyncDisposable
         return tools.Count;
     }
 
-    private static IClientTransport BuildTransport(McpServerOptions server)
+    private IClientTransport BuildTransport(McpServerOptions server)
     {
         if (string.Equals(server.Transport, "http", StringComparison.OrdinalIgnoreCase)
             || string.Equals(server.Transport, "sse", StringComparison.OrdinalIgnoreCase))
@@ -160,10 +160,18 @@ public sealed class McpClientHost : IAsyncDisposable
             {
                 throw new InvalidOperationException($"MCP server '{server.Name}': Url is required for {server.Transport} transport.");
             }
-            return new HttpClientTransport(new HttpClientTransportOptions
-            {
-                Endpoint = new Uri(server.Url),
-            });
+            // server.Url is operator-supplied — without an SSRF guard a tenant/operator could point it at cloud
+            // metadata (169.254.169.254), 127.0.0.1, or an internal service and make the host fetch it on their
+            // behalf. Pin the transport to an SsrfGuard-hardened HttpClient (connect-time refusal of
+            // private/loopback/link-local targets, DNS-rebind safe) — the same defense GitHub/Azure DevOps
+            // outbound calls already use. ownsHttpClient: the transport disposes the client on connection close.
+            var hardened = new System.Net.Http.HttpClient(
+                AgentOs.SharedKernel.Security.SsrfGuard.CreateHardenedHandler());
+            return new HttpClientTransport(
+                new HttpClientTransportOptions { Endpoint = new Uri(server.Url) },
+                hardened,
+                _loggerFactory,
+                ownsHttpClient: true);
         }
 
         if (!string.Equals(server.Transport, "stdio", StringComparison.OrdinalIgnoreCase))

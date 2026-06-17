@@ -152,6 +152,11 @@ public sealed class BuildVerifier : IBuildVerifier
             catch (OperationCanceledException)
             {
                 TryKill(proc);
+                // Killing the process tears down the pipes; drain the stdout/stderr read tasks so they complete
+                // BEFORE the linked CTS is disposed at method exit. Leaving them running would have them touch a
+                // disposed cts.Token, surfacing as an unobserved ObjectDisposedException. Output is discarded here.
+                await ObserveAsync(outTask).ConfigureAwait(false);
+                await ObserveAsync(errTask).ConfigureAwait(false);
                 stopwatch.Stop();
                 return new BuildVerifyResult(false, -1,
                     $"Build cancelled / timed out after {BuildTimeoutSeconds}s.", stopwatch.ElapsedMilliseconds);
@@ -175,6 +180,15 @@ public sealed class BuildVerifier : IBuildVerifier
             catch (IOException ex) { _logger.LogWarning(ex, "Failed to delete scratch dir {Dir}", workDir); }
             catch (UnauthorizedAccessException ex) { _logger.LogWarning(ex, "Failed to delete scratch dir {Dir}", workDir); }
         }
+    }
+
+    // Awaits a read task only to observe its completion/exception so the linked CTS can be disposed safely.
+    // On the timeout path the captured output is unused; cancellation + a torn pipe are the expected outcomes.
+    private static async Task ObserveAsync(Task<string> task)
+    {
+        try { await task.ConfigureAwait(false); }
+        catch (OperationCanceledException) { /* expected — the build was cancelled */ }
+        catch (IOException) { /* expected — the kill tore down the pipe */ }
     }
 
     private static void TryKill(Process proc)
