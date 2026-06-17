@@ -68,12 +68,13 @@ public static class GraphPlanner
             {
                 var id = queue.Dequeue();
                 order.Add(id);
-                foreach (var e in graph.Edges.Where(e => e.SourceId == id))
+                // Enqueue each known, not-yet-visited neighbour. visited.Add (in the predicate) doubles as the
+                // cycle guard — it runs once per edge during enumeration and returns false for an already-seen
+                // target, so a back-edge is filtered out exactly as the explicit if did.
+                foreach (var e in graph.Edges.Where(
+                    e => e.SourceId == id && byId.ContainsKey(e.TargetId) && visited.Add(e.TargetId)))
                 {
-                    if (byId.ContainsKey(e.TargetId) && visited.Add(e.TargetId))
-                    {
-                        queue.Enqueue(e.TargetId);
-                    }
+                    queue.Enqueue(e.TargetId);
                 }
             }
         }
