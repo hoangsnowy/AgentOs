@@ -18,6 +18,9 @@ public sealed class PgAdvisoryLock : IAsyncDisposable
     private readonly NpgsqlConnection? _connection;
     private readonly long _key;
 
+    /// <summary>Default bound on how long <see cref="AcquireAsync"/> waits for the lock before failing fast.</summary>
+    private static readonly TimeSpan DefaultAcquireTimeout = TimeSpan.FromSeconds(60);
+
     private PgAdvisoryLock(NpgsqlConnection? connection, long key)
     {
         _connection = connection;
@@ -25,8 +28,10 @@ public sealed class PgAdvisoryLock : IAsyncDisposable
     }
 
     /// <summary>Acquires <c>pg_advisory_lock(key)</c> for <paramref name="lockName"/> (stable FNV-1a
-    /// hash), blocking until the holder releases it. A null/empty <paramref name="connectionString"/>
-    /// (no real database — InMemory tests, no-op repos) returns a no-op handle.</summary>
+    /// hash), blocking until the holder releases it or the acquire timeout (<see cref="DefaultAcquireTimeout"/>,
+    /// 60s) elapses. A null/empty <paramref name="connectionString"/> (no real database — InMemory tests,
+    /// no-op repos) returns a no-op handle. Throws <see cref="TimeoutException"/> if the wait is bounded out —
+    /// fail fast so the orchestrator restarts the pod rather than wedging startup forever.</summary>
     public static async Task<PgAdvisoryLock> AcquireAsync(
         string? connectionString, string lockName, CancellationToken cancellationToken = default)
     {
@@ -40,14 +45,31 @@ public sealed class PgAdvisoryLock : IAsyncDisposable
             return new PgAdvisoryLock(null, key);
         }
 
+        // pg_advisory_lock() blocks server-side with NO timeout: a holder that crashed mid-migration (or an
+        // unreachable Postgres) would hang every other replica's startup indefinitely while its health probe
+        // still reports 200. Bound the wait — on expiry Npgsql cancels the command and we surface a clear
+        // TimeoutException so the failure is observable and the pod is recycled instead of silently stuck.
+        var timeout = DefaultAcquireTimeout;
+        using var timeoutCts = new CancellationTokenSource(timeout);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
         var connection = new NpgsqlConnection(connectionString);
         try
         {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await connection.OpenAsync(linked.Token).ConfigureAwait(false);
             await using var command = new NpgsqlCommand("SELECT pg_advisory_lock(@key)", connection);
             command.Parameters.AddWithValue("key", key);
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync(linked.Token).ConfigureAwait(false);
             return new PgAdvisoryLock(connection, key);
+        }
+        catch (Exception ex) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            // Our timeout fired (not the caller's token) — translate whatever Npgsql threw on cancel into a
+            // clear, actionable timeout. The caller-cancellation case falls through to the generic rethrow.
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw new TimeoutException(
+                $"Timed out after {timeout.TotalSeconds:0}s acquiring the '{lockName}' migration advisory lock. "
+                + "Another replica may be stuck mid-migration, or Postgres is unreachable.", ex);
         }
         catch
         {

@@ -69,7 +69,16 @@ public sealed class QaAgent : LlmAgentBase, IQaAgent
             Score: dto.Score,
             IsConsistent: dto.IsConsistent,
             IterationNeeded: dto.IterationNeeded,
-            Issues: (dto.Issues ?? []).Select(i => new QaIssue(i.Severity!, i.Category!, i.Description!, i.Location)).ToArray(),
+            // QA has no JSON schema (its output is advisory), so an issue may arrive with missing fields.
+            // Coalesce to safe defaults rather than dereferencing null into the non-nullable QaIssue record —
+            // one malformed issue must not poison the report or crash the orchestrator's QA loop.
+            Issues: (dto.Issues ?? [])
+                .Select(i => new QaIssue(
+                    string.IsNullOrWhiteSpace(i.Severity) ? "info" : i.Severity,
+                    string.IsNullOrWhiteSpace(i.Category) ? "general" : i.Category,
+                    i.Description ?? string.Empty,
+                    i.Location))
+                .ToArray(),
             Recommendations: dto.Recommendations ?? [],
             Metrics: metrics);
 

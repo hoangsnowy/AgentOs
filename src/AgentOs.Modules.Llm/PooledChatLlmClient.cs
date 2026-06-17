@@ -231,6 +231,11 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
     /// wrapper cascades to its inner base client, so base clients that have a wrapper are skipped.</summary>
     public void Dispose()
     {
+        // Snapshot the wrapped-key set first: a concurrent in-flight SendAsync could otherwise add a wrapper for
+        // a base client between the ContainsKey check and the Dispose call below, so the base client would be
+        // disposed both directly here AND via its freshly-added wrapper — breaking the "exactly once" guarantee.
+        var wrappedKeys = new HashSet<string>(_wrappedClients.Keys, StringComparer.Ordinal);
+
         foreach (var wrapped in _wrappedClients.Values)
         {
             wrapped.Dispose();
@@ -238,7 +243,7 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
 
         foreach (var (cacheKey, client) in _clients)
         {
-            if (!_wrappedClients.ContainsKey(cacheKey))
+            if (!wrappedKeys.Contains(cacheKey))
             {
                 client.Dispose();
             }

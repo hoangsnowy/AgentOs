@@ -142,6 +142,26 @@ public sealed class GraphExecutorTests
     }
 
     [Fact]
+    public async Task RunAsync_IfElse_WhitespacePaddedLabel_StillRoutesToChosenBranch()
+    {
+        // The edge label " b " carries stray whitespace and the router LLM replies "b". The chosen route must
+        // still match the padded label (both sides are trimmed). Before the fix the asymmetric trim (reply
+        // trimmed, route not) failed to match and silently fired the first/default branch instead.
+        var (exec, _) = Build(llmReply: "b");
+        var graph = new PlanGraph("g", "if",
+            [N("gate", "IfElse", start: true), N("na", "Llm"), N("nb", "Llm")],
+            [E("gate", "na", "a"), E("gate", "nb", " b ")]);
+
+        var running = new List<string>();
+        var result = await exec.RunAsync(graph, "pick", 3, "t",
+            e => { if (e.Phase == GraphNodePhase.Running) { running.Add(e.NodeId); } return Task.CompletedTask; });
+
+        result.Completed.ShouldBeTrue();
+        running.ShouldContain("nb");
+        running.ShouldNotContain("na");
+    }
+
+    [Fact]
     public async Task RunAsync_Loop_RepeatsBodyUntilCapThenExits()
     {
         var (exec, _) = Build(llmReply: "x");

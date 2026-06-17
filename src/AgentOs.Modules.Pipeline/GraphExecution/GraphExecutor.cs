@@ -337,13 +337,16 @@ public sealed class GraphExecutor
 
         foreach (var e in labeled)
         {
-            var label = e.Label;
+            // Trim the edge label so it matches the trimmed route the decision node stores (RunDecisionAsync
+            // trims its routes and MatchRoute trims the LLM reply). Leaving labels untrimmed made " proceed "
+            // never equal the chosen "proceed", silently firing the default branch instead of the labelled one.
+            var label = e.Label?.Trim();
             builder.AddEdge<GraphState>(exec[node.Id], exec[e.TargetId],
                 s => s is not null && s.Routes.TryGetValue(nodeId, out var r)
                     && string.Equals(r, label, StringComparison.OrdinalIgnoreCase));
         }
 
-        var labels = labeled.Select(e => e.Label).ToList();
+        var labels = labeled.Select(e => e.Label?.Trim()).ToList();
         foreach (var e in outs.Where(e => string.IsNullOrWhiteSpace(e.Label)))
         {
             builder.AddEdge<GraphState>(exec[node.Id], exec[e.TargetId],
@@ -460,6 +463,7 @@ public sealed class GraphExecutor
     {
         var source = routeOptions.Count > 0 ? routeOptions : node.Routes ?? [];
         var routes = source.Where(r => !string.IsNullOrWhiteSpace(r))
+            .Select(r => r.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (routes.Count == 0)
         {
@@ -524,6 +528,9 @@ public sealed class GraphExecutor
     private static async ValueTask<string?> RunHumanAsync(
         PlanNode node, Func<GraphHumanRequest, Task<GraphHumanReply>>? onHuman, GraphState s, CancellationToken ct)
     {
+        // Check cancellation BEFORE the onHuman null-branch so a cancelled run does not silently auto-approve
+        // when no operator is attached (both paths must honour the token).
+        ct.ThrowIfCancellationRequested();
         var question = Interpolate(string.IsNullOrWhiteSpace(node.Description) ? node.Title : node.Description, s);
         var context = ResolveInput(node.Input, s);
         if (onHuman is null)
@@ -532,7 +539,6 @@ public sealed class GraphExecutor
             return "auto-approved";
         }
 
-        ct.ThrowIfCancellationRequested();
         var reply = await onHuman(new GraphHumanRequest(node.Id, node.Title, question, context)).ConfigureAwait(false);
         var note = reply.Note?.Trim();
         if (!reply.Approved)
