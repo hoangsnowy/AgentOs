@@ -67,7 +67,11 @@ Keep model ids in sync with `CostCalculator`'s price table or cost reports show 
 | Key | Default | Notes |
 |---|---|---|
 | `Tools:EnforceByDefault` | `true` in Production, else `false` | Fail-closed tool policy: deny unless on the tenant allowlist (`tools/allowlist` per-tenant config, Policy app). |
-| `Integration:BuildVerifier:Enabled` | `false` in Production | `build_verifier` runs MSBuild in-process — gated off in Production until the sandbox lands (audit #10). |
+| `Integration:BuildVerifier:Enabled` | `false` in Production | Master gate. Keep off in Production unless `Sandbox=Container` (ADR-0005, audit #10). |
+| `Integration:BuildVerifier:Sandbox` | `InProcess` | `InProcess` (host child process, Layer-1 hardening only — Dev) or `Container` (ephemeral no-egress `docker run` / ACA Job — Production-safe). |
+| `Integration:BuildVerifier:ContainerImage` | `mcr.microsoft.com/dotnet/sdk:10.0` | Image for the container runner + ACA Job. A dotnet SDK image. |
+| `Integration:BuildVerifier:CpuLimit` / `MemoryLimit` / `PidsLimit` | `2.0` / `1g` / `256` | Container resource quotas (`--cpus` / `--memory` / `--pids-limit`). |
+| `Integration:BuildVerifier:TimeoutSeconds` | `90` | Hard cap on build duration; the process tree is killed on overrun. |
 | `Github:*` (Pat/RepoOwner/RepoName/BaseBranch) | — | Runtime Settings UI only (per-tenant, encrypted). PAT must start `ghp_`/`github_pat_`/`gho_`. |
 
 ## Workspaces (`Workspaces:*`)

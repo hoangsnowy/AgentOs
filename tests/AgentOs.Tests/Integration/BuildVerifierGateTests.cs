@@ -3,6 +3,7 @@
 
 using System.Threading;
 using AgentOs.Modules.Integration;
+using AgentOs.Modules.Integration.Sandbox;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Xunit;
@@ -14,7 +15,9 @@ public sealed class BuildVerifierGateTests
     [Fact]
     public async Task VerifyFilesAsync_Disabled_ReturnsFailureWithoutBuilding()
     {
-        var verifier = new BuildVerifier(NullLogger<BuildVerifier>.Instance, new BuildVerifierOptions(Enabled: false));
+        var options = new BuildVerifierOptions(Enabled: false);
+        var verifier = new BuildVerifier(
+            NullLogger<BuildVerifier>.Instance, options, new InProcessBuildRunner(options));
 
         var result = await verifier.VerifyFilesAsync(
             [new BuildVerifyFile("Program.cs", "class C {}")], CancellationToken.None);

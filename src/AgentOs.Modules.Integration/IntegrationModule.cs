@@ -20,10 +20,26 @@ public sealed class IntegrationModule : IModule
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
         services.AddGitHubIntegration();
-        // build_verifier runs LLM-generated MSBuild projects (arbitrary code execution) — off by default in
-        // Production until a sandboxed runner exists; Development defaults on. Config key overrides.
-        services.AddSingleton(new BuildVerifierOptions(
-            configuration.GetValue("Integration:BuildVerifier:Enabled", !ModuleEnvironment.IsProduction(configuration))));
+        // build_verifier runs LLM-generated source (MSBuild = arbitrary code execution) — off by default in
+        // Production until a sandboxed runner is selected; Development defaults on. Config keys override.
+        // ADR-0005: Sandbox=InProcess (Dev) or Container (Prod-safe, ephemeral no-egress `docker run`/ACA Job).
+        var buildVerifierOptions = new BuildVerifierOptions(
+            Enabled: configuration.GetValue("Integration:BuildVerifier:Enabled", !ModuleEnvironment.IsProduction(configuration)),
+            Sandbox: configuration.GetValue("Integration:BuildVerifier:Sandbox", BuildSandboxMode.InProcess),
+            ContainerImage: configuration.GetValue("Integration:BuildVerifier:ContainerImage", "mcr.microsoft.com/dotnet/sdk:10.0")!,
+            CpuLimit: configuration.GetValue("Integration:BuildVerifier:CpuLimit", 2.0),
+            MemoryLimit: configuration.GetValue("Integration:BuildVerifier:MemoryLimit", "1g")!,
+            PidsLimit: configuration.GetValue("Integration:BuildVerifier:PidsLimit", 256),
+            TimeoutSeconds: configuration.GetValue("Integration:BuildVerifier:TimeoutSeconds", 90));
+        services.AddSingleton(buildVerifierOptions);
+        if (buildVerifierOptions.Sandbox == BuildSandboxMode.Container)
+        {
+            services.AddSingleton<Sandbox.ISandboxedBuildRunner, Sandbox.ContainerBuildRunner>();
+        }
+        else
+        {
+            services.AddSingleton<Sandbox.ISandboxedBuildRunner, Sandbox.InProcessBuildRunner>();
+        }
         services.AddBuildVerifier();
         services.AddTransient<IBoardTicketService, BoardTicketService>();
         services.AddTransient<IBoardWriteService, BoardWriteService>();

@@ -71,13 +71,19 @@ that slips through Layer 1 cannot touch the host or network:
 
 ## Consequences
 
-- **Now (this ADR's PR):** Layer 1 ships and is unit-tested — a malicious `*.csproj`/`*.targets`/
-  `*.props`/`nuget.config`/`Directory.Build.props`/`*.rsp` fixture is **rejected and never built**;
-  the synthesized project + cleared feed are always used; `HOME` is redirected. The in-process build
-  stays **gated off by default in Production** until Layer 2's container host lands — Layer 1 raises
-  the floor; Layer 2 is what flips the Production default back on.
-- **Next slice (user-driven cloud verify):** `ISandboxedBuildRunner` + the container runner + the
-  ACA Jobs bicep, verified on a real `azd up` with a malicious fixture proving no host/network reach.
+- **Layer 1 — shipped + unit-tested.** A `*.csproj`/`*.targets`/`*.props`/`nuget.config`/
+  `Directory.Build.props`/`*.rsp` fixture is **rejected and never built**; the synthesized project +
+  cleared feed are always used; `HOME`/`USERPROFILE` are redirected (`BuildInputSanitizerTests`).
+- **Layer 2 — shipped + locally E2E-verified.** `ISandboxedBuildRunner` with `InProcess` (Dev
+  default) and `Container` runners; `ContainerCommand` composes the `docker run` argv
+  (`ContainerCommandTests` assert the isolation flags). Verified on a real Docker host: a valid
+  source set built **offline** (`--network none`), **non-root** (uid 1000), **read-only root fs**,
+  `--cap-drop ALL`, `--security-opt no-new-privileges`, with CPU/memory/PID quotas → `Build
+  succeeded`, exit 0. Selected via `Integration:BuildVerifier:Sandbox=Container`.
+- **Remaining — user-driven cloud verify.** Deploy the same image as an **ACA Job** (egress disabled
+  + quotas at the platform level) via bicep, and run the round-trip on a real `azd up`. The
+  in-process build stays **gated off by default in Production**; flip it on only with
+  `Sandbox=Container` + `Enabled=true` where the container host is present.
 - **Trade-off:** rejecting model project files means `build_verifier` only ever compiles a flat
   source set against a fixed framework target — it cannot validate a build that genuinely needs a
   package. That is the correct trade for an untrusted-input compile-check; richer validation belongs
