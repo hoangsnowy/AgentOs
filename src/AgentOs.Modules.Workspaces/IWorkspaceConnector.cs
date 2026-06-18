@@ -68,14 +68,17 @@ internal sealed class WorkspaceConnector : IWorkspaceConnector
     private readonly ISourceProviderResolver _providers;
     private readonly IAppConfigStore _credentials;
     private readonly TimeProvider _clock;
+    private readonly Security.IWorkspaceHostPolicy _hostPolicy;
 
     public WorkspaceConnector(
-        IWorkspaceRepository repo, ISourceProviderResolver providers, IAppConfigStore credentials, TimeProvider clock)
+        IWorkspaceRepository repo, ISourceProviderResolver providers, IAppConfigStore credentials,
+        TimeProvider clock, Security.IWorkspaceHostPolicy hostPolicy)
     {
         _repo = repo;
         _providers = providers;
         _credentials = credentials;
         _clock = clock;
+        _hostPolicy = hostPolicy;
     }
 
     public async Task<WorkspaceConnectResult> ConnectAsync(
@@ -89,6 +92,11 @@ internal sealed class WorkspaceConnector : IWorkspaceConnector
         if (!_providers.TryResolve(input.Kind, out var provider) || provider is null)
         {
             return WorkspaceConnectResult.Fail($"No source provider registered for '{input.Kind}'.");
+        }
+        if (!_hostPolicy.IsAllowed(input.Host))
+        {
+            return WorkspaceConnectResult.Fail(
+                $"Host '{input.Host}' is not on the allowed-hosts list. Add it under Workspaces:AllowedHosts to connect a self-hosted server.");
         }
 
         var id = Guid.NewGuid();
@@ -150,6 +158,10 @@ internal sealed class WorkspaceConnector : IWorkspaceConnector
             return [];
         }
         if (!_providers.TryResolve(kind, out var provider) || provider is null)
+        {
+            return [];
+        }
+        if (!_hostPolicy.IsAllowed(host))
         {
             return [];
         }

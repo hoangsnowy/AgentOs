@@ -9,6 +9,8 @@ using AgentOs.Modules.AppConfig;
 using AgentOs.Modules.Workspaces;
 using AgentOs.Modules.Workspaces.Persistence;
 using AgentOs.Modules.Workspaces.Persistence.Entities;
+using AgentOs.Modules.Workspaces.Security;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
 using Shouldly;
@@ -22,13 +24,15 @@ public sealed class WorkspaceConnectorTests
     private readonly ISourceProvider _provider = Substitute.For<ISourceProvider>();
     private readonly ISourceProviderResolver _resolver = Substitute.For<ISourceProviderResolver>();
     private readonly InMemoryAppConfigStore _credentials = new();
+    private readonly IWorkspaceHostPolicy _hostPolicy =
+        new WorkspaceHostPolicy(Options.Create(new WorkspaceHostOptions()));
 
     private WorkspaceConnector Sut()
     {
         _provider.Kind.Returns(SourceProviderKind.GitHub);
         _resolver.TryResolve(SourceProviderKind.GitHub, out Arg.Any<ISourceProvider?>()!)
             .Returns(ci => { ci[1] = _provider; return true; });
-        return new WorkspaceConnector(_repo, _resolver, _credentials, TimeProvider.System);
+        return new WorkspaceConnector(_repo, _resolver, _credentials, TimeProvider.System, _hostPolicy);
     }
 
     private static WorkspaceConnectInput BoardInput(int? number = 5, string token = "ghp_x") =>
@@ -98,13 +102,53 @@ public sealed class WorkspaceConnectorTests
         var resolver = Substitute.For<ISourceProviderResolver>();
         resolver.TryResolve(Arg.Any<SourceProviderKind>(), out Arg.Any<ISourceProvider?>()!)
             .Returns(ci => { ci[1] = null; return false; });
-        var sut = new WorkspaceConnector(_repo, resolver, _credentials, TimeProvider.System);
+        var sut = new WorkspaceConnector(_repo, resolver, _credentials, TimeProvider.System, _hostPolicy);
 
         var result = await sut.ConnectAsync("tenant-1", "user-1", BoardInput());
 
         result.Ok.ShouldBeFalse();
         result.Error.ShouldNotBeNull();
         result.Error!.ShouldContain("provider");
+    }
+
+    [Fact]
+    public async Task ConnectAsync_HostNotAllowlisted_ReturnsError_AndContactsNothing()
+    {
+        var sut = Sut();
+        var input = new WorkspaceConnectInput(
+            "My board", SourceProviderKind.GitHub, "octo-org", "org", 5, null, "https://evil.example.com", "ghp_x");
+
+        var result = await sut.ConnectAsync("tenant-1", "user-1", input);
+
+        result.Ok.ShouldBeFalse();
+        result.Error!.ShouldContain("allowed-hosts");
+        await _provider.DidNotReceive().ValidateBoardAsync(Arg.Any<BoardDescriptor>(), Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().AddForTenantAsync(Arg.Any<WorkspaceEntity>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ConnectAsync_PublicHost_IsAllowed()
+    {
+        var sut = Sut();
+        _provider.ValidateBoardAsync(Arg.Any<BoardDescriptor>(), Arg.Any<CancellationToken>())
+            .Returns(BoardValidation.Success("PVT_node", "My board"));
+        var input = new WorkspaceConnectInput(
+            "My board", SourceProviderKind.GitHub, "octo-org", "org", 5, null, "github.com", "ghp_x");
+
+        var result = await sut.ConnectAsync("tenant-1", "user-1", input);
+
+        result.Ok.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ListBoardsAsync_HostNotAllowlisted_ReturnsEmpty_WithoutCallingProvider()
+    {
+        var sut = Sut();
+
+        var boards = await sut.ListBoardsAsync(SourceProviderKind.GitHub, "octo-org", "ghp_x", "https://evil.example.com");
+
+        boards.ShouldBeEmpty();
+        await _provider.DidNotReceive().ListBoardsAsync(Arg.Any<ConnectionCredentials>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
