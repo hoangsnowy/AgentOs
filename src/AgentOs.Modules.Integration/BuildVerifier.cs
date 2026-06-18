@@ -74,6 +74,7 @@ public sealed class BuildVerifier : IBuildVerifier
         _logger.LogInformation("Build verifier scratch dir: {Dir}", workDir);
 
         var stopwatch = Stopwatch.StartNew();
+        var rejected = 0;
         try
         {
             foreach (var file in files)
@@ -84,11 +85,21 @@ public sealed class BuildVerifier : IBuildVerifier
                 {
                     continue;
                 }
+                // ADR-0005 Layer 1: the model may contribute SOURCE files only. A project/solution/import/
+                // config/response file lets it inject MSBuild tasks (RCE) or repoint restore at a hostile
+                // feed — drop it and never write it; the verifier synthesizes its own project below.
+                if (BuildInputSanitizer.IsBuildControlFile(path))
+                {
+                    rejected++;
+                    _logger.LogWarning("Rejected a generated build-control file (project/import/config) — only source files are compiled.");
+                    continue;
+                }
                 // Generated file paths come from the LLM — normalise and confine them to the scratch
                 // dir so a rooted or ../-laden path cannot write outside the sandbox (path traversal).
                 var dest = Path.GetFullPath(Path.Join(workDir, path));
                 if (!dest.StartsWith(workDirFull + Path.DirectorySeparatorChar, StringComparison.Ordinal))
                 {
+                    rejected++;
                     _logger.LogWarning("Skipping a generated file whose path escapes the build sandbox.");
                     continue;
                 }
@@ -100,22 +111,33 @@ public sealed class BuildVerifier : IBuildVerifier
                 await File.WriteAllTextAsync(dest, content, ct).ConfigureAwait(false);
             }
 
-            // 2. Ensure a project file exists (the Coding agent often emits scattered .cs files only).
-            if (Directory.GetFiles(workDir, "*.csproj", SearchOption.AllDirectories).Length == 0)
-            {
-                var csproj = Path.Join(workDir, "AgentOsGenerated.csproj");
-                await File.WriteAllTextAsync(csproj,
-                    """
-                    <Project Sdk="Microsoft.NET.Sdk">
-                      <PropertyGroup>
-                        <TargetFramework>net10.0</TargetFramework>
-                        <Nullable>enable</Nullable>
-                        <ImplicitUsings>enable</ImplicitUsings>
-                        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-                      </PropertyGroup>
-                    </Project>
-                    """, ct).ConfigureAwait(false);
-            }
+            // 2. ALWAYS synthesize the project ourselves — a single zero-dependency SDK-style net10.0
+            // project (no PackageReference/Analyzer/ProjectReference, so no build-time package or source
+            // generator can be introduced). Any model-authored .csproj was rejected above.
+            await File.WriteAllTextAsync(Path.Join(workDir, "AgentOsGenerated.csproj"),
+                """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <Nullable>enable</Nullable>
+                    <ImplicitUsings>enable</ImplicitUsings>
+                    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+                  </PropertyGroup>
+                </Project>
+                """, ct).ConfigureAwait(false);
+
+            // 2b. Cut the feed: a project-local nuget.config that clears all package sources, so even if
+            // something triggers a restore it cannot reach a remote (or attacker-supplied) feed. A
+            // zero-dependency net10.0 project resolves its framework packs from the SDK install, offline.
+            await File.WriteAllTextAsync(Path.Join(workDir, "nuget.config"),
+                """
+                <?xml version="1.0" encoding="utf-8"?>
+                <configuration>
+                  <packageSources>
+                    <clear />
+                  </packageSources>
+                </configuration>
+                """, ct).ConfigureAwait(false);
 
             // 3. Run `dotnet build` with timeout + cancellation.
             var psi = new ProcessStartInfo
@@ -130,13 +152,16 @@ public sealed class BuildVerifier : IBuildVerifier
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
-            // Harden the child environment: opt out of telemetry/first-run, kill node reuse, and force the
-            // working dir as HOME so a malicious build can't read the server's user profile / NuGet creds.
+            // Harden the child environment: opt out of telemetry/first-run, kill node reuse, and redirect
+            // HOME/USERPROFILE into the scratch dir so a malicious build can't read the server's user
+            // profile or a user-level NuGet.config (private feeds / credentials).
             psi.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
             psi.Environment["DOTNET_NOLOGO"] = "1";
             psi.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
             psi.Environment["MSBUILDDISABLENODEREUSE"] = "1";
             psi.Environment["DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER"] = "1";
+            psi.Environment["HOME"] = workDirFull;
+            psi.Environment["USERPROFILE"] = workDirFull;
 
             using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start dotnet build process.");
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -168,6 +193,14 @@ public sealed class BuildVerifier : IBuildVerifier
             if (combined.Length > MaxOutputBytes)
             {
                 combined = combined[..MaxOutputBytes] + "\n... (truncated)";
+            }
+            if (rejected > 0)
+            {
+                // Tell the caller the model's build-control files were dropped, so a "build succeeded"
+                // is never mistaken for "the model's exact project built".
+                combined = $"[build_verifier] Rejected {rejected} build-control file(s) "
+                    + "(project/solution/import/config/response) — only source files are compiled, "
+                    + "against a synthesized zero-dependency project.\n" + combined;
             }
 
             stopwatch.Stop();
