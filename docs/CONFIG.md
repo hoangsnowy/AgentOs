@@ -70,6 +70,12 @@ Keep model ids in sync with `CostCalculator`'s price table or cost reports show 
 | `Integration:BuildVerifier:Enabled` | `false` in Production | `build_verifier` runs MSBuild in-process — gated off in Production until the sandbox lands (audit #10). |
 | `Github:*` (Pat/RepoOwner/RepoName/BaseBranch) | — | Runtime Settings UI only (per-tenant, encrypted). PAT must start `ghp_`/`github_pat_`/`gho_`. |
 
+## Workspaces (`Workspaces:*`)
+
+| Key | Default | Notes |
+|---|---|---|
+| `Workspaces:AllowedHosts[]` | empty | Defense-in-depth host allowlist for tenant-supplied workspace hosts (atop the connect-time `SsrfGuard`). The provider public hosts (`github.com`, `dev.azure.com`, `*.visualstudio.com`) are always allowed; add GitHub Enterprise Server / Azure DevOps Server hosts here to connect a self-hosted board. Bare host or URL; subdomains of an entry are allowed. A blank board host = the provider's public default. |
+
 ## MCP (`Mcp:*`) — validated at startup
 
 | Key | Default | Notes |

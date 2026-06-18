@@ -27,7 +27,18 @@ getters; Coherence Phase 2 — Spine runs the Quality engine, Quick/Quality togg
 pooled-client per-call tenant fix (#73).
 
 **Still NOT done (other open items):** #10 build_verifier RCE *sandbox* (prod-gate is interim only);
-backlog: member can revoke another's runner/session, LLM-gateway edge bugs, observability backend.
+backlog: LLM-gateway edge bugs, observability backend.
+
+**Re-verified on main (2026-06-18, Q1 residue pass):** the Batch-4 "still open" residue is now CLOSED in
+code — run-history repo tenant stamping (`PipelineRunRepository.SaveAsync` stamps `TenantId` on the run
+row + every metric; reads filtered by the instance-member EF query filter), `AuthSession` null-`HttpContext`
+fail-open (`HttpTenantContext` returns empty ⇒ scoped reads match nothing), `OrchestrationStore` per-tenant
+keying (#72). Member-revokes-another's-runner/session is CLOSED (`SessionEndpoints` `CloseSessionAsync` +
+`RevokeRunnerAsync` `Forbid()` unless owner or `admin`). Secrets: dead HS256/operator defaults gone from
+appsettings + `DevSecretGuard` fail-fast + azd Key-Vault-backed secret parameters (`AddParameter(secret:true)`).
+Added this pass: workspace-connect **host allowlist** (`Workspaces:AllowedHosts`, `WorkspaceHostPolicy`) as
+defense-in-depth atop the connect-time `SsrfGuard`, gating connect + add-repo + the find-boards/repos probes.
+**Remaining Q1 = the build_verifier sandbox (#10) + the real `azd up` round-trip + two-tenant verify.**
 
 **Re-verified on main (2026-06-12, enterprise-grade review):** the following are confirmed CLOSED by
 #72 — SSRF on workspace connect/repos/boards (`SsrfGuard.CreateHardenedHandler` on every outbound
