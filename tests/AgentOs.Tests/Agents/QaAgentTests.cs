@@ -41,6 +41,50 @@ public sealed class QaAgentTests
         issue.Location.ShouldBe("src/Foo.cs");  // preserved
     }
 
+    [Fact]
+    public async Task RunAsync_ModelClaimsConsistentButScoreBelowBar_OverriddenToInconsistent()
+    {
+        // Hallucinated verdict: isConsistent=true but score 0.50 (< 0.8 bar). The QA loop's exit condition
+        // must NOT trust this — re-derived IsConsistent is false so the loop keeps iterating on bad output.
+        const string json = """{"score":0.50,"isConsistent":true,"iterationNeeded":false,"issues":[],"recommendations":[]}""";
+        var report = await Run(json);
+        report.IsConsistent.ShouldBeFalse();
+        report.Score.ShouldBe(0.50); // score is reported verbatim; only the verdict is hardened
+    }
+
+    [Fact]
+    public async Task RunAsync_ModelClaimsConsistentButCriticalIssue_OverriddenToInconsistent()
+    {
+        const string json = """{"score":0.95,"isConsistent":true,"iterationNeeded":false,"issues":[{"severity":"Critical","category":"Security","description":"missing authz"}],"recommendations":[]}""";
+        var report = await Run(json);
+        report.IsConsistent.ShouldBeFalse(); // a Critical issue blocks convergence regardless of score
+    }
+
+    [Fact]
+    public async Task RunAsync_HighScoreNoCriticalAndModelAgrees_StaysConsistent()
+    {
+        const string json = """{"score":0.92,"isConsistent":true,"iterationNeeded":false,"issues":[{"severity":"Minor","category":"Docs","description":"nit"}],"recommendations":[]}""";
+        var report = await Run(json);
+        report.IsConsistent.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task RunAsync_ModelSaysInconsistent_NeverFlippedTrueEvenWithHighScore()
+    {
+        // We only ever make the verdict STRICTER — a model "false" is preserved even at a passing score.
+        const string json = """{"score":0.99,"isConsistent":false,"iterationNeeded":true,"issues":[],"recommendations":[]}""";
+        var report = await Run(json);
+        report.IsConsistent.ShouldBeFalse();
+    }
+
+    private static async Task<AgentOs.Domain.Qa.QaReport> Run(string json)
+    {
+        var llm = Substitute.For<ILlmClient>();
+        llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
+           .Returns(AgentTestHelpers.StubResponse(json));
+        return await KcBenchHarness.BuildQa(llm).RunAsync(Spec(), Code(), Tests());
+    }
+
     private static RequirementSpec Spec()
         => new("T", "S", [], [], [],
                [new EntityDescriptor("Product", ["id"], null)],

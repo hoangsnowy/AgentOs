@@ -105,6 +105,25 @@ public sealed class KeycloakAdminMemberOpsTests
         await Should.ThrowAsync<InvalidOperationException>(() => client.SendPasswordResetEmailAsync(UserId));
     }
 
+    [Fact]
+    public async Task GetUserTenant_ReturnsTheTenantAttribute()
+    {
+        var recorder = new Recorder { UserTenant = "tenant-b" };
+        var client = Build(recorder);
+
+        (await client.GetUserTenantAsync(UserId)).ShouldBe("tenant-b");
+    }
+
+    [Fact]
+    public async Task GetUserTenant_NotFound_ReturnsNull()
+    {
+        var recorder = new Recorder { UserNotFound = true };
+        var client = Build(recorder);
+
+        // null drives the cross-tenant guard to reject (target not confirmed in the caller's tenant).
+        (await client.GetUserTenantAsync(UserId)).ShouldBeNull();
+    }
+
     private static KeycloakAdminClient Build(Recorder recorder)
     {
         var http = new HttpClient(recorder) { BaseAddress = new Uri("http://kc.local/") };
@@ -127,6 +146,8 @@ public sealed class KeycloakAdminMemberOpsTests
         public List<RoleDto> RealmRolesForUser { get; set; } = new();
         public Dictionary<string, RoleDto> RoleByName { get; set; } = new();
         public bool FailActionsEmail { get; set; }
+        public string? UserTenant { get; set; }
+        public bool UserNotFound { get; set; }
 
         public List<Captured> Posts { get; } = new();
         public List<Captured> Deletes { get; } = new();
@@ -148,6 +169,22 @@ public sealed class KeycloakAdminMemberOpsTests
             if (request.Method == HttpMethod.Get && path.EndsWith($"users/{UserId}/role-mappings/realm"))
             {
                 return Json(RealmRolesForUser);
+            }
+
+            // GET a single user (tenant-attribute lookup for the cross-tenant guard).
+            if (request.Method == HttpMethod.Get && path.EndsWith($"users/{UserId}"))
+            {
+                if (UserNotFound)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+                }
+                return Json(new
+                {
+                    id = UserId,
+                    attributes = UserTenant is null
+                        ? null
+                        : new Dictionary<string, string[]> { ["tenant"] = new[] { UserTenant } },
+                });
             }
 
             // GET role by name.

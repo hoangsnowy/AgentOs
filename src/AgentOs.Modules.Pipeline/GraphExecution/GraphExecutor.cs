@@ -16,6 +16,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain;
 using AgentOs.Domain.Code;
+using AgentOs.Domain.Cost;
 using AgentOs.Domain.Llm;
 using AgentOs.Domain.Pipeline;
 using AgentOs.Domain.Qa;
@@ -46,6 +47,8 @@ public sealed class GraphExecutor
     private readonly IToolGateway _toolGateway;
     private readonly AgentsOptions _agents;
     private readonly ILogger<GraphExecutor> _logger;
+    // Optional: the per-tenant spend gate. Null in no-DB/standalone (nothing to meter against).
+    private readonly IBudgetGuard? _budgetGuard;
 
     public GraphExecutor(
         IRequirementAgent requirement,
@@ -56,7 +59,8 @@ public sealed class GraphExecutor
         IToolRegistry toolRegistry,
         IToolGateway toolGateway,
         IOptions<AgentsOptions> agents,
-        ILogger<GraphExecutor> logger)
+        ILogger<GraphExecutor> logger,
+        IBudgetGuard? budgetGuard = null)
     {
         _requirement = requirement ?? throw new ArgumentNullException(nameof(requirement));
         _coding = coding ?? throw new ArgumentNullException(nameof(coding));
@@ -68,6 +72,7 @@ public sealed class GraphExecutor
         ArgumentNullException.ThrowIfNull(agents);
         _agents = agents.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _budgetGuard = budgetGuard;
     }
 
     /// <summary>Validate (LLM-free) then compile + run the graph as a MAF Workflow, pushing per-node status
@@ -95,6 +100,23 @@ public sealed class GraphExecutor
             var reasons = string.Join("; ", plan.Errors
                 .Concat(plan.Nodes.Where(n => n.Support != NodeSupport.Supported).Select(n => n.Reason)));
             return new GraphRunResult(false, $"Graph not runnable: {reasons}");
+        }
+
+        // Run-level budget gate. The Workflow studio runs full multi-agent LLM work on AgentOS's OWN
+        // server tokens, so it passes the same per-tenant spend check as the pipeline path (this was an
+        // ungated server-token entrypoint). Returns a clean failed result — not throw — to match the
+        // not-runnable channel so the canvas renders the block instead of crashing the circuit. Skipped
+        // when no guard is wired (no-DB/standalone). NOTE (follow-up): the graph's own spend is not yet
+        // persisted to run_metrics, so a workflow-only tenant doesn't accumulate toward its cap.
+        var budgetTenant = Coalesce(tenantId, OperatorTenant);
+        if (_budgetGuard is not null)
+        {
+            var budget = await _budgetGuard.EvaluateAsync(budgetTenant, ct).ConfigureAwait(false);
+            if (budget is { State: BudgetState.Exceeded, EnforceOn: true })
+            {
+                return new GraphRunResult(false,
+                    $"Budget exceeded for this workspace — spent ${budget.SpentUsd:0.00} of ${budget.CapUsd:0.00} this month. The run was blocked before any agent ran.");
+            }
         }
 
         // Baseline: everything Pending.

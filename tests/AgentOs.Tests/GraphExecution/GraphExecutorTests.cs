@@ -52,6 +52,46 @@ public sealed class GraphExecutorTests
     }
 
     [Fact]
+    public async Task RunAsync_BudgetExceeded_BlocksBeforeAnyAgentRuns()
+    {
+        var guard = Substitute.For<AgentOs.Domain.Cost.IBudgetGuard>();
+        guard.EvaluateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(new AgentOs.Domain.Cost.BudgetStatus(
+                 CapUsd: 10m, SpentUsd: 25m, RemainingUsd: -15m, Percent: 2.5,
+                 State: AgentOs.Domain.Cost.BudgetState.Exceeded, EnforceOn: true));
+        var (exec, agents) = Build(qaConsistent: true, budget: guard);
+        var graph = new PlanGraph("g", "lin",
+            [N("req", "Agent", "Requirement", start: true), N("end", "End")],
+            [E("req", "end")]);
+
+        var result = await exec.RunAsync(graph, "build a thing", nMax: 3, "tenant-over-cap", _ => Task.CompletedTask);
+
+        result.Completed.ShouldBeFalse();
+        result.FailureMessage!.ShouldContain("Budget exceeded");
+        // The gate ran BEFORE any agent — no LLM spend incurred.
+        await agents.Requirement.DidNotReceive().RunAsync(Arg.Any<UserStory>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_BudgetWithinCap_RunsNormally()
+    {
+        var guard = Substitute.For<AgentOs.Domain.Cost.IBudgetGuard>();
+        guard.EvaluateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(new AgentOs.Domain.Cost.BudgetStatus(
+                 CapUsd: 100m, SpentUsd: 5m, RemainingUsd: 95m, Percent: 0.05,
+                 State: AgentOs.Domain.Cost.BudgetState.Ok, EnforceOn: true));
+        var (exec, agents) = Build(qaConsistent: true, budget: guard);
+        var graph = new PlanGraph("g", "lin",
+            [N("req", "Agent", "Requirement", start: true), N("end", "End")],
+            [E("req", "end")]);
+
+        var result = await exec.RunAsync(graph, "build a thing", nMax: 3, "tenant-ok", _ => Task.CompletedTask);
+
+        result.Completed.ShouldBeTrue();
+        await agents.Requirement.Received(1).RunAsync(Arg.Any<UserStory>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task RunAsync_QaPassFirstIteration_RunsCodingOnce()
     {
         var (exec, agents) = Build(qaConsistent: true);
@@ -306,7 +346,9 @@ public sealed class GraphExecutorTests
 
     private sealed record Agents(IRequirementAgent Requirement, ICodingAgent Coding, ITestingAgent Testing, IQaAgent Qa);
 
-    private static (GraphExecutor Exec, Agents Agents) Build(bool qaConsistent = true, string? llmReply = null, bool yieldLlm = false)
+    private static (GraphExecutor Exec, Agents Agents) Build(
+        bool qaConsistent = true, string? llmReply = null, bool yieldLlm = false,
+        AgentOs.Domain.Cost.IBudgetGuard? budget = null)
     {
         var req = Substitute.For<IRequirementAgent>();
         req.RunAsync(Arg.Any<UserStory>(), Arg.Any<CancellationToken>()).Returns(StubSpec());
@@ -349,7 +391,8 @@ public sealed class GraphExecutorTests
             Substitute.For<IToolRegistry>(),
             Substitute.For<IToolGateway>(),
             Options.Create(new AgentsOptions()),
-            NullLogger<GraphExecutor>.Instance);
+            NullLogger<GraphExecutor>.Instance,
+            budget);
 
         return (exec, new Agents(req, coding, testing, qa));
     }

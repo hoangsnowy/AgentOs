@@ -64,10 +64,23 @@ public sealed class QaAgent : LlmAgentBase, IQaAgent
             cancellationToken);
     }
 
+    /// <summary>The documented QA convergence invariant (see <c>QaPrompt</c>): a run is consistent only
+    /// when the score clears this bar AND no Critical issue remains.</summary>
+    private const double PassScore = 0.8;
+
     private static QaReport Map(QaReportDto dto, AgentMetrics metrics)
-        => new(
+    {
+        var hasCritical = (dto.Issues ?? []).Any(i =>
+            string.Equals(i.Severity?.Trim(), "critical", System.StringComparison.OrdinalIgnoreCase));
+        // Trust-but-verify the model's verdict. IsConsistent is the QA loop's exit condition, so a
+        // hallucinated {"score":0.2,"isConsistent":true} would otherwise converge the loop on bad output
+        // (QA has no JSON schema to catch it). Re-derive the documented invariant (score >= 0.8 AND no
+        // Critical issue) and AND it onto the model's own flag — we only ever make the verdict STRICTER,
+        // never flip a false to true, so this can't shorten a run the model wanted to keep iterating.
+        var consistent = dto.IsConsistent && dto.Score >= PassScore && !hasCritical;
+        return new(
             Score: dto.Score,
-            IsConsistent: dto.IsConsistent,
+            IsConsistent: consistent,
             IterationNeeded: dto.IterationNeeded,
             // QA has no JSON schema (its output is advisory), so an issue may arrive with missing fields.
             // Coalesce to safe defaults rather than dereferencing null into the non-nullable QaIssue record —
@@ -81,6 +94,7 @@ public sealed class QaAgent : LlmAgentBase, IQaAgent
                 .ToArray(),
             Recommendations: dto.Recommendations ?? [],
             Metrics: metrics);
+    }
 
     private void LogSuccess(AgentMetrics metrics, QaReportDto dto)
         => Logger.LogInformation(

@@ -254,6 +254,10 @@ internal static class TenantEndpoints
             }
             try
             {
+                if (!await UserInTenantAsync(kc, userId, tenantId, ct).ConfigureAwait(false))
+                {
+                    return Results.NotFound();
+                }
                 await kc.UpdateUserRolesAsync(userId, roles, ct).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
@@ -293,6 +297,10 @@ internal static class TenantEndpoints
             }
             try
             {
+                if (!await UserInTenantAsync(kc, userId, tenantId, ct).ConfigureAwait(false))
+                {
+                    return Results.NotFound();
+                }
                 await kc.DeleteUserAsync(userId, ct).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
@@ -328,6 +336,10 @@ internal static class TenantEndpoints
             }
             try
             {
+                if (!await UserInTenantAsync(kc, userId, tenantId, ct).ConfigureAwait(false))
+                {
+                    return Results.NotFound();
+                }
                 await kc.SendPasswordResetEmailAsync(userId, ct).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
@@ -426,6 +438,18 @@ internal static class TenantEndpoints
     }
 
     private static readonly string[] AdminRole = new[] { "admin" };
+
+    /// <summary>True when the target user's <c>tenant</c> attribute equals <paramref name="tenantId"/>.
+    /// The realm <c>admin</c> role is realm-wide, so a tenant-route match alone does NOT authorize acting
+    /// on an arbitrary user id — this confirms the target actually belongs to the caller's tenant before a
+    /// re-role / delete / password-reset. Throws <see cref="InvalidOperationException"/> if Keycloak is
+    /// unreachable (callers map it to 502, same as the mutating call).</summary>
+    private static async Task<bool> UserInTenantAsync(
+        IKeycloakAdminClient kc, string userId, string tenantId, CancellationToken ct)
+    {
+        var targetTenant = await kc.GetUserTenantAsync(userId, ct).ConfigureAwait(false);
+        return string.Equals(targetTenant, tenantId, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>Response shape for GET /tenants/me.</summary>

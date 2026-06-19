@@ -47,6 +47,17 @@ public sealed class McpClientHost : IAsyncDisposable
         _logger = _loggerFactory.CreateLogger<McpClientHost>();
     }
 
+    /// <summary>Output-size cap for an MCP tool result. An upstream server's output flows straight into
+    /// the next LLM turn (token/cost blow-up) and is persisted as evidence, so a hostile/buggy server must
+    /// not be able to return unbounded text.</summary>
+    internal const int MaxOutputChars = 64 * 1024;
+
+    /// <summary>Truncate MCP tool output to <see cref="MaxOutputChars"/> with a visible marker.</summary>
+    internal static string CapOutput(string text) =>
+        string.IsNullOrEmpty(text) || text.Length <= MaxOutputChars
+            ? text
+            : text[..MaxOutputChars] + "\n…(truncated)";
+
     /// <summary>Connects to every enabled server and registers its tools. Idempotent — safe to call once at startup.</summary>
     public async Task ConnectAllAsync(CancellationToken cancellationToken)
     {
@@ -135,7 +146,8 @@ public sealed class McpClientHost : IAsyncDisposable
                     arguments: args!,
                     cancellationToken: cts.Token).ConfigureAwait(false);
                 // CallToolResult.Content is a list of content blocks; concat the textual ones for the LLM.
-                return string.Join("\n", result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Select(t => t.Text));
+                var text = string.Join("\n", result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Select(t => t.Text));
+                return CapOutput(text);
             };
 
             try
