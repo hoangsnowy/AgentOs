@@ -28,6 +28,13 @@ public sealed class NullKeycloakAdminClientTests
     }
 
     [Fact]
+    public async Task GetUserTenantAsync_ReturnsNull()
+    {
+        // No Keycloak ⇒ no user to confirm; the cross-tenant guard treats this as not-in-tenant.
+        (await _sut.GetUserTenantAsync("user-1")).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WriteOperations_AreNoOps_AndDoNotThrow()
     {
         // None of these should throw — they complete silently in the absence of a Keycloak server.

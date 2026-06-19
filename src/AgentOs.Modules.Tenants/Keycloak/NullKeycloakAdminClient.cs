@@ -37,4 +37,8 @@ public sealed class NullKeycloakAdminClient : IKeycloakAdminClient
         => Task.CompletedTask;
 
     public Task SendPasswordResetEmailAsync(string userId, CancellationToken ct = default) => Task.CompletedTask;
+
+    // No Keycloak ⇒ no users to confirm; null means the cross-tenant guard treats every target as
+    // not-in-tenant (the member-admin endpoints aren't reachable in a no-Keycloak standalone anyway).
+    public Task<string?> GetUserTenantAsync(string userId, CancellationToken ct = default) => Task.FromResult<string?>(null);
 }

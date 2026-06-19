@@ -294,6 +294,30 @@ public sealed class KeycloakAdminClient : IKeycloakAdminClient, IDisposable
         }
     }
 
+    /// <inheritdoc />
+    public async Task<string?> GetUserTenantAsync(string userId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        var token = await GetAdminTokenAsync(ct).ConfigureAwait(false);
+        using var req = BuildRequest(HttpMethod.Get, $"admin/realms/{_options.Realm}/users/{userId}", token);
+        using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new InvalidOperationException($"Keycloak get-user failed ({(int)resp.StatusCode}): {body}");
+        }
+        var dto = await resp.Content.ReadFromJsonAsync<UserDto>(ct).ConfigureAwait(false);
+        if (dto?.Attributes is null)
+        {
+            return null;
+        }
+        return dto.Attributes.TryGetValue("tenant", out var values) ? values?.FirstOrDefault() : null;
+    }
+
     private async Task<string> GetAdminTokenAsync(CancellationToken ct)
     {
         // No BaseAddress ⟺ Keycloak unconfigured (the ctor only sets it when Options.BaseUrl is present).

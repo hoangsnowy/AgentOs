@@ -42,6 +42,12 @@ public interface IKeycloakAdminClient
     /// password (the server never exposes the old one). Best-effort: logs + throws on transport
     /// failure so the caller can surface it.</summary>
     Task SendPasswordResetEmailAsync(string userId, CancellationToken ct = default);
+
+    /// <summary>Return the value of a user's single <c>tenant</c> attribute, or <c>null</c> if the user
+    /// doesn't exist or has no tenant attribute. Used to verify a target user belongs to the caller's
+    /// tenant BEFORE a cross-tenant-capable admin operation — the realm <c>admin</c> role is realm-wide,
+    /// so the route tenant alone is not sufficient authorization for acting on an arbitrary user id.</summary>
+    Task<string?> GetUserTenantAsync(string userId, CancellationToken ct = default);
 }
 
 /// <summary>Realm-user projection returned by the admin REST list endpoint.</summary>
