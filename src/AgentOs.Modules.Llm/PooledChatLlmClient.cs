@@ -28,6 +28,7 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
     private readonly Func<CancellationToken, ValueTask<IReadOnlyList<string>>> _keyProvider;
     private readonly ApiKeyRouter _router;
     private readonly Func<Exception, bool> _isRateLimited;
+    private readonly Func<Exception, LlmErrorKind> _classify;
     private readonly Func<Exception, TimeSpan?> _retryAfter;
     private readonly ILogger _logger;
     private readonly TimeSpan _baseDelay;
@@ -59,13 +60,18 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
         ITenantContext? tenantContext = null,
         IToolPolicy? toolPolicy = null,
         IToolInvocationLog? toolInvocationLog = null,
-        IServiceProvider? tenantProvider = null)
+        IServiceProvider? tenantProvider = null,
+        Func<Exception, LlmErrorKind>? classifyError = null)
     {
         Provider = string.IsNullOrWhiteSpace(provider) ? throw new ArgumentException("provider required", nameof(provider)) : provider;
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _keyProvider = keyProvider ?? throw new ArgumentNullException(nameof(keyProvider));
         _router = router ?? throw new ArgumentNullException(nameof(router));
         _isRateLimited = isRateLimited ?? throw new ArgumentNullException(nameof(isRateLimited));
+        // Default classifier preserves the legacy behavior (only a rate-limit error fails over) so callers
+        // that pass just isRateLimited are unchanged; production passes SdkChatClients.Classify for the full
+        // transient/auth/bad-request classification.
+        _classify = classifyError ?? (ex => _isRateLimited(ex) ? LlmErrorKind.Transient : LlmErrorKind.Other);
         _retryAfter = retryAfter ?? (_ => null);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _baseDelay = baseDelay ?? TimeSpan.FromSeconds(1);
@@ -174,20 +180,24 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
             {
                 throw;
             }
-            // Deliberately broad, gated by the injected rate-limit predicate: different providers'
-            // SDKs surface a 429 as different exception types (ClientResultException, HttpRequestException,
-            // provider-specific) and _isRateLimited inspects the whole inner-exception chain by message.
-            // Narrowing the caught type here would silently break key failover, so the predicate — not the
-            // type — is the gate. (CodeQL cs/catch-of-all-exceptions is expected to flag this single line.)
-            catch (Exception ex) when (_isRateLimited(ex)) { await HandleRateLimit(ex).ConfigureAwait(false); }
+            // Deliberately broad, gated by the injected classifier: providers' SDKs surface a failure as
+            // different exception types (ClientResultException, HttpRequestException, provider-specific), so
+            // the CLASSIFIER — not the catch type — decides failover. We retry the next key on a transient
+            // error (429 / 5xx / timeout) or an auth error (a different key may be valid); a bad-request or
+            // unclassified error is non-retryable and propagates. (CodeQL cs/catch-of-all-exceptions is
+            // expected to flag this single line.)
+            catch (Exception ex) when (ShouldFailover(ex)) { await HandleFailover(ex).ConfigureAwait(false); }
 
-            async Task HandleRateLimit(Exception ex)
+            async Task HandleFailover(Exception ex)
             {
                 LlmTelemetry.RecordError(activity, ex.Message);
                 last = ex;
-                _router.Penalize(Provider, key, _retryAfter(ex));
-                _logger.LogWarning("[{Provider}] key rate-limited; {Available}/{Total} keys available — failing over.",
-                    Provider, _router.AvailableCount(Provider, keys), keys.Count);
+                var kind = _classify(ex);
+                // Penalize the key: a transient error honors the server's Retry-After; an auth failure has no
+                // cooldown signal (the key is simply wrong) so it gets the default cooldown.
+                _router.Penalize(Provider, key, kind == LlmErrorKind.Transient ? _retryAfter(ex) : null);
+                _logger.LogWarning("[{Provider}] {Kind} on a key; {Available}/{Total} keys available — failing over.",
+                    Provider, kind, _router.AvailableCount(Provider, keys), keys.Count);
 
                 if (attempt + 1 < maxAttempts)
                 {
@@ -197,7 +207,15 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
             }
         }
 
-        throw new LlmException($"{Provider} rate-limited on all {keys.Count} key(s) after {maxAttempts} attempt(s).", Provider, innerException: last);
+        throw new LlmException($"{Provider} failed on all {keys.Count} key(s) after {maxAttempts} attempt(s) (last: {last?.Message}).", Provider, innerException: last);
+    }
+
+    // A key-pool retry is warranted only for a transient (429 / 5xx / timeout) or auth (wrong key — another
+    // key may be valid) failure. A bad-request or unclassified error is non-retryable and propagates.
+    private bool ShouldFailover(Exception ex)
+    {
+        var kind = _classify(ex);
+        return kind is LlmErrorKind.Transient or LlmErrorKind.Auth;
     }
 
     private List<AIToolFunction> ResolveTools(IReadOnlyList<string>? requested)

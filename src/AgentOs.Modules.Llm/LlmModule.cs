@@ -60,7 +60,10 @@ public sealed class LlmModule : IModule
                 toolInvocationLog: sp.GetService<AgentOs.Domain.Tools.IToolInvocationLog>(),
                 // Singleton client: pass the root provider so the request-scoped ITenantContext is resolved
                 // PER CALL (never captured here — that throws "scoped from root" under scope validation).
-                tenantProvider: sp);
+                tenantProvider: sp,
+                // Classify SDK errors so the key pool fails over on transient (5xx/timeout) + auth errors,
+                // not only 429.
+                classifyError: SdkChatClients.Classify);
         });
         services.AddKeyedSingleton<ILlmClient>("AzureOpenAI", (sp, _) =>
         {
@@ -83,7 +86,10 @@ public sealed class LlmModule : IModule
                 toolInvocationLog: sp.GetService<AgentOs.Domain.Tools.IToolInvocationLog>(),
                 // Singleton client: pass the root provider so the request-scoped ITenantContext is resolved
                 // PER CALL (never captured here — that throws "scoped from root" under scope validation).
-                tenantProvider: sp);
+                tenantProvider: sp,
+                // Classify SDK errors so the key pool fails over on transient (5xx/timeout) + auth errors,
+                // not only 429.
+                classifyError: SdkChatClients.Classify);
         });
 
         services.AddSingleton<ILlmClientFactory, LlmClientFactory>();
