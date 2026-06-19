@@ -15,6 +15,7 @@ using AgentOs.Domain.Workspaces;
 using AgentOs.Modules.AppConfig;
 using AgentOs.Modules.Workspaces.Persistence;
 using AgentOs.Modules.Workspaces.Persistence.Entities;
+using AgentOs.Modules.Workspaces.Security;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Persistence;
 using Microsoft.AspNetCore.Builder;
@@ -113,6 +114,7 @@ internal static class WorkspaceEndpoints
     private static async Task<IResult> ListReposForTokenAsync(
         ListReposRequest? request,
         ISourceProviderResolver providers,
+        IWorkspaceHostPolicy hostPolicy,
         CancellationToken ct)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.AccessToken))
@@ -127,6 +129,10 @@ internal static class WorkspaceEndpoints
             return Results.Problem(
                 detail: $"No source provider registered for '{request.Kind}'.",
                 statusCode: StatusCodes.Status400BadRequest);
+        }
+        if (!hostPolicy.IsAllowed(request.Host))
+        {
+            return Results.Problem(detail: HostRejected(request.Host), statusCode: StatusCodes.Status400BadRequest);
         }
 
         var creds = new ConnectionCredentials(request.Kind, request.AccessToken, request.Owner, request.Host);
@@ -137,6 +143,7 @@ internal static class WorkspaceEndpoints
     private static async Task<IResult> ListBoardsForTokenAsync(
         ListReposRequest? request,
         ISourceProviderResolver providers,
+        IWorkspaceHostPolicy hostPolicy,
         CancellationToken ct)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.AccessToken))
@@ -152,11 +159,18 @@ internal static class WorkspaceEndpoints
                 detail: $"No source provider registered for '{request.Kind}'.",
                 statusCode: StatusCodes.Status400BadRequest);
         }
+        if (!hostPolicy.IsAllowed(request.Host))
+        {
+            return Results.Problem(detail: HostRejected(request.Host), statusCode: StatusCodes.Status400BadRequest);
+        }
 
         var creds = new ConnectionCredentials(request.Kind, request.AccessToken, request.Owner, request.Host);
         var boards = await provider.ListBoardsAsync(creds, ct).ConfigureAwait(false);
         return Results.Ok(boards);
     }
+
+    private static string HostRejected(string? host) =>
+        $"Host '{host}' is not on the allowed-hosts list. Add it under Workspaces:AllowedHosts to probe a self-hosted server.";
 
     private static async Task<IResult> ListBoardReposAsync(
         Guid id, IWorkspaceRepository repo, ITenantContext tenant, CancellationToken ct)

@@ -27,6 +27,12 @@ public sealed class WorkspacesModule : IModule, IEndpointModule, IInitializableM
 
         services.TryAddSingleton(TimeProvider.System);
 
+        // Defense-in-depth host allowlist for tenant-supplied workspace hosts (atop the connect-time
+        // SsrfGuard). Defaults cover the provider public hosts; operators add GHE/ADO-Server hosts via
+        // Workspaces:AllowedHosts.
+        services.Configure<Security.WorkspaceHostOptions>(configuration.GetSection("Workspaces"));
+        services.AddSingleton<Security.IWorkspaceHostPolicy, Security.WorkspaceHostPolicy>();
+
         // The connect flow is shared by the HTTP endpoint and the desktop Spine app (tenant-explicit).
         services.AddScoped<IWorkspaceConnector, WorkspaceConnector>();
 

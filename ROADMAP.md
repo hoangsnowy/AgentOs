@@ -90,7 +90,7 @@ deployment), **Shipped, cloud-unverified** (in code and tested, but no real clou
 | Claim | Status |
 |---|---|
 | Cloud hardening (ForwardedHeaders, DataProtection, env gating) | Shipped, **cloud-unverified** — no real `azd up` round-trip yet |
-| Multi-tenant isolation | Shipped+verified at row level; residue open: run-history stamping + `AuthSession` fallback; `OrchestrationStore` per-tenant keying shipped in [#72](https://github.com/hoangsnowy/AgentOs/pull/72), full-stack E2E pending |
+| Multi-tenant isolation | Shipped+verified at row level; B4 residue now closed in code — run-history tenant stamping (run + metric rows), `AuthSession` null-`HttpContext` fail-open, `OrchestrationStore` per-tenant keying ([#72](https://github.com/hoangsnowy/AgentOs/pull/72)); full-stack two-tenant E2E pending the `azd up` round-trip |
 | `build_verifier` execution | **Not sandboxed** — runs MSBuild on LLM-influenced code in-process ([audit #10](docs/deploy-readiness-audit.md)); gated **off by default in Production** ([#72](https://github.com/hoangsnowy/AgentOs/pull/72)) until the Q1 sandbox lands |
 | Scale-out (≥2 replicas) | **Unverified** — single-instance only until a 2-replica test (see Q2) |
 
@@ -121,15 +121,18 @@ depend on the Azure deployment. PR-level slicing for the E/F/G workstreams lives
     implementation months 2–3 — ephemeral per-build container, no egress, CPU/mem/disk/timeout
     quotas, always-synthesized project file (model-authored `.csproj`/`.targets`/`.props` rejected),
     `--no-restore` with a locked feed.
-  - **Multi-tenant residue (audit B4):** run-history repo tenant stamping; `AuthSession`
-    null-`HttpContext` fix; full-stack two-tenant verification of the
-    [#72](https://github.com/hoangsnowy/AgentOs/pull/72) `OrchestrationStore` per-tenant keying —
-    all exercised on the real cloud deployment with two tenants.
-  - **Secrets, first slice (F2):** delete the dead HS256 secret + operator password from
-    `appsettings.json`; Azure Key Vault as the production secret source.
-  - **Low-severity security:** explicit workspace-connect `Host` allowlist (defense in depth on top
-    of the [#72](https://github.com/hoangsnowy/AgentOs/pull/72) connect-time `SsrfGuard`); ownership
-    check so a member cannot revoke another member's runner/session.
+  - **Multi-tenant residue (audit B4) — ✅ closed in code:** run-history repo tenant stamping (run +
+    metric rows) and `AuthSession` null-`HttpContext` fail-open are fixed; the
+    [#72](https://github.com/hoangsnowy/AgentOs/pull/72) `OrchestrationStore` per-tenant keying ships;
+    only the full-stack two-tenant verification on the real cloud deployment remains.
+  - **Secrets, first slice (F2) — ✅ shipped:** the dead HS256 secret + operator password are gone from
+    `appsettings.json` (`DevSecretGuard` fails fast on any committed dev default); production secrets
+    flow through azd Key-Vault-backed secret parameters (`AddParameter(secret: true)`).
+  - **Low-severity security — ✅ shipped:** explicit workspace-connect `Host` allowlist
+    (`Workspaces:AllowedHosts` / `WorkspaceHostPolicy`, defense in depth on top of the
+    [#72](https://github.com/hoangsnowy/AgentOs/pull/72) connect-time `SsrfGuard`, gating connect +
+    add-repo + the find-boards/repos probes); ownership check so a member cannot revoke another
+    member's runner/session.
 - **Exit criteria:** a documented `azd up` from a clean environment yields a deployment where an
   external user can log in via OIDC and complete a pipeline run that persists under their tenant;
   a malicious-`.csproj` fixture test proves the sandbox cannot reach the host or the network; zero

@@ -1,16 +1,15 @@
-// AgentOs.Infrastructure/Integration/BuildVerifier.cs
-// IBuildVerifier impl: writes the pipeline-generated files to a temp dir, ensures a .csproj exists,
-// runs `dotnet build` with a hard timeout, captures stdout/stderr, then cleans up.
+// IBuildVerifier impl. Owns ADR-0005 Layer 1 (input hardening): writes the model's SOURCE files to a
+// scratch dir (rejecting any build-control file), ALWAYS synthesizes its own zero-dependency project +
+// a feed-clearing nuget.config, then hands the prepared dir to an ISandboxedBuildRunner (Layer 2) which
+// owns *where* `dotnet build` executes — in-process (Dev) or in an ephemeral no-egress container (Prod).
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using AgentOs.Modules.Integration;
+using AgentOs.Modules.Integration.Sandbox;
 using AgentOs.Domain.Pipeline;
 using Microsoft.Extensions.Logging;
 
@@ -19,20 +18,16 @@ namespace AgentOs.Modules.Integration;
 /// <inheritdoc cref="IBuildVerifier"/>
 public sealed class BuildVerifier : IBuildVerifier
 {
-    /// <summary>Hard cap on the build duration (seconds) — kills the process if it overruns.</summary>
-    public const int BuildTimeoutSeconds = 90;
-
-    /// <summary>Output is truncated to this many bytes so the UI/log payload stays bounded.</summary>
-    public const int MaxOutputBytes = 8 * 1024;
-
     private readonly ILogger<BuildVerifier> _logger;
     private readonly BuildVerifierOptions _options;
+    private readonly ISandboxedBuildRunner _runner;
 
-    /// <summary>Initializes the verifier with a logger and the enable/disable gate.</summary>
-    public BuildVerifier(ILogger<BuildVerifier> logger, BuildVerifierOptions options)
+    /// <summary>Initializes the verifier with a logger, the enable/sandbox config, and the build runner.</summary>
+    public BuildVerifier(ILogger<BuildVerifier> logger, BuildVerifierOptions options, ISandboxedBuildRunner runner)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
     }
 
     /// <inheritdoc />
@@ -57,8 +52,8 @@ public sealed class BuildVerifier : IBuildVerifier
     {
         ArgumentNullException.ThrowIfNull(files);
 
-        // Gate: refuse to run a build (which executes arbitrary MSBuild tasks from LLM-generated projects)
-        // when disabled — the default outside Development until a sandboxed runner exists.
+        // Gate: refuse to run a build when disabled — the default outside Development until a sandboxed
+        // runner (Sandbox=Container) is selected.
         if (!_options.Enabled)
         {
             _logger.LogWarning("Build verification is disabled on this host (Integration:BuildVerifier:Enabled=false); refusing to run `dotnet build`.");
@@ -71,107 +66,25 @@ public sealed class BuildVerifier : IBuildVerifier
         var workDir = Path.Join(Path.GetTempPath(), "agentic-sdlc-build-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(workDir);
         var workDirFull = Path.GetFullPath(workDir);
-        _logger.LogInformation("Build verifier scratch dir: {Dir}", workDir);
+        _logger.LogInformation("Build verifier scratch dir: {Dir} (sandbox: {Sandbox})", workDir, _options.Sandbox);
 
-        var stopwatch = Stopwatch.StartNew();
         try
         {
-            foreach (var file in files)
+            var rejected = await PrepareWorkspaceAsync(files, workDir, workDirFull, ct).ConfigureAwait(false);
+
+            // Layer 2: hand the prepared, sanitized dir to the configured isolation host.
+            var result = await _runner.RunAsync(workDir, ct).ConfigureAwait(false);
+
+            if (rejected > 0)
             {
-                var path = file.Path;
-                var content = file.Content;
-                if (string.IsNullOrWhiteSpace(path))
-                {
-                    continue;
-                }
-                // Generated file paths come from the LLM — normalise and confine them to the scratch
-                // dir so a rooted or ../-laden path cannot write outside the sandbox (path traversal).
-                var dest = Path.GetFullPath(Path.Join(workDir, path));
-                if (!dest.StartsWith(workDirFull + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-                {
-                    _logger.LogWarning("Skipping a generated file whose path escapes the build sandbox.");
-                    continue;
-                }
-                var destDir = Path.GetDirectoryName(dest);
-                if (!string.IsNullOrEmpty(destDir))
-                {
-                    Directory.CreateDirectory(destDir);
-                }
-                await File.WriteAllTextAsync(dest, content, ct).ConfigureAwait(false);
+                // Tell the caller the model's build-control files were dropped, so a "build succeeded" is
+                // never mistaken for "the model's exact project built".
+                var notice = $"[build_verifier] Rejected {rejected} build-control file(s) "
+                    + "(project/solution/import/config/response) — only source files are compiled, "
+                    + "against a synthesized zero-dependency project.\n";
+                return result with { Output = notice + result.Output };
             }
-
-            // 2. Ensure a project file exists (the Coding agent often emits scattered .cs files only).
-            if (Directory.GetFiles(workDir, "*.csproj", SearchOption.AllDirectories).Length == 0)
-            {
-                var csproj = Path.Join(workDir, "AgentOsGenerated.csproj");
-                await File.WriteAllTextAsync(csproj,
-                    """
-                    <Project Sdk="Microsoft.NET.Sdk">
-                      <PropertyGroup>
-                        <TargetFramework>net10.0</TargetFramework>
-                        <Nullable>enable</Nullable>
-                        <ImplicitUsings>enable</ImplicitUsings>
-                        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-                      </PropertyGroup>
-                    </Project>
-                    """, ct).ConfigureAwait(false);
-            }
-
-            // 3. Run `dotnet build` with timeout + cancellation.
-            var psi = new ProcessStartInfo
-            {
-                FileName = "dotnet",
-                // --no-incremental keeps the build self-contained; node reuse off so no MSBuild worker
-                // survives the scratch dir. (True isolation needs a sandboxed runner — this is defense in depth.)
-                Arguments = "build --nologo -v q --no-incremental -nodeReuse:false",
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            // Harden the child environment: opt out of telemetry/first-run, kill node reuse, and force the
-            // working dir as HOME so a malicious build can't read the server's user profile / NuGet creds.
-            psi.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
-            psi.Environment["DOTNET_NOLOGO"] = "1";
-            psi.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
-            psi.Environment["MSBUILDDISABLENODEREUSE"] = "1";
-            psi.Environment["DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER"] = "1";
-
-            using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start dotnet build process.");
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(BuildTimeoutSeconds));
-
-            var outTask = proc.StandardOutput.ReadToEndAsync(cts.Token);
-            var errTask = proc.StandardError.ReadToEndAsync(cts.Token);
-
-            try
-            {
-                await proc.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                TryKill(proc);
-                // Killing the process tears down the pipes; drain the stdout/stderr read tasks so they complete
-                // BEFORE the linked CTS is disposed at method exit. Leaving them running would have them touch a
-                // disposed cts.Token, surfacing as an unobserved ObjectDisposedException. Output is discarded here.
-                await ObserveAsync(outTask).ConfigureAwait(false);
-                await ObserveAsync(errTask).ConfigureAwait(false);
-                stopwatch.Stop();
-                return new BuildVerifyResult(false, -1,
-                    $"Build cancelled / timed out after {BuildTimeoutSeconds}s.", stopwatch.ElapsedMilliseconds);
-            }
-
-            var stdout = await outTask.ConfigureAwait(false);
-            var stderr = await errTask.ConfigureAwait(false);
-            var combined = (stdout + (string.IsNullOrEmpty(stderr) ? "" : "\n" + stderr)).Trim();
-            if (combined.Length > MaxOutputBytes)
-            {
-                combined = combined[..MaxOutputBytes] + "\n... (truncated)";
-            }
-
-            stopwatch.Stop();
-            return new BuildVerifyResult(proc.ExitCode == 0, proc.ExitCode, combined, stopwatch.ElapsedMilliseconds);
+            return result;
         }
         finally
         {
@@ -182,22 +95,73 @@ public sealed class BuildVerifier : IBuildVerifier
         }
     }
 
-    // Awaits a read task only to observe its completion/exception so the linked CTS can be disposed safely.
-    // On the timeout path the captured output is unused; cancellation + a torn pipe are the expected outcomes.
-    private static async Task ObserveAsync(Task<string> task)
+    // ADR-0005 Layer 1. Writes the model's SOURCE files (build-control files rejected, paths confined to
+    // the scratch dir), then ALWAYS synthesizes a zero-dependency project + a feed-clearing nuget.config.
+    // Returns the number of rejected/skipped files.
+    private async Task<int> PrepareWorkspaceAsync(
+        IEnumerable<BuildVerifyFile> files, string workDir, string workDirFull, CancellationToken ct)
     {
-        try { await task.ConfigureAwait(false); }
-        catch (OperationCanceledException) { /* expected — the build was cancelled */ }
-        catch (IOException) { /* expected — the kill tore down the pipe */ }
-    }
+        var rejected = 0;
+        foreach (var file in files)
+        {
+            var path = file.Path;
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+            // The model may contribute SOURCE files only. A project/solution/import/config/response file
+            // lets it inject MSBuild tasks (RCE) or repoint restore at a hostile feed — drop it.
+            if (BuildInputSanitizer.IsBuildControlFile(path))
+            {
+                rejected++;
+                _logger.LogWarning("Rejected a generated build-control file (project/import/config) — only source files are compiled.");
+                continue;
+            }
+            // Generated paths come from the LLM — normalise + confine to the scratch dir so a rooted or
+            // ../-laden path cannot write outside the sandbox (path traversal).
+            var dest = Path.GetFullPath(Path.Join(workDir, path));
+            if (!dest.StartsWith(workDirFull + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                rejected++;
+                _logger.LogWarning("Skipping a generated file whose path escapes the build sandbox.");
+                continue;
+            }
+            var destDir = Path.GetDirectoryName(dest);
+            if (!string.IsNullOrEmpty(destDir))
+            {
+                Directory.CreateDirectory(destDir);
+            }
+            await File.WriteAllTextAsync(dest, file.Content, ct).ConfigureAwait(false);
+        }
 
-    private static void TryKill(Process proc)
-    {
-        try { if (!proc.HasExited) { proc.Kill(entireProcessTree: true); } }
-        // Best-effort kill: the process may have already exited (InvalidOperationException) or the OS
-        // refused the kill (Win32Exception). Nothing we can do — swallow and let cleanup proceed.
-        catch (InvalidOperationException ex) { _ = ex.Message; }
-        catch (System.ComponentModel.Win32Exception ex) { _ = ex.Message; }
-        catch (NotSupportedException ex) { _ = ex.Message; }
+        // ALWAYS synthesize the project — a single zero-dependency SDK-style net10.0 project (no
+        // PackageReference/Analyzer/ProjectReference, so no build-time package or source generator can be
+        // introduced). Any model-authored .csproj was rejected above.
+        await File.WriteAllTextAsync(Path.Join(workDir, "AgentOsGenerated.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+              </PropertyGroup>
+            </Project>
+            """, ct).ConfigureAwait(false);
+
+        // Cut the feed: a project-local nuget.config clearing all package sources, so even if something
+        // triggers a restore it cannot reach a remote (or attacker-supplied) feed. A zero-dependency
+        // net10.0 project resolves its framework packs from the SDK install, offline.
+        await File.WriteAllTextAsync(Path.Join(workDir, "nuget.config"),
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <clear />
+              </packageSources>
+            </configuration>
+            """, ct).ConfigureAwait(false);
+
+        return rejected;
     }
 }
