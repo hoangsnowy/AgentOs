@@ -22,11 +22,17 @@ internal sealed class PipelineRunRepository(
     ITenantContext tenant,
     INpgsqlConnectionFactory? connectionFactory = null) : IPipelineRunRepository
 {
-    public async Task SaveAsync(PipelineRunRecord record, CancellationToken ct = default)
+    // Ambient-tenant write: the API request path has a populated ITenantContext, so stamp from it.
+    public Task SaveAsync(PipelineRunRecord record, CancellationToken ct = default)
+        => SaveAsync(record, tenant.TenantId, ct);
+
+    // Tenant-explicit write: the caller (e.g. a Blazor circuit, which has a blank ITenantContext) supplies
+    // the owning tenant directly, so the run + its run_metrics rows are billed to the right tenant.
+    public async Task SaveAsync(PipelineRunRecord record, string tenantId, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(record);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
         var result = record.Result;
-        var tenantId = tenant.TenantId;
 
         var entity = new PipelineRunEntity
         {

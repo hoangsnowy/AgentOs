@@ -7,6 +7,8 @@ internal sealed class NullPipelineRunRepository : IPipelineRunRepository
 {
     public Task SaveAsync(PipelineRunRecord record, CancellationToken ct = default) => Task.CompletedTask;
 
+    public Task SaveAsync(PipelineRunRecord record, string tenantId, CancellationToken ct = default) => Task.CompletedTask;
+
     public Task<PipelineRunRecord?> GetAsync(Guid id, CancellationToken ct = default) =>
         Task.FromResult<PipelineRunRecord?>(null);
 
