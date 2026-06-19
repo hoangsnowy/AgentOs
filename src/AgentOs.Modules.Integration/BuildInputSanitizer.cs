@@ -36,6 +36,10 @@ internal static class BuildInputSanitizer
             return false;
         }
         var name = Path.GetFileName(path.Trim());
+        // Windows silently strips trailing dots and spaces from a file name on write, so "Foo.csproj." or
+        // "Directory.Build.props " lands on disk as "Foo.csproj" / "Directory.Build.props" and MSBuild
+        // auto-imports it — an RCE bypass of the extension/name check. Normalise them away before classifying.
+        name = name.TrimEnd('.', ' ');
         if (string.IsNullOrEmpty(name))
         {
             return false;

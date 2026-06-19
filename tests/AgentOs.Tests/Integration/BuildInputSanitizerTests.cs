@@ -35,6 +35,14 @@ public sealed class BuildInputSanitizerTests
     // nested anywhere in the tree
     [InlineData("src/inner/Evil.csproj")]
     [InlineData("a/b/c/Directory.Build.props")]
+    // Windows trailing-dot / trailing-space bypass: the OS strips these on write, so the file lands as a
+    // real build-control file and MSBuild auto-imports it (RCE). Must be rejected after normalisation.
+    [InlineData("Directory.Build.props.")]
+    [InlineData("Directory.Build.props ")]
+    [InlineData("Evil.csproj.")]
+    [InlineData("Evil.csproj  ")]
+    [InlineData("nuget.config.")]
+    [InlineData("a/b/Custom.targets. ")]
     public void IsBuildControlFile_BuildControlPaths_AreRejected(string path)
     {
         BuildInputSanitizer.IsBuildControlFile(path).ShouldBeTrue();
