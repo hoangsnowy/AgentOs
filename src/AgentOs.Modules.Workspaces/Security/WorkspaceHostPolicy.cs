@@ -62,15 +62,9 @@ internal sealed class WorkspaceHostPolicy : IWorkspaceHostPolicy
         {
             return false; // unparseable => reject rather than guess.
         }
-        foreach (var allowed in _allowed)
-        {
-            if (h.Equals(allowed, StringComparison.OrdinalIgnoreCase)
-                || h.EndsWith("." + allowed, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-        return false;
+        return _allowed.Any(allowed =>
+            h.Equals(allowed, StringComparison.OrdinalIgnoreCase)
+            || h.EndsWith("." + allowed, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string NormalizeHost(string entry) =>
