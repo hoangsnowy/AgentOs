@@ -674,30 +674,7 @@ select {
     flex-direction: column;
     min-width: 0;
 }
-.shell-topbar { display: none; /* superseded by menubar + toolbar-strip */ }
-
-/* --- Desktop chrome: menu bar + toolbar + status bar --- */
-.menubar {
-    height: 24px;
-    background: linear-gradient(180deg, rgba(244,246,250,.85), rgba(232,237,243,.85));
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    border-bottom: 1px solid rgba(255,255,255,.30);
-    display: flex; align-items: center;
-    padding: 0 4px;
-    gap: 1px;
-    user-select: none;
-}
-.menu-item {
-    padding: 3px 10px;
-    font-size: 12px;
-    color: var(--txt-soft);
-    cursor: default;
-    border-radius: 2px;
-}
-.menu-item:hover { background: rgba(37,99,235,.10); color: var(--txt); }
-.menubar-spacer { flex: 1; }
-.menubar .theme-btn { padding: 1px 7px; font-size: 11px; margin-right: 4px; }
+/* --- Desktop chrome: toolbar + status bar (dead .shell-topbar + .menubar removed — GNOME TopBar) --- */
 
 .toolbar-strip {
     height: 32px;
@@ -1150,7 +1127,7 @@ select {
    ================================================================= */
 .login-overlay {
     position: fixed; inset: 0; z-index: 99999;
-    display: grid; place-items: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px;
     /* Lock screen: heavily frost the desktop behind, independent of the
        glass slider (which defaults to 0). KDE / macOS lock-screen feel. */
     background: rgba(10,22,40,.62);
@@ -1164,6 +1141,11 @@ select {
     backdrop-filter: blur(28px) saturate(110%) brightness(.78);
     -webkit-backdrop-filter: blur(28px) saturate(110%) brightness(.78);
 }
+/* GNOME lock-screen clock — large thin clock + date over the frosted wallpaper. */
+.lock-clock { text-align: center; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.45); user-select: none; }
+.lock-time { font-size: 80px; font-weight: 200; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.lock-date { font-size: 18px; font-weight: 500; opacity: .92; margin-top: 8px; }
+@media (max-width: 480px) { .lock-time { font-size: 60px; } }
 .login-card {
     width: 340px;
     background: rgba(255,255,255,.92);
@@ -1226,8 +1208,8 @@ select {
 .dock-item {
     width: 46px; height: 46px;
     display: grid; place-items: center;
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.12);
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: 12px;
     cursor: pointer;
     transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
@@ -1241,7 +1223,8 @@ select {
     border-color: rgba(255,255,255,.30);
 }
 .dock-item:active { background: rgba(255,255,255,.28); }
-.di-ic { line-height: 1; }
+/* GNOME Dash full-colour app icon — the icon IS a tinted rounded square (tint set inline per app). */
+.di-ic { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; line-height: 1; }
 
 /* GNOME dash running indicator — flat accent dot under the icon, no glow/pulse. */
 .di-dot {

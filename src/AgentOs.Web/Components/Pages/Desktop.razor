@@ -14,7 +14,7 @@
         <div class="desktop-icons">
             @foreach (var app in AgentOs.Web.Services.AppCatalog.VisiblePinned(_isAdmin))
             {
-                <DesktopIcon Title="@app.Title" Icon="@app.Icon" Caption="@app.Caption"
+                <DesktopIcon Title="@app.Title" Icon="@app.Icon" Caption="@app.Caption" Color="@app.Color"
                              OnClick="@(() => WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H))" />
             }
         </div>
@@ -23,11 +23,11 @@
     <div class="desktop-group">
         <div class="desktop-group-title">Quick actions</div>
         <div class="desktop-icons">
-            <DesktopIcon Title="Open PR" Icon="git-pull-request" Caption="Push generated code → GitHub"
+            <DesktopIcon Title="Open PR" Icon="git-pull-request" Caption="Push generated code → GitHub" Color="#2ec27e"
                          OnClick="@(() => WM.OpenApp("pipeline", "Pipeline", "play"))" />
-            <DesktopIcon Title="Verify build" Icon="hammer" Caption="dotnet build the agent output"
+            <DesktopIcon Title="Verify build" Icon="hammer" Caption="dotnet build the agent output" Color="#e66100"
                          OnClick="@(() => WM.OpenApp("pipeline", "Pipeline", "play"))" />
-            <DesktopIcon Title="GitHub" Icon="arrow-square-out" Caption="Repository"
+            <DesktopIcon Title="GitHub" Icon="arrow-square-out" Caption="Repository" Color="#5e5c64"
                          Href="https://github.com/hoangsnowy/AgentOs" Target="_blank" />
         </div>
     </div>

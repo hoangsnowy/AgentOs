@@ -29,27 +29,28 @@ public sealed record DesktopApp(
     int H = 620,
     bool Pinned = true,
     bool AdminOnly = false,
-    System.Type? ComponentType = null);
+    System.Type? ComponentType = null,
+    string Color = "#3584e4");
 
 /// <summary>The catalog of apps the AgentOS shell can launch — built-ins plus any registered by plugins.</summary>
 public static class AppCatalog
 {
     private static readonly List<DesktopApp> _builtIn = new()
     {
-        new("pipeline", "Pipeline", "play",  "Run the 5-agent pipeline on a sandbox story", "Agents", 920, 620),
-        new("workflow", "Workflow", "graph", "Edit the same pipeline as a visual graph",     "Agents", 1080, 660),
-        new("spine",    "Spine",    "git-pull-request", "Run the pipeline on a real ticket → PR", "Agents", 940, 640),
-        new("workspaces", "Workspaces", "squares-four", "Connected boards + their repos", "Agents", 940, 620, Pinned: false),
-        new("sessions",   "Sessions",   "clock-counter", "Runners + AI coding sessions",  "Agents", 940, 620, Pinned: false),
-        new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: true, AdminOnly: true),
-        new("evidence", "Evidence", "lock",  "Tool-invocation audit trail",   "Admin", 960, 620, Pinned: true, AdminOnly: true),
-        new("cost",     "Cost",     "graph", "LLM spend by agent, provider, model", "Admin", 1000, 660, Pinned: true, AdminOnly: true),
-        new("policy",   "Policy",   "lock",  "Per-tenant tool allowlist",     "Admin", 900, 620, Pinned: true, AdminOnly: true),
-        new("prompts",  "Prompts",  "lightning", "Tune the agents' prompts",   "Admin", 1000, 680, Pinned: true, AdminOnly: true),
-        new("plugins",  "Plugins",  "squares-stack", "Installed extensions",  "System", 860, 600),
-        new("mcp",      "MCP",      "arrow-square-out", "Upstream MCP tool servers", "System", 860, 600, Pinned: false, AdminOnly: true),
-        new("settings", "Settings", "gear",  "LLM keys, providers, GitHub",   "System", 760, 600, Pinned: true, AdminOnly: true),
-        new("system",   "System",   "wrench","OS appearance, themes, about",  "System", 760, 600),
+        new("pipeline", "Pipeline", "play",  "Run the 5-agent pipeline on a sandbox story", "Agents", 920, 620, Color: "#3584e4"),
+        new("workflow", "Workflow", "graph", "Edit the same pipeline as a visual graph",     "Agents", 1080, 660, Color: "#9141ac"),
+        new("spine",    "Spine",    "git-pull-request", "Run the pipeline on a real ticket → PR", "Agents", 940, 640, Color: "#2ec27e"),
+        new("workspaces", "Workspaces", "squares-four", "Connected boards + their repos", "Agents", 940, 620, Pinned: false, Color: "#e66100"),
+        new("sessions",   "Sessions",   "clock-counter", "Runners + AI coding sessions",  "Agents", 940, 620, Pinned: false, Color: "#986a44"),
+        new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: true, AdminOnly: true, Color: "#e5a50a"),
+        new("evidence", "Evidence", "lock",  "Tool-invocation audit trail",   "Admin", 960, 620, Pinned: true, AdminOnly: true, Color: "#c01c28"),
+        new("cost",     "Cost",     "graph", "LLM spend by agent, provider, model", "Admin", 1000, 660, Pinned: true, AdminOnly: true, Color: "#1c9099"),
+        new("policy",   "Policy",   "lock",  "Per-tenant tool allowlist",     "Admin", 900, 620, Pinned: true, AdminOnly: true, Color: "#613583"),
+        new("prompts",  "Prompts",  "lightning", "Tune the agents' prompts",   "Admin", 1000, 680, Pinned: true, AdminOnly: true, Color: "#c061cb"),
+        new("plugins",  "Plugins",  "squares-stack", "Installed extensions",  "System", 860, 600, Color: "#5e5c64"),
+        new("mcp",      "MCP",      "arrow-square-out", "Upstream MCP tool servers", "System", 860, 600, Pinned: false, AdminOnly: true, Color: "#1a5fb4"),
+        new("settings", "Settings", "gear",  "LLM keys, providers, GitHub",   "System", 760, 600, Pinned: true, AdminOnly: true, Color: "#5e5c64"),
+        new("system",   "System",   "wrench","OS appearance, themes, about",  "System", 760, 600, Color: "#3d3846"),
     };
 
     // Plugin-contributed apps, appended once at host startup (before any request is served).

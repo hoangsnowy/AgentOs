@@ -4,7 +4,7 @@
 @if (OnClick.HasDelegate)
 {
     <button type="button" class="dicon" @onclick="OnClick" title="@Title">
-        <div class="dicon-tile">
+        <div class="dicon-tile" style="@TileStyle">
             <Icon Name="@Icon" Size="28" />
         </div>
         <div class="dicon-title">@Title</div>
@@ -17,7 +17,7 @@
 else
 {
     <a class="dicon" href="@Href" target="@(Target ?? "_self")" title="@Title">
-        <div class="dicon-tile">
+        <div class="dicon-tile" style="@TileStyle">
             <Icon Name="@Icon" Size="28" />
         </div>
         <div class="dicon-title">@Title</div>
@@ -35,4 +35,9 @@ else
     [Parameter] public string? Caption { get; set; }
     [Parameter] public string? Target { get; set; }
     [Parameter] public EventCallback OnClick { get; set; }
+
+    /// <summary>GNOME full-colour app-icon tint. When set, the tile becomes a filled
+    /// rounded square with a white glyph (instead of the neutral chip + accent glyph).</summary>
+    [Parameter] public string? Color { get; set; }
+    private string? TileStyle => Color is null ? null : $"background:{Color};color:#fff;border-color:transparent";
 }
