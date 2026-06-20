@@ -15,6 +15,8 @@ public static class PersistenceServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         if (!string.IsNullOrWhiteSpace(connectionString))
         {
+            // The read-side is active → install the Dapper type handlers (timestamptz → DateTimeOffset).
+            DapperConfig.EnsureConfigured();
             services.TryAddSingleton<INpgsqlConnectionFactory>(new NpgsqlConnectionFactory(connectionString));
         }
 

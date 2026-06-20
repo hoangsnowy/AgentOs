@@ -14,8 +14,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Raw Npgsql connection factory for the Dapper read-side (INpgsqlConnectionFactory). -->
+    <!-- Raw Npgsql connection factory + Dapper type config for the read-side (INpgsqlConnectionFactory). -->
     <PackageReference Include="Npgsql" />
+    <PackageReference Include="Dapper" />
   </ItemGroup>
 
   <ItemGroup>
