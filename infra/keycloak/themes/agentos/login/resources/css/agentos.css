@@ -5,41 +5,41 @@
    ================================================================= */
 
 :root {
-    --bg:           #eef2f7;
+    --bg:           #fafafb;
     --bg-2:         #ffffff;
-    --bg-3:         #f4f6fa;
-    --bg-sunk:      #e1e7ef;
-    --line:         #cfd6e0;
-    --line-strong:  #b6c0cc;
-    --txt:          #0f172a;
-    --txt-soft:     #334155;
-    --txt-dim:      #64748b;
-    --txt-faint:    #94a3b8;
-    --accent:       #3daee9;
-    --accent-hover: #2a93cc;
-    --accent-active:#1d7eb3;
-    --accent-soft:  #d6ecf7;
-    --ok:           #16a34a;
-    --warn:         #d97706;
-    --err:          #dc2626;
+    --bg-3:         #f4f4f5;
+    --bg-sunk:      #ededee;
+    --line:         #d7d7db;
+    --line-strong:  #c0c0c4;
+    --txt:          #1e1e1e;
+    --txt-soft:     #3d3d40;
+    --txt-dim:      #5e5c64;
+    --txt-faint:    #9a9996;
+    --accent:       #3584e4;
+    --accent-hover: #2d77d6;
+    --accent-active:#1f66c4;
+    --accent-soft:  #dbe8fb;
+    --ok:           #2e9f63;
+    --warn:         #c98a0a;
+    --err:          #e01b24;
 
     --font:  "Inter", "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
     --mono:  "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, ui-monospace, monospace;
 
-    --r-3:   5px;
-    --r-4:   6px;
-    --r-5:   8px;
-    --r-card: 8px;
+    --r-3:   8px;
+    --r-4:   9px;
+    --r-5:   12px;
+    --r-card: 12px;
 
-    --focus-ring: 0 0 0 2px rgba(61,174,233,.55);
+    --focus-ring: 0 0 0 2px rgba(53,132,228,.55);
 
-    /* Mirror the app's --shadow-4 (max elevation) — calm enterprise, not a heavy 50%-black drop. */
-    --shadow-card: 0 24px 48px -8px rgba(15,23,42,.18), 0 8px 16px rgba(15,23,42,.08);
-    --shadow-1:    0 1px 0 rgba(15,23,42,.04);
-    --shadow-2:    0 2px 4px rgba(15,23,42,.06), 0 1px 0 rgba(15,23,42,.04);
+    /* GNOME / Adwaita elevation — soft neutral shadow. */
+    --shadow-card: 0 18px 48px -12px rgba(0,0,0,.30), 0 8px 16px rgba(0,0,0,.12);
+    --shadow-1:    0 1px 2px rgba(0,0,0,.07);
+    --shadow-2:    0 2px 10px rgba(0,0,0,.12);
 
-    /* Match the app desktop's default enterprise-light wallpaper. */
-    --wallpaper-bg: linear-gradient(180deg, #e8eef5 0%, #d4dde8 100%);
+    /* Match the app desktop's GNOME radial wallpaper. */
+    --wallpaper-bg: radial-gradient(circle at 28% 18%, #dde7f7 0%, #c4d3ea 48%, #aebfdd 100%);
 }
 
 /* ===== Page shell — lock-screen glass over the AgentOS wallpaper ===== */
@@ -61,7 +61,7 @@ body, .login-pf body, .login-pf-page {
     /* Calm enterprise wallpaper + one faint accent glow — mirrors the app shell,
        no more triple aurora blobs. */
     background:
-        radial-gradient(70vw 55vh at 50% -10%, rgba(61,174,233,.10) 0%, transparent 60%),
+        radial-gradient(70vw 55vh at 50% -10%, rgba(53,132,228,.10) 0%, transparent 60%),
         var(--wallpaper-bg);
     min-height: 100vh;
 }
@@ -140,7 +140,6 @@ body, .login-pf body, .login-pf-page {
     border-radius: 8px;
     font-size: 18px;
     font-weight: 700;
-    box-shadow: 0 4px 10px rgba(61,174,233,.30);
     flex-shrink: 0;
 }
 
