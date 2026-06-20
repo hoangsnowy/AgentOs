@@ -107,42 +107,51 @@ body, .login-pf body, .login-pf-page {
     padding: 0;
 }
 
-/* ===== Card (the actual login dialog) ===== */
-.login-pf-page .card-pf,
-#kc-content,
-#kc-form-wrapper {
-    /* Frosted GDM glass — same recipe as the in-app .login-card. */
+/* ===== Card — ONE frosted card. Only .card-pf carries the glass; every inner KC wrapper is
+   transparent (the nested box-in-box was the ugliness). ===== */
+.login-pf-page .card-pf {
     background: rgba(255,255,255,.55);
     backdrop-filter: blur(30px) saturate(150%) brightness(1.04);
     -webkit-backdrop-filter: blur(30px) saturate(150%) brightness(1.04);
-    border: 1px solid rgba(255,255,255,.45);
-    border-radius: var(--r-card);
-    box-shadow: 0 24px 60px -12px rgba(10,22,40,.45), inset 0 1px 0 rgba(255,255,255,.60);
-    padding: 24px 26px 22px;
+    border: 1px solid rgba(255,255,255,.5);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px -12px rgba(10,22,40,.45), inset 0 1px 0 rgba(255,255,255,.6);
+    padding: 26px 26px 24px;
     margin: 0;
 }
-
-#kc-content { padding: 0; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; border: 0; }
+#kc-content,
+#kc-content-wrapper,
+#kc-form,
+#kc-form-wrapper {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
 
 /* ===== Header — replace the stock KC logo with the AgentOS mark ===== */
-#kc-header,
-.login-pf-page-header {
-    /* A-tile + repeated name removed — the big "AgentOS" wordmark above is the single brand. */
-    display: none;
+/* Brand tile centered at the top of the card (the squares-style mark). The realm-name text is
+   hidden — the big wordmark above already names the product. */
+#kc-header {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 14px;
+    padding: 0;
+    border: 0;
 }
+.login-pf-page-header { display: none; }
 
 #kc-header-wrapper {
     background: none !important;
     padding: 0 !important;
-    color: var(--txt-dim) !important;
-    font: 600 13px/1.2 var(--font) !important;
-    text-transform: none !important;
-    letter-spacing: 0 !important;
+    font-size: 0 !important;          /* hide the realm-name text — tile only */
     text-shadow: none !important;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
 }
 
 /* Lit-app-icon brand tile — accent gradient + glow + sheen (same as .login-brand .brand-mark). */
@@ -197,12 +206,14 @@ select, textarea,
 .pf-c-form-control,
 .form-control {
     width: 100%;
-    /* Translucent frosted field — see-through over the glass card, matching the system design. */
-    background: rgba(255,255,255,.35);
+    /* Clean light field — a defined, slightly-recessed pill (matches the system-design field),
+       not the washed see-through one. */
+    background: rgba(255,255,255,.78);
     color: var(--txt);
-    border: 1px solid rgba(255,255,255,.55);
-    border-radius: var(--r-3);
-    padding: 7px 10px;
+    border: 1px solid rgba(255,255,255,.95);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: inset 0 1px 2px rgba(10,22,40,.06);
     font-family: inherit;
     font-size: 13px;
     line-height: 1.4;
