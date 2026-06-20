@@ -1435,15 +1435,6 @@ select {
     animation: login-fade var(--duration-base) var(--ease-standard);
 }
 /* Workspace thumbnails strip */
-.ko-workspaces { display: flex; justify-content: center; gap: 10px; margin: 2px 0 10px; }
-.ko-ws {
-    width: 128px; height: 74px; border-radius: 10px;
-    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
-    display: grid; place-items: center; color: rgba(255,255,255,.7);
-}
-.ko-ws-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); background: rgba(255,255,255,.12); }
-.ko-ws-num { font-size: 13px; font-weight: 700; }
-
 .ko-overview .ko-search {
     width: min(560px, 72vw);
     padding: 0; background: transparent; border-bottom: 0; margin-bottom: 6px;

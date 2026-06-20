@@ -28,10 +28,6 @@
     <div class="start-menu-backdrop" @onclick="CloseStart" @oncontextmenu="CloseStart" @oncontextmenu:preventDefault="true"></div>
     <div class="kickoff ko-overview" @onclick:stopPropagation="true" role="menu" aria-label="Activities overview">
 
-        <div class="ko-workspaces" aria-label="Workspaces">
-            <div class="ko-ws ko-ws-active" title="Workspace 1"><span class="ko-ws-num">1</span></div>
-        </div>
-
         <div class="ko-search">
             <span class="ko-search-ic"><Icon Name="search" Size="15" /></span>
             <input class="ko-search-input" type="text" placeholder="Search apps…"
