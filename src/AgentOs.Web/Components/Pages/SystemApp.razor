@@ -44,8 +44,8 @@
                 <div class="prefs-row">
                     <div class="prefs-label"><strong>Color scheme</strong><br /><span class="prefs-hint">Light or dark UI palette.</span></div>
                     <select value="@_theme" @onchange="OnThemeChanged" class="prefs-select">
-                        <option value="light">Light (Breeze)</option>
-                        <option value="dark">Dark (Breeze Dark)</option>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
                     </select>
                 </div>
                 <div class="prefs-row">
@@ -163,6 +163,8 @@
         UpdatePreview();
         _clockTimer = new System.Threading.Timer(_ => InvokeAsync(() => { UpdatePreview(); StateHasChanged(); }),
             null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+
+        WM.ThemeChanged += OnThemeExternallyChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -242,8 +244,24 @@
     private async Task OnThemeChanged(ChangeEventArgs e)
     {
         _theme = e.Value?.ToString() ?? "light";
-        await JS.InvokeVoidAsync("agenticTheme.applyTheme", _theme);
+        // Paired apply (flips the enterprise wallpaper to match) — identical to the TopBar toggle.
+        await JS.InvokeVoidAsync("agenticTheme.applyThemePaired", _theme);
+        _wall = await JS.InvokeAsync<string>("agenticTheme.getWallpaper");
+        WM.NotifyThemeChanged();   // keep the TopBar sun/moon icon in sync
     }
+
+    // Theme was toggled elsewhere (the TopBar) → re-read theme + wallpaper so the dropdowns match.
+    private void OnThemeExternallyChanged() => InvokeAsync(async () =>
+    {
+        try
+        {
+            _theme = await JS.InvokeAsync<string>("agenticTheme.getTheme");
+            _wall = await JS.InvokeAsync<string>("agenticTheme.getWallpaper");
+        }
+        catch (Microsoft.JSInterop.JSException ex) { _ = ex.Message; }
+        catch (System.InvalidOperationException ex) { _ = ex.Message; }
+        StateHasChanged();
+    });
 
     private async Task OnWallpaperChanged(ChangeEventArgs e)
     {
@@ -264,5 +282,9 @@
 
     private void SignOut() => Nav.NavigateTo("/account/logout", forceLoad: true);
 
-    public void Dispose() => _clockTimer?.Dispose();
+    public void Dispose()
+    {
+        _clockTimer?.Dispose();
+        WM.ThemeChanged -= OnThemeExternallyChanged;
+    }
 }

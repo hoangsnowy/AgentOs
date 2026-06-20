@@ -119,8 +119,18 @@
             null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         WM.Changed += OnChanged;
         WM.ClockPrefsChanged += OnClockPrefsChanged;
+        WM.ThemeChanged += OnThemeExternallyChanged;
         _ = CheckHealthAsync();
     }
+
+    // Theme was changed elsewhere (System → Appearance) → re-read it so the sun/moon icon matches.
+    private void OnThemeExternallyChanged() => InvokeAsync(async () =>
+    {
+        try { _theme = await JS.InvokeAsync<string>("agenticTheme.getTheme"); }
+        catch (Microsoft.JSInterop.JSException ex) { _ = ex.Message; }
+        catch (System.InvalidOperationException ex) { _ = ex.Message; }
+        StateHasChanged();
+    });
 
     // System → Date & time toggled a format pref → re-read + repaint the clock.
     private void OnClockPrefsChanged() => InvokeAsync(async () =>
@@ -234,6 +244,7 @@
         try
         {
             _theme = await JS.InvokeAsync<string>("agenticTheme.toggleAppearance");
+            WM.NotifyThemeChanged();   // keep System → Appearance in sync
         }
         catch (Microsoft.JSInterop.JSException ex)
         {
@@ -307,5 +318,6 @@
         _timer?.Dispose();
         WM.Changed -= OnChanged;
         WM.ClockPrefsChanged -= OnClockPrefsChanged;
+        WM.ThemeChanged -= OnThemeExternallyChanged;
     }
 }

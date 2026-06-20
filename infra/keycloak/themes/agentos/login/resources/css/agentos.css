@@ -197,9 +197,10 @@ select, textarea,
 .pf-c-form-control,
 .form-control {
     width: 100%;
-    background: #ffffff;
+    /* Translucent frosted field — see-through over the glass card, matching the system design. */
+    background: rgba(255,255,255,.35);
     color: var(--txt);
-    border: 1px solid var(--line-strong);
+    border: 1px solid rgba(255,255,255,.55);
     border-radius: var(--r-3);
     padding: 7px 10px;
     font-family: inherit;
