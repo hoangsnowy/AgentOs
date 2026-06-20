@@ -90,7 +90,7 @@ if (!isPublish)
         .WithEnvironment("KC_SPI_THEME_STATIC_MAX_AGE", "-1")
         .WithEnvironment("KC_SPI_THEME_CACHE_THEMES", "false")
         .WithEnvironment("KC_SPI_THEME_CACHE_TEMPLATES", "false")
-        .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE", "64K");
+        .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE", "128K");
 }
 else
 {

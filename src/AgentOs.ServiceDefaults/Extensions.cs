@@ -46,7 +46,7 @@ public static class Extensions
         // before the request even reaches auth. Match Keycloak's 64 KB limit so the full stack is
         // reachable without clearing cookies. (Cloud requests carry no such bloat; harmless there.)
         builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(o =>
-            o.Limits.MaxRequestHeadersTotalSize = 64 * 1024);
+            o.Limits.MaxRequestHeadersTotalSize = 128 * 1024);
 
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
