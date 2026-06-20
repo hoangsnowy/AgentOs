@@ -4,6 +4,11 @@
    sign-in screen feels like part of the same product.
    ================================================================= */
 
+/* Load the SAME Inter webfont the app uses (App.razor → rsms.me/inter) so the
+   login typography is identical to the desktop — without it KC falls back to a
+   system font and the sign-in screen looks "off". */
+@import url('https://rsms.me/inter/inter.css');
+
 :root {
     --bg:           #fafafb;
     --bg-2:         #ffffff;
@@ -224,13 +229,14 @@ button.pf-c-button.pf-m-block,
     padding: 8px 14px;
     background: var(--accent);
     color: #fff;
-    border: 1px solid var(--accent-active);
+    border: 0;
     border-radius: var(--r-3);
     font-family: inherit;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.30), var(--shadow-1);
+    /* Adwaita buttons are flat — no bevel gloss. */
+    box-shadow: none;
     margin-top: 4px;
     transition: background 80ms cubic-bezier(.2,0,0,1);
 }
@@ -249,7 +255,7 @@ button.pf-c-button.pf-m-secondary,
 .kc-button-secondary {
     width: 100%;
     padding: 7px 14px;
-    background: linear-gradient(180deg, var(--bg-2), var(--bg-3));
+    background: var(--bg-2);
     color: var(--txt-soft);
     border: 1px solid var(--line-strong);
     border-radius: var(--r-3);
@@ -259,7 +265,7 @@ button.pf-c-button.pf-m-secondary,
     margin-top: 6px;
 }
 button.pf-c-button.pf-m-secondary:hover {
-    background: linear-gradient(180deg, var(--bg-3), var(--bg-sunk));
+    background: var(--bg-3);
 }
 
 /* ===== Footer links: "Forgot password?", "Register", "Back to login" ===== */
