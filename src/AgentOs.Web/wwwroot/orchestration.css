@@ -18,7 +18,7 @@
     --syn-muted: var(--txt-dim, #6b7888);
     --syn-faint: var(--txt-faint, #5b6675);
     /* accents */
-    --syn-blue: var(--accent, #5cc8ff);
+    --syn-blue: var(--accent);
     --syn-green: #22c55e;
     --syn-purple: #8b5cf6;
     --syn-agent: #2bd4a6;
@@ -54,7 +54,7 @@
     --syn-text-dim: var(--txt-dim, #5b6675);
     --syn-muted: var(--txt-dim, #7a8696);
     --syn-faint: var(--txt-faint, #97a1b0);
-    --syn-blue: var(--accent, #3daee9);
+    --syn-blue: var(--accent);
     --syn-green: #16a34a;
     --syn-purple: #7c3aed;
     --syn-agent: #0d9488;
@@ -118,7 +118,7 @@ html, body { margin: 0; height: 100%; }
 /* ---------- main ---------- */
 .syn-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
-.syn-topbar { display: flex; justify-content: space-between; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--syn-border); background: linear-gradient(180deg, #fbfcfd, #f1f4f8); }
+.syn-topbar { display: flex; justify-content: space-between; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--syn-border); background: var(--syn-head); }
 .syn-topbar h1 { margin: 0; font-size: 14px; font-weight: 700; color: var(--syn-text-strong); }
 .syn-topbar p { margin: 0; color: var(--syn-muted); font-size: 11.5px; }
 .syn-close { color: var(--syn-muted); text-decoration: none; font-size: 14px; padding: 6px 10px; border-radius: 6px; }

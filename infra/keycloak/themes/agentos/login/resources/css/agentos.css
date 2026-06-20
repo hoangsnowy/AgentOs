@@ -227,7 +227,7 @@ input:focus, select:focus, textarea:focus,
     box-shadow: var(--focus-ring);
 }
 
-input::placeholder { color: var(--txt-faint); }
+input::placeholder { color: var(--txt-dim); }
 
 /* "Show password" eye toggle KC injects on password fields */
 /* Password field = ONE seamless pill. The show-password toggle floats transparent inside it on
