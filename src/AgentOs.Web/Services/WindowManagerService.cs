@@ -86,6 +86,24 @@ public sealed class WindowManagerService
     /// <summary>Raise <see cref="ClockPrefsChanged"/>. Called by System → Date &amp; time toggles.</summary>
     public void NotifyClockPrefsChanged() => ClockPrefsChanged?.Invoke();
 
+    /// <summary>
+    /// Fires when the color theme changes from EITHER control (TopBar appearance toggle or the
+    /// System → Appearance dropdown), so both re-read the live theme/wallpaper and stay in sync.
+    /// Scoped service ⇒ one instance per circuit, shared by the TopBar + the open System window.
+    /// </summary>
+    public event Action? ThemeChanged;
+
+    /// <summary>Raise <see cref="ThemeChanged"/>. Called after any theme/wallpaper appearance change.</summary>
+    public void NotifyThemeChanged() => ThemeChanged?.Invoke();
+
+    /// <summary>Fires when the GNOME-style "Activities" trigger (top bar) wants to toggle the
+    /// launcher overview. The shell layout owns the launcher state and subscribes here so the
+    /// top bar can open it without a direct component reference.</summary>
+    public event Action? StartMenuToggleRequested;
+
+    /// <summary>Raise <see cref="StartMenuToggleRequested"/>. Called by the TopBar Activities button.</summary>
+    public void RequestStartMenuToggle() => StartMenuToggleRequested?.Invoke();
+
     /// <summary>Open an app window. If one already exists for this key, focus it instead.</summary>
     public AppWindowState OpenApp(string appKey, string title, string icon, int w = 920, int h = 620)
     {

@@ -1,45 +1,53 @@
 /* =================================================================
-   AgentOS login theme — Keycloak skin matching AgentOS Studio (Breeze).
-   Mirrors the design tokens from src/AgentOS.Web/wwwroot/app.css so the
+   AgentOS login theme — Keycloak skin matching the AgentOS GNOME/Adwaita desktop.
+   Mirrors the design tokens from src/AgentOs.Web/wwwroot/app.css so the
    sign-in screen feels like part of the same product.
    ================================================================= */
 
+/* Load the SAME Inter webfont the app uses (App.razor → rsms.me/inter) so the
+   login typography is identical to the desktop — without it KC falls back to a
+   system font and the sign-in screen looks "off". */
+@import url('https://rsms.me/inter/inter.css');
+
 :root {
-    --bg:           #eef2f7;
+    --bg:           #fafafb;
     --bg-2:         #ffffff;
-    --bg-3:         #f4f6fa;
-    --bg-sunk:      #e1e7ef;
-    --line:         #cfd6e0;
-    --line-strong:  #b6c0cc;
-    --txt:          #0f172a;
-    --txt-soft:     #334155;
-    --txt-dim:      #64748b;
-    --txt-faint:    #94a3b8;
-    --accent:       #3daee9;
-    --accent-hover: #2a93cc;
-    --accent-active:#1d7eb3;
-    --accent-soft:  #d6ecf7;
-    --ok:           #16a34a;
-    --warn:         #d97706;
-    --err:          #dc2626;
+    --bg-3:         #f4f4f5;
+    --bg-sunk:      #ededee;
+    --line:         #d7d7db;
+    --line-strong:  #c0c0c4;
+    --txt:          #1e1e1e;
+    --txt-soft:     #3d3d40;
+    --txt-dim:      #5e5c64;
+    --txt-faint:    #9a9996;
+    --accent:       #3584e4;
+    --accent-hover: #2d77d6;
+    --accent-active:#1f66c4;
+    --accent-soft:  #dbe8fb;
+    --ok:           #2e9f63;
+    --warn:         #c98a0a;
+    --err:          #e01b24;
 
     --font:  "Inter", "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
     --mono:  "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, ui-monospace, monospace;
 
-    --r-3:   5px;
-    --r-4:   6px;
-    --r-5:   8px;
-    --r-card: 8px;
+    --r-3:   8px;
+    --r-4:   9px;
+    --r-5:   12px;
+    --r-card: 12px;
 
-    --focus-ring: 0 0 0 2px rgba(61,174,233,.55);
+    --focus-ring: 0 0 0 2px rgba(53,132,228,.55);
 
-    /* Mirror the app's --shadow-4 (max elevation) — calm enterprise, not a heavy 50%-black drop. */
-    --shadow-card: 0 24px 48px -8px rgba(15,23,42,.18), 0 8px 16px rgba(15,23,42,.08);
-    --shadow-1:    0 1px 0 rgba(15,23,42,.04);
-    --shadow-2:    0 2px 4px rgba(15,23,42,.06), 0 1px 0 rgba(15,23,42,.04);
+    /* GNOME / Adwaita elevation — soft neutral shadow. */
+    --shadow-card: 0 18px 48px -12px rgba(0,0,0,.30), 0 8px 16px rgba(0,0,0,.12);
+    --shadow-1:    0 1px 2px rgba(0,0,0,.07);
+    --shadow-2:    0 2px 10px rgba(0,0,0,.12);
 
-    /* Match the app desktop's default enterprise-light wallpaper. */
-    --wallpaper-bg: linear-gradient(180deg, #e8eef5 0%, #d4dde8 100%);
+    /* Byte-identical to the desktop app.css light wallpaper so KC + desktop share pixels. */
+    --wallpaper-bg:
+        radial-gradient(80vw 70vh at 12% 0%, #8bbef5 0%, transparent 58%),
+        radial-gradient(78vw 68vh at 100% 100%, #3a78da 0%, transparent 55%),
+        linear-gradient(135deg, #c2dcf8 0%, #7ba9e8 52%, #4f86dd 100%);
 }
 
 /* ===== Page shell — lock-screen glass over the AgentOS wallpaper ===== */
@@ -58,11 +66,8 @@ html, body {
 }
 
 body, .login-pf body, .login-pf-page {
-    /* Calm enterprise wallpaper + one faint accent glow — mirrors the app shell,
-       no more triple aurora blobs. */
-    background:
-        radial-gradient(70vw 55vh at 50% -10%, rgba(61,174,233,.10) 0%, transparent 60%),
-        var(--wallpaper-bg);
+    /* Byte-identical to the desktop field — wallpaper only, no extra glow layer. */
+    background: var(--wallpaper-bg);
     min-height: 100vh;
 }
 
@@ -74,82 +79,102 @@ body, .login-pf body, .login-pf-page {
 }
 
 .login-pf-page {
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(28px, 6vh, 48px);
+    min-height: 100vh;
     padding: 32px 16px;
 }
+/* GDM lock-screen wordmark above the card — thin white, THE brand identity (the in-card A-tile
+   is hidden so the name shows once). */
+.login-pf-page::before {
+    content: "AgentOS";
+    order: 1;
+    color: #fff;
+    font: 200 clamp(48px, 9vw, 84px)/1 var(--font);
+    letter-spacing: -.03em;
+    text-shadow: 0 2px 14px rgba(0,0,0,.42);
+}
 
-/* The PF Keycloak frame — strip it. */
+/* The PF Keycloak frame — strip it; the card sits below the wordmark. */
 .login-pf-page .container,
 .login-pf-page > div {
-    max-width: 380px;
+    order: 2;
+    max-width: 360px;
     width: 100%;
     padding: 0;
 }
 
-/* ===== Card (the actual login dialog) ===== */
-.login-pf-page .card-pf,
-#kc-content,
-#kc-form-wrapper {
-    background: rgba(255,255,255,.95);
-    backdrop-filter: blur(10px) saturate(120%);
-    -webkit-backdrop-filter: blur(10px) saturate(120%);
-    border: 1px solid var(--line);
-    border-radius: var(--r-card);
-    box-shadow: var(--shadow-card);
-    padding: 24px 26px 22px;
+/* ===== Card — ONE frosted card. Only .card-pf carries the glass; every inner KC wrapper is
+   transparent (the nested box-in-box was the ugliness). ===== */
+.login-pf-page .card-pf {
+    background: rgba(255,255,255,.55);
+    backdrop-filter: blur(30px) saturate(150%) brightness(1.04);
+    -webkit-backdrop-filter: blur(30px) saturate(150%) brightness(1.04);
+    border: 1px solid rgba(255,255,255,.5);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px -12px rgba(10,22,40,.45), inset 0 1px 0 rgba(255,255,255,.6);
+    padding: 26px 26px 24px;
     margin: 0;
 }
-
-#kc-content { padding: 0; background: transparent; box-shadow: none; border: 0; }
+#kc-content,
+#kc-content-wrapper,
+#kc-form,
+#kc-form-wrapper {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
 
 /* ===== Header — replace the stock KC logo with the AgentOS mark ===== */
-#kc-header,
-.login-pf-page-header {
-    text-align: left;
-    margin: 0 0 14px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid rgba(15,23,42,.10);
+/* Brand tile centered at the top of the card (the squares-style mark). The realm-name text is
+   hidden — the big wordmark above already names the product. */
+#kc-header {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    justify-content: center;
+    margin: 0 0 14px;
+    padding: 0;
+    border: 0;
 }
+.login-pf-page-header { display: none; }
 
 #kc-header-wrapper {
     background: none !important;
     padding: 0 !important;
-    color: var(--txt) !important;
-    font: 700 15px/1.2 var(--font) !important;
-    text-transform: none !important;
-    letter-spacing: 0 !important;
+    font-size: 0 !important;          /* hide the realm-name text — tile only */
     text-shadow: none !important;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 12px;
 }
 
-/* Mark = blue square with "A" — same recipe as .login-brand .brand-mark in Web. */
+/* Lit-app-icon brand tile — accent gradient + the AgentOS window/squares glyph (data-URI SVG),
+   matching the system-design mark (not a bare "A" letter). */
 #kc-header-wrapper::before {
-    content: "A";
-    width: 38px;
-    height: 38px;
-    display: grid;
-    place-items: center;
-    background: var(--accent);
-    color: #fff;
-    border-radius: 8px;
-    font-size: 18px;
-    font-weight: 700;
-    box-shadow: 0 4px 10px rgba(61,174,233,.30);
+    content: "";
+    width: 46px;
+    height: 46px;
+    border-radius: 11px;
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='14' height='14' rx='2'/%3E%3Crect x='7' y='7' width='14' height='14' rx='2'/%3E%3C/svg%3E") center / 24px 24px no-repeat,
+        linear-gradient(160deg, #5b9bf0, var(--accent) 60%, var(--accent-active));
+    box-shadow: 0 6px 16px -4px rgba(53,132,228,.55), inset 0 1px 0 rgba(255,255,255,.25);
     flex-shrink: 0;
 }
 
 /* ===== Page titles inside content (e.g. "Sign in", "Register") ===== */
 #kc-page-title {
-    font-size: 15px;
+    text-align: center;
+    font-size: 17px;
     font-weight: 700;
     color: var(--txt);
-    margin: 0 0 4px;
+    margin: 0 0 16px;
     letter-spacing: -.01em;
 }
 .subtitle {
@@ -179,11 +204,14 @@ select, textarea,
 .pf-c-form-control,
 .form-control {
     width: 100%;
-    background: var(--bg-2);
+    /* Clean light field — a defined, slightly-recessed pill (matches the system-design field),
+       not the washed see-through one. */
+    background: rgba(255,255,255,.78);
     color: var(--txt);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-3);
-    padding: 7px 10px;
+    border: 1px solid rgba(255,255,255,.95);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: inset 0 1px 2px rgba(10,22,40,.06);
     font-family: inherit;
     font-size: 13px;
     line-height: 1.4;
@@ -199,21 +227,24 @@ input:focus, select:focus, textarea:focus,
     box-shadow: var(--focus-ring);
 }
 
-input::placeholder { color: var(--txt-faint); }
+input::placeholder { color: var(--txt-dim); }
 
 /* "Show password" eye toggle KC injects on password fields */
-.pf-c-input-group { display: flex; }
-.pf-c-input-group > input { flex: 1; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* Password field = ONE seamless pill. The show-password toggle floats transparent inside it on
+   the right (no separate boxed button / notch). */
+.pf-c-input-group { position: relative; display: flex; }
+.pf-c-input-group > input { flex: 1; border-radius: 10px; padding-right: 42px; }
 .pf-c-input-group > button {
-    background: var(--bg-3);
-    border: 1px solid var(--line-strong);
-    border-left: 0;
-    border-radius: 0 var(--r-3) var(--r-3) 0;
-    padding: 0 10px;
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    width: 32px; height: 30px;
+    display: grid; place-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
     color: var(--txt-dim);
     cursor: pointer;
 }
-.pf-c-input-group > button:hover { color: var(--txt); background: var(--bg-sunk); }
+.pf-c-input-group > button:hover { color: var(--txt); background: rgba(10,22,40,.06); }
 
 /* ===== Buttons ===== */
 input[type="submit"],
@@ -225,13 +256,14 @@ button.pf-c-button.pf-m-block,
     padding: 8px 14px;
     background: var(--accent);
     color: #fff;
-    border: 1px solid var(--accent-active);
+    border: 0;
     border-radius: var(--r-3);
     font-family: inherit;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.30), var(--shadow-1);
+    /* Adwaita buttons are flat — no bevel gloss. */
+    box-shadow: none;
     margin-top: 4px;
     transition: background 80ms cubic-bezier(.2,0,0,1);
 }
@@ -250,7 +282,7 @@ button.pf-c-button.pf-m-secondary,
 .kc-button-secondary {
     width: 100%;
     padding: 7px 14px;
-    background: linear-gradient(180deg, var(--bg-2), var(--bg-3));
+    background: var(--bg-2);
     color: var(--txt-soft);
     border: 1px solid var(--line-strong);
     border-radius: var(--r-3);
@@ -260,7 +292,7 @@ button.pf-c-button.pf-m-secondary,
     margin-top: 6px;
 }
 button.pf-c-button.pf-m-secondary:hover {
-    background: linear-gradient(180deg, var(--bg-3), var(--bg-sunk));
+    background: var(--bg-3);
 }
 
 /* ===== Footer links: "Forgot password?", "Register", "Back to login" ===== */
@@ -270,11 +302,11 @@ button.pf-c-button.pf-m-secondary:hover {
     font-size: 12px;
     color: var(--txt-dim);
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     gap: 12px;
     flex-wrap: wrap;
 }
-#kc-info-wrapper { border-top: 1px solid rgba(15,23,42,.10); padding-top: 12px; margin-top: 16px; justify-content: center; }
+#kc-info-wrapper { border-top: 1px solid rgba(15,23,42,.08); padding-top: 12px; margin-top: 16px; justify-content: center; }
 
 a, a:visited {
     color: var(--accent);
@@ -292,7 +324,7 @@ a:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 2
     margin: 0;
     color: var(--txt-soft);
 }
-#kc-form-options input[type="checkbox"] { width: auto; accent-color: var(--accent); margin: 0; }
+#kc-form-options input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); margin: 0; flex: none; }
 
 /* ===== Alerts (success / warning / error messages KC pushes inline) ===== */
 .alert, .pf-c-alert {
@@ -306,24 +338,24 @@ a:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 2
     border: 1px solid transparent;
 }
 .alert-success, .pf-m-success {
-    background: rgba(22,163,74,.10);
+    background: color-mix(in srgb, var(--ok) 10%, transparent);
     color: var(--ok);
-    border-color: rgba(22,163,74,.40);
+    border-color: color-mix(in srgb, var(--ok) 40%, transparent);
 }
 .alert-warning, .pf-m-warning {
-    background: rgba(217,119,6,.10);
+    background: color-mix(in srgb, var(--warn) 10%, transparent);
     color: var(--warn);
-    border-color: rgba(217,119,6,.40);
+    border-color: color-mix(in srgb, var(--warn) 40%, transparent);
 }
 .alert-error, .alert-danger, .pf-m-danger {
-    background: rgba(220,38,38,.10);
+    background: color-mix(in srgb, var(--err) 10%, transparent);
     color: var(--err);
-    border-color: rgba(220,38,38,.40);
+    border-color: color-mix(in srgb, var(--err) 40%, transparent);
 }
 .alert-info, .pf-m-info {
     background: var(--accent-soft);
     color: var(--accent-active);
-    border-color: rgba(61,174,233,.40);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 /* ===== Field-level inline validation (Keycloak adds .has-error on .form-group) ===== */

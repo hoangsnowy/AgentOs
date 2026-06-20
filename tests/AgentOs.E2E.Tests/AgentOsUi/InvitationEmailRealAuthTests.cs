@@ -25,8 +25,8 @@ public sealed class InvitationEmailRealAuthTests : IClassFixture<AgentOsRealAuth
         await MailHog.ClearAsync();
         await _fx.LoginAsync(); // operator / admin
 
-        // Open the (admin-only) Users app from its desktop icon.
-        await _fx.Page.Locator(".dicon", new() { HasTextString = "Users" }).First.ClickAsync();
+        // Open the (admin-only) Users app from its Dash (dock) button.
+        await _fx.Page.Locator(".dock-item[title=\"Users\"]").First.ClickAsync();
         var win = _fx.Page.Locator(".appwin.focused");
         await Assertions.Expect(win.Locator(".appwin-title")).ToHaveTextAsync("Users");
 

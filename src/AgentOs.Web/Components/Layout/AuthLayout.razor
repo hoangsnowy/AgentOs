@@ -3,5 +3,9 @@
 @* Standalone layout for anonymous pages (Login / Signup) — no desktop shell, no TopBar. *@
 
 <div class="login-overlay">
+    <div class="lock-clock">
+        <div class="lock-time">@DateTime.Now.ToString("HH:mm")</div>
+        <div class="lock-date">@DateTime.Now.ToString("dddd, d MMMM")</div>
+    </div>
     @Body
 </div>

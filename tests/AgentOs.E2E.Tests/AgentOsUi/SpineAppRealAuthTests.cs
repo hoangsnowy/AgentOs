@@ -40,7 +40,7 @@ public sealed class SpineAppRealAuthTests : IClassFixture<AgentOsRealAuthFixture
         if (!AgentOsRealAuthFixture.IsEnabled) { Assert.Skip(AgentOsRealAuthFixture.SkipReason); }
 
         await _fx.LoginAsync();
-        await _fx.Page.Locator(".dicon", new() { HasTextString = "Spine" }).First.ClickAsync();
+        await _fx.Page.Locator(".dock-item[title=\"Spine\"]").First.ClickAsync();
         var win = _fx.Page.Locator(".appwin.focused");
         await Assertions.Expect(win.Locator(".appwin-title")).ToHaveTextAsync("Spine");
 

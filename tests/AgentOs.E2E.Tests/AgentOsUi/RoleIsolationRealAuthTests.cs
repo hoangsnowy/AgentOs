@@ -28,10 +28,10 @@ public sealed class RoleIsolationRealAuthTests : IClassFixture<AgentOsRealAuthFi
         await Assertions.Expect(_fx.Page.Locator(".dock")).ToBeVisibleAsync();
 
         // Spine is visible to every member.
-        await Assertions.Expect(_fx.Page.Locator(".dicon", new() { HasTextString = "Spine" }).First).ToBeVisibleAsync();
+        await Assertions.Expect(_fx.Page.Locator(".dock-item[title=\"Spine\"]").First).ToBeVisibleAsync();
 
         // AdminOnly apps must be absent from the member's app surface.
-        await Assertions.Expect(_fx.Page.Locator(".dicon", new() { HasTextString = "Users" })).ToHaveCountAsync(0);
-        await Assertions.Expect(_fx.Page.Locator(".dicon", new() { HasTextString = "Evidence" })).ToHaveCountAsync(0);
+        await Assertions.Expect(_fx.Page.Locator(".dock-item[title=\"Users\"]")).ToHaveCountAsync(0);
+        await Assertions.Expect(_fx.Page.Locator(".dock-item[title=\"Evidence\"]")).ToHaveCountAsync(0);
     }
 }

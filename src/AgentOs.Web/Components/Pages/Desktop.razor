@@ -5,34 +5,13 @@
 
 <PageTitle>Desktop — AgentOS</PageTitle>
 
-<div class="desktop"
+<div class="desktop desktop-empty"
      @oncontextmenu="OnRightClick"
      @oncontextmenu:preventDefault="true">
 
-    <div class="desktop-group">
-        <div class="desktop-group-title">Apps</div>
-        <div class="desktop-icons">
-            @foreach (var app in AgentOs.Web.Services.AppCatalog.VisiblePinned(_isAdmin))
-            {
-                <DesktopIcon Title="@app.Title" Icon="@app.Icon" Caption="@app.Caption"
-                             OnClick="@(() => WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H))" />
-            }
-        </div>
-    </div>
-
-    <div class="desktop-group">
-        <div class="desktop-group-title">Quick actions</div>
-        <div class="desktop-icons">
-            <DesktopIcon Title="Open PR" Icon="git-pull-request" Caption="Push generated code → GitHub"
-                         OnClick="@(() => WM.OpenApp("pipeline", "Pipeline", "play"))" />
-            <DesktopIcon Title="Verify build" Icon="hammer" Caption="dotnet build the agent output"
-                         OnClick="@(() => WM.OpenApp("pipeline", "Pipeline", "play"))" />
-            <DesktopIcon Title="GitHub" Icon="arrow-square-out" Caption="Repository"
-                         Href="https://github.com/hoangsnowy/AgentOs" Target="_blank" />
-        </div>
-    </div>
-
-    @* Clock removed — TopBar clock is the single source. KDE Plasma + macOS convention. *@
+    @* Authentic GNOME desktop: clean wallpaper, no icons. Apps live in the Dash (bottom dock)
+       and the Activities overview (top-left "Activities" → search + app grid + window exposé).
+       Right-click opens the desktop context menu. *@
 </div>
 
 <ContextMenu Show="_ctxShow" X="_ctxX" Y="_ctxY" OnClose="@(() => _ctxShow = false)">
@@ -55,20 +34,8 @@
 </ContextMenu>
 
 @code {
-    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
-
     private bool _ctxShow;
     private int _ctxX, _ctxY;
-    private bool _isAdmin;
-
-    protected override async Task OnInitializedAsync()
-    {
-        if (AuthState is not null)
-        {
-            var state = await AuthState;
-            _isAdmin = state.User.IsInRole("admin");
-        }
-    }
 
     private void OnRightClick(MouseEventArgs e)
     {

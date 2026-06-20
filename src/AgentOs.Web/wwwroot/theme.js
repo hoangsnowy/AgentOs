@@ -42,15 +42,22 @@ window.agenticTheme = {
     // wallpaper is one of the paired enterprise variants, flips it to match so the
     // desktop stays coherent. Custom wallpapers (aurora/midnight/sunset) are left
     // as the user chose them. Returns the new theme.
-    toggleAppearance: function () {
-        var T = window.agenticTheme;   // not `this` — see toggleTheme note.
-        var next = T.getTheme() === 'light' ? 'dark' : 'light';
-        T.applyTheme(next);
+    // Apply an EXPLICIT theme and, when the wallpaper is a paired enterprise variant, flip it to
+    // match so the desktop stays coherent. Custom wallpapers (aurora/midnight/sunset) are left as
+    // the user chose them. Shared by the TopBar toggle AND the Settings dropdown so the two controls
+    // behave identically (the source of the previous TopBar↔Settings desync).
+    applyThemePaired: function (t) {
+        var T = window.agenticTheme;
+        T.applyTheme(t);
         var w = T.getWallpaper();
         if (w === 'enterprise-light' || w === 'enterprise-dark') {
-            T.applyWallpaper(next === 'dark' ? 'enterprise-dark' : 'enterprise-light');
+            T.applyWallpaper(t === 'dark' ? 'enterprise-dark' : 'enterprise-light');
         }
-        return next;
+        return t;
+    },
+    toggleAppearance: function () {
+        var T = window.agenticTheme;   // not `this` — see toggleTheme note.
+        return T.applyThemePaired(T.getTheme() === 'light' ? 'dark' : 'light');
     },
 
     // Back-compat with old call sites that used agenticTheme.apply / agenticTheme.toggle / agenticTheme.get

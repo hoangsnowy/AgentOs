@@ -615,7 +615,7 @@ else if (_tab == Tab.Sessions)
                             @s.Title
                             @if (!string.IsNullOrEmpty(s.Error))
                             {
-                                <br /><span class="muted" style="font-size:11px;color:var(--color-err,#e55)">@s.Error</span>
+                                <br /><span class="spine-session-repo-err" style="font-size:11px">@s.Error</span>
                             }
                         </td>
                         <td><code>@BoardName(s.WorkspaceId)</code></td>

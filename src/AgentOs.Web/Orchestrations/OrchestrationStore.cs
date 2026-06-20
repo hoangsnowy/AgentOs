@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Modules.Pipeline.Persistence;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Web.Orchestrations;
 
@@ -30,14 +31,17 @@ public sealed class OrchestrationStore
     private readonly Dictionary<(string Tenant, string Id), OrchestrationGraph> _graphs = new();
     private readonly HashSet<string> _loadedTenants = new(StringComparer.Ordinal);
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<OrchestrationStore> _logger;
 
     /// <summary>Construct. The DB load is LAZY (first access), NOT in the ctor — this store is a
     /// singleton resolved during host build / circuit open, so a blocking DB load here would stall
     /// startup and risk crashing the Blazor circuit (eager-DI). See <see cref="EnsureLoaded"/>.</summary>
-    public OrchestrationStore(IServiceScopeFactory scopeFactory)
+    public OrchestrationStore(IServiceScopeFactory scopeFactory, ILogger<OrchestrationStore> logger)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);
+        ArgumentNullException.ThrowIfNull(logger);
         _scopeFactory = scopeFactory;
+        _logger = logger;
     }
 
     /// <summary>All orchestrations for a tenant, sorted by name.</summary>
@@ -150,15 +154,38 @@ public sealed class OrchestrationStore
         var records = RunOnRepo(repo => repo.ListForTenantAsync(tenantId));
         if (records.Count > 0)
         {
+            var loaded = 0;
             foreach (var r in records)
             {
-                var g = JsonSerializer.Deserialize<OrchestrationGraph>(r.DefinitionJson, Json);
+                // A single corrupt/legacy DefinitionJson row must NOT take down the whole Studio for the
+                // tenant — deserialize defensively, log + skip the bad row, keep the rest. (OrchestrationGraph.Id
+                // is a `required` member, so a row missing "id" throws JsonException here.)
+                OrchestrationGraph? g;
+                try
+                {
+                    g = JsonSerializer.Deserialize<OrchestrationGraph>(r.DefinitionJson, Json);
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogWarning(ex, "Skipping corrupt orchestration row {Id} for tenant {Tenant}", r.Id, tenantId);
+                    continue;
+                }
+
                 if (g is not null)
                 {
                     _graphs[(tenantId, g.Id)] = g;
+                    loaded++;
                 }
             }
-            return;
+
+            // At least one row materialized → done. If EVERY row was corrupt, fall through to seed defaults
+            // so the tenant still gets a working Studio (the bad rows stay in the DB but are ignored).
+            if (loaded > 0)
+            {
+                return;
+            }
+
+            _logger.LogWarning("All {Count} orchestration rows for tenant {Tenant} were corrupt; seeding defaults", records.Count, tenantId);
         }
 
         foreach (var g in SeedDefaults())

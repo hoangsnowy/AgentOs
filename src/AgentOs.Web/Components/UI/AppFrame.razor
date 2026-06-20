@@ -27,19 +27,19 @@
                     title="Minimize"
                     @onclick="@(() => WM.Minimize(W.Id))"
                     @onclick:stopPropagation="true"
-                    @onmousedown:stopPropagation="true">—</button>
+                    @onmousedown:stopPropagation="true"><Icon Name="minus" Size="16" /></button>
             <button class="appwin-btn" type="button"
                     aria-label="@(_maximized ? "Restore" : "Maximize")"
                     title="@(_maximized ? "Restore" : "Maximize")"
                     @onclick="ToggleMax"
                     @onclick:stopPropagation="true"
-                    @onmousedown:stopPropagation="true">@(_maximized ? "❐" : "□")</button>
+                    @onmousedown:stopPropagation="true"><Icon Name="@(_maximized ? "squares-stack" : "square")" Size="13" /></button>
             <button class="appwin-btn appwin-btn-close" type="button"
                     aria-label="Close"
                     title="Close"
                     @onclick="@(() => WM.Close(W.Id))"
                     @onclick:stopPropagation="true"
-                    @onmousedown:stopPropagation="true">×</button>
+                    @onmousedown:stopPropagation="true"><Icon Name="x" Size="16" /></button>
         </div>
     </div>
     <div class="appwin-body">

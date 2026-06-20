@@ -18,7 +18,7 @@
     --syn-muted: var(--txt-dim, #6b7888);
     --syn-faint: var(--txt-faint, #5b6675);
     /* accents */
-    --syn-blue: var(--accent, #5cc8ff);
+    --syn-blue: var(--accent);
     --syn-green: #22c55e;
     --syn-purple: #8b5cf6;
     --syn-agent: #2bd4a6;
@@ -54,7 +54,7 @@
     --syn-text-dim: var(--txt-dim, #5b6675);
     --syn-muted: var(--txt-dim, #7a8696);
     --syn-faint: var(--txt-faint, #97a1b0);
-    --syn-blue: var(--accent, #3daee9);
+    --syn-blue: var(--accent);
     --syn-green: #16a34a;
     --syn-purple: #7c3aed;
     --syn-agent: #0d9488;
@@ -118,7 +118,7 @@ html, body { margin: 0; height: 100%; }
 /* ---------- main ---------- */
 .syn-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
-.syn-topbar { display: flex; justify-content: space-between; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--syn-border); background: linear-gradient(180deg, #fbfcfd, #f1f4f8); }
+.syn-topbar { display: flex; justify-content: space-between; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--syn-border); background: var(--syn-head); }
 .syn-topbar h1 { margin: 0; font-size: 14px; font-weight: 700; color: var(--syn-text-strong); }
 .syn-topbar p { margin: 0; color: var(--syn-muted); font-size: 11.5px; }
 .syn-close { color: var(--syn-muted); text-decoration: none; font-size: 14px; padding: 6px 10px; border-radius: 6px; }
@@ -216,8 +216,13 @@ a.syn-nav-item { text-decoration: none; }
 .step-node.cat-llm { border-left-color: var(--syn-llm); }
 .step-node.cat-llm .sn-ico { color: var(--syn-llm); }
 .step-node.cat-terminal { border-left-color: var(--syn-term); }
+/* Logic category (Loop/Merge/Parallel/Transform/ExtractJson) — gray. The base .step-node already
+   uses --syn-logic for the left border; this also tints the icon so logic nodes aren't text-coloured. */
+.step-node.cat-logic { border-left-color: var(--syn-logic); }
+.step-node.cat-logic .sn-ico { color: var(--syn-logic); }
 
 /* run states */
+.step-node.run-idle { /* default at-rest state — the base .step-node styling IS the idle look. */ }
 .step-node.run-running { border-color: var(--syn-blue); box-shadow: 0 0 0 1px var(--syn-blue), 0 0 18px rgba(92,200,255,.35); }
 .step-node.run-done { border-color: var(--syn-green-border); }
 .step-node.run-failed { border-color: var(--syn-danger-border); box-shadow: 0 0 0 1px var(--syn-human), 0 0 16px rgba(192,86,106,.35); }
