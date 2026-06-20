@@ -1085,33 +1085,39 @@ select {
    ================================================================= */
 .login-overlay {
     position: fixed; inset: 0; z-index: 99999;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px;
-    /* Lock screen: heavily frost the desktop behind, independent of the
-       glass slider (which defaults to 0). KDE / macOS lock-screen feel. */
-    background: rgba(10,22,40,.62);
-    backdrop-filter: blur(28px) saturate(120%) brightness(.92);
-    -webkit-backdrop-filter: blur(28px) saturate(120%) brightness(.92);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(32px, 7vh, 56px);
+    /* Sign-in sits over the bold GNOME wallpaper (body::before) — the SAME crisp field as the
+       Keycloak login (lock = logout, so there is no live desktop to frost behind). The depth
+       comes from the frosted glass on the card itself, not a scrim. */
+    background: transparent;
     animation: login-fade var(--duration-slow) var(--ease-standard);
 }
 @keyframes login-fade { from { opacity: 0; } to { opacity: 1; } }
-:root[data-theme="dark"] .login-overlay {
-    background: rgba(4,8,14,.70);
-    backdrop-filter: blur(28px) saturate(110%) brightness(.78);
-    -webkit-backdrop-filter: blur(28px) saturate(110%) brightness(.78);
-}
+/* Dark login field = the dark navy wallpaper itself (body::before) — no scrim override needed. */
 /* GNOME lock-screen clock — large thin clock + date over the frosted wallpaper. */
 .lock-clock { text-align: center; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.45); user-select: none; }
-.lock-time { font-size: 80px; font-weight: 200; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.lock-date { font-size: 18px; font-weight: 500; opacity: .92; margin-top: 8px; }
+.lock-time { font-size: clamp(64px, 11vw, 104px); font-weight: 200; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.lock-date { font-size: clamp(15px, 2vw, 20px); font-weight: 500; opacity: .92; margin-top: 8px; letter-spacing: .01em; }
 @media (max-width: 480px) { .lock-time { font-size: 60px; } }
 .login-card {
     width: 340px;
-    background: var(--bg-2);
-    border: 1px solid var(--line);
+    max-width: 360px;
+    /* Frosted GDM glass — light-translucent, same tint as the Keycloak login (one design, both
+       surfaces). Sits on the already-blurred .login-overlay → double-blur depth. */
+    background: rgba(255,255,255,.55);
+    backdrop-filter: blur(30px) saturate(150%) brightness(1.04);
+    -webkit-backdrop-filter: blur(30px) saturate(150%) brightness(1.04);
+    border: 1px solid rgba(255,255,255,.45);
     border-radius: var(--radius-md);
-    box-shadow: 0 18px 48px -8px rgba(0,0,0,.45);
+    box-shadow: 0 24px 60px -12px rgba(10,22,40,.45), inset 0 1px 0 rgba(255,255,255,.60);
     padding: 22px 22px 18px;
     animation: login-rise var(--duration-base) var(--ease-emphasized);
+}
+/* Dark theme: var(--txt) is white, so the card must be a DARK glass for the form text to read. */
+:root[data-theme="dark"] .login-card {
+    background: rgba(22,28,40,.55);
+    border-color: rgba(255,255,255,.16);
+    box-shadow: 0 24px 60px -12px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.10);
 }
 @keyframes login-rise { from { transform: translateY(10px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
 /* Wider variant for the signup card (more fields than login). */
@@ -1123,11 +1129,13 @@ select {
     margin-bottom: 16px;
 }
 .login-brand .brand-mark {
-    width: 38px; height: 38px;
+    width: 44px; height: 44px;
     display: grid; place-items: center;
-    background: var(--accent);
+    /* Lit-app-icon: accent gradient + colored glow + top sheen (GDM brand tile). */
+    background: linear-gradient(160deg, #5b9bf0, var(--accent) 60%, var(--accent-active));
     color: #fff;
     border-radius: var(--radius-sm);
+    box-shadow: 0 6px 16px -4px rgba(53,132,228,.55), inset 0 1px 0 rgba(255,255,255,.25);
     font-size: 18px;
     font-weight: 700;
 }
