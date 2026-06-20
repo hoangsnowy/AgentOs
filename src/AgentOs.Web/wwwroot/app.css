@@ -8,31 +8,31 @@
 
 :root {
     /* ----- Surfaces (Breeze Light) ----- */
-    --bg: #eef2f7;
+    --bg: #fafafb;
     --bg-2: #ffffff;
-    --bg-3: #f4f6fa;
-    --bg-sunk: #e1e7ef;
-    --bg-sidebar: #f7f9fc;
+    --bg-3: #f4f4f5;
+    --bg-sunk: #ededee;
+    --bg-sidebar: #fafafb;
     --bg-topbar: #ffffff;
-    --bg-titlebar: #f4f6fa;
-    --bg-toolbar: #f7f9fc;
-    --bg-statusbar: #eef2f7;
+    --bg-titlebar: #f0f0f1;
+    --bg-toolbar: #f6f6f7;
+    --bg-statusbar: #f0f0f1;
     --surface-0: var(--bg);
     --surface-1: var(--bg-2);
     --surface-2: var(--bg-3);
     --surface-3: var(--bg-sunk);
 
     /* ----- Borders ----- */
-    --line: #cfd6e0;
-    --line-strong: #b6c0cc;
+    --line: #d7d7db;
+    --line-strong: #c0c0c4;
     --border-subtle: var(--line);
     --border-strong: var(--line-strong);
 
     /* ----- Text ----- */
-    --txt: #0f172a;
-    --txt-soft: #334155;
-    --txt-dim: #64748b;
-    --txt-faint: #94a3b8;
+    --txt: #1e1e1e;
+    --txt-soft: #3d3d40;
+    --txt-dim: #5e5c64;
+    --txt-faint: #9a9996;
     --txt-on-accent: #ffffff;
     --text-primary: var(--txt);
     --text-secondary: var(--txt-soft);
@@ -41,16 +41,16 @@
 
     /* ----- Accent — GNOME Adwaita blue, single hue ----- */
     --accent: #3584e4;
-    --accent-hover: #1c71d8;
-    --accent-active: #1a5fb4;
-    --accent-soft: #d3e3fa;
+    --accent-hover: #2d77d6;
+    --accent-active: #1f66c4;
+    --accent-soft: #dbe8fb;
     --accent-2: var(--accent);        /* deprecated alias — use --accent */
     --accent-2-soft: var(--accent-soft);
 
     /* ----- State ----- */
-    --ok: #16a34a;
-    --warn: #d97706;
-    --err: #dc2626;
+    --ok: #2e9f63;
+    --warn: #c98a0a;
+    --err: #e01b24;
     --idle: #cbd5e1;
     --state-success: var(--ok);
     --state-warning: var(--warn);
@@ -133,32 +133,32 @@
 
 :root[data-theme="dark"] {
     /* Breeze Dark surfaces */
-    --bg: #1b1e23;
-    --bg-2: #232629;
-    --bg-3: #2a2e32;
-    --bg-sunk: #16191c;
-    --bg-sidebar: #1b1e23;
-    --bg-topbar: #1b1e23;
-    --bg-titlebar: #2a2e32;
-    --bg-toolbar: #232629;
-    --bg-statusbar: #1b1e23;
+    --bg: #242424;
+    --bg-2: #303030;
+    --bg-3: #2a2a2a;
+    --bg-sunk: #1e1e1e;
+    --bg-sidebar: #242424;
+    --bg-topbar: #242424;
+    --bg-titlebar: #2e2e2e;
+    --bg-toolbar: #303030;
+    --bg-statusbar: #242424;
 
-    --line: #3a3f44;
-    --line-strong: #4e555c;
+    --line: #3b3b3b;
+    --line-strong: #4d4d4d;
 
-    --txt: #eff0f1;
-    --txt-soft: #bdc3c7;
-    --txt-dim: #7f8c8d;
-    --txt-faint: #5d646b;
+    --txt: #ffffff;
+    --txt-soft: #c5c4c2;
+    --txt-dim: #9a9996;
+    --txt-faint: #6e6d6b;
 
     --accent: #62a0ea;
-    --accent-hover: #78aeed;
-    --accent-active: #3584e4;
-    --accent-soft: #1a3a5c;
+    --accent-hover: #79b0ee;
+    --accent-active: #5294e2;
+    --accent-soft: #21314a;
 
-    --ok: #2ecc71;
-    --warn: #f39c12;
-    --err: #e74c3c;
+    --ok: #57d08a;
+    --warn: #f5c211;
+    --err: #ff7b63;
     --idle: #4e555c;
 
     --focus-ring: 0 0 0 2px rgba(98,160,234,.70);
