@@ -1,6 +1,6 @@
 /* =================================================================
-   AgentOS login theme — Keycloak skin matching AgentOS Studio (Breeze).
-   Mirrors the design tokens from src/AgentOS.Web/wwwroot/app.css so the
+   AgentOS login theme — Keycloak skin matching the AgentOS GNOME/Adwaita desktop.
+   Mirrors the design tokens from src/AgentOs.Web/wwwroot/app.css so the
    sign-in screen feels like part of the same product.
    ================================================================= */
 
@@ -311,24 +311,24 @@ a:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 2
     border: 1px solid transparent;
 }
 .alert-success, .pf-m-success {
-    background: rgba(22,163,74,.10);
+    background: color-mix(in srgb, var(--ok) 10%, transparent);
     color: var(--ok);
-    border-color: rgba(22,163,74,.40);
+    border-color: color-mix(in srgb, var(--ok) 40%, transparent);
 }
 .alert-warning, .pf-m-warning {
-    background: rgba(217,119,6,.10);
+    background: color-mix(in srgb, var(--warn) 10%, transparent);
     color: var(--warn);
-    border-color: rgba(217,119,6,.40);
+    border-color: color-mix(in srgb, var(--warn) 40%, transparent);
 }
 .alert-error, .alert-danger, .pf-m-danger {
-    background: rgba(220,38,38,.10);
+    background: color-mix(in srgb, var(--err) 10%, transparent);
     color: var(--err);
-    border-color: rgba(220,38,38,.40);
+    border-color: color-mix(in srgb, var(--err) 40%, transparent);
 }
 .alert-info, .pf-m-info {
     background: var(--accent-soft);
     color: var(--accent-active);
-    border-color: rgba(61,174,233,.40);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 /* ===== Field-level inline validation (Keycloak adds .has-error on .form-group) ===== */

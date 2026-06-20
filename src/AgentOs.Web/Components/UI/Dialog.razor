@@ -8,7 +8,7 @@
     <div class="dialog" style="width:@(Width)px; max-height:@MaxHeight;">
         <div class="dialog-titlebar">
             <span class="dialog-title">@Title</span>
-            <button class="window-close" @onclick="OnClose">×</button>
+            <button class="dialog-close" aria-label="Close" @onclick="OnClose"><Icon Name="x" Size="16" /></button>
         </div>
         <div class="dialog-body">
             @ChildContent

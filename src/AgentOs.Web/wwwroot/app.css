@@ -718,40 +718,10 @@ select {
     display: flex; align-items: center;
 }
 
-/* status bar shared with .statusbar utility but anchored bottom of shell-pane */
-.shell-pane .statusbar {
-    border-top: 1px solid var(--line-strong);
-    border-bottom: 0;
-    border-radius: 0;
-    margin: 0;
-}
-.statusbar .sb-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    display: inline-block;
-    margin-right: 5px;
-}
-.statusbar .sb-dot.ok { background: var(--ok); box-shadow: 0 0 0 2px rgba(22,163,74,.18); }
-.statusbar .sb-dot.warn { background: var(--warn); box-shadow: 0 0 0 2px rgba(217,119,6,.18); }
-.statusbar .sb-dot.err { background: var(--err); box-shadow: 0 0 0 2px rgba(220,38,38,.18); }
+/* (removed) legacy .statusbar bottom strip — GNOME has no desktop status bar; status lives in .topbar. */
 
-/* ===== Start button + Start menu (Windows-style app launcher) ===== */
-.start-btn {
-    display: inline-flex; align-items: center; gap: 5px;
-    height: 22px; margin-right: 6px;
-    padding: 0 10px;
-    background: var(--accent);
-    color: #fff;
-    border: 1px solid #1d4ed8;
-    border-radius: var(--r-3);
-    font-family: inherit;
-    font-size: 11.5px;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: var(--shadow-inset);
-}
-.start-btn:hover { background: var(--accent-hover); }
-.start-btn:active, .start-btn.open { background: #1d4ed8; box-shadow: inset 0 1px 2px rgba(0,0,0,.20); }
-.start-glyph { font-size: 13px; line-height: 1; }
+/* ===== Activities overview launcher (GNOME). The Windows-style .start-btn/.start-glyph orb was
+   removed — Activities is the .tb-activities text pill in TopBar; the launcher is .kickoff. ===== */
 
 .start-menu-backdrop {
     position: fixed; inset: 0; z-index: 990;
@@ -762,29 +732,9 @@ select {
     animation: login-fade var(--duration-base) var(--ease-standard);
 }
 
-/* ===== Window (draggable desktop dialog) ===== */
-.window {
-    position: fixed;
-    background: var(--bg-2);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-4);
-    box-shadow: var(--shadow-3);
-    display: flex; flex-direction: column;
-    overflow: hidden;
-}
-.window.dragging { cursor: move; user-select: none; }
-.window-titlebar {
-    display: flex; align-items: center; justify-content: space-between;
-    height: 28px;
-    padding: 0 var(--space-1) 0 var(--space-3);
-    background: var(--bg-titlebar);
-    color: var(--text-primary);
-    cursor: move;
-    user-select: none;
-    border-bottom: 1px solid var(--border-subtle);
-}
-.window-title { font-size: var(--fs-sm); font-weight: var(--fw-semibold); letter-spacing: .01em; }
-.window-close {
+/* ===== Dialog close button (modals). The legacy pre-CSD .window/.window-titlebar/.window-body
+   desktop-dialog skin was removed — windows use .appwin*, modals use .dialog*. ===== */
+.dialog-close {
     background: transparent;
     color: var(--text-secondary);
     border: 0;
@@ -793,12 +743,12 @@ select {
     cursor: pointer;
     font-size: 13px; line-height: 1;
     padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
     transition: background var(--duration-fast) var(--ease-standard),
                 color var(--duration-fast) var(--ease-standard);
 }
-.window-close:hover { background: var(--err); color: #fff; }
-.window-close:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.window-body { padding: 14px 16px; overflow: auto; flex: 1; font-size: 12.5px; color: var(--txt-soft); }
+.dialog-close:hover { background: var(--err); color: #fff; }
+.dialog-close:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .drag-overlay { position: fixed; inset: 0; z-index: 9999; cursor: move; background: transparent; }
 
 /* About dialog content */
@@ -963,7 +913,7 @@ select {
     transform: translate(-50%, -50%);
     background: var(--bg-2);
     border: 1px solid var(--border-strong);
-    border-radius: var(--r-4);
+    border-radius: var(--radius-md);
     box-shadow: var(--shadow-3);
     z-index: 9100;
     display: flex; flex-direction: column;
@@ -1022,7 +972,7 @@ select {
 .dicon {
     display: flex; flex-direction: column; align-items: center; gap: 6px;
     padding: 12px 8px;
-    border-radius: var(--r-4);
+    border-radius: var(--radius-md);
     text-decoration: none;
     color: inherit;
     /* Reset the UA <button> chrome — otherwise the default light grey leaks
@@ -1478,6 +1428,8 @@ select {
 .toast.toast-warn .toast-ic { background: var(--warn); }
 .toast.toast-err  { border-left-color: var(--err); }
 .toast.toast-err  .toast-ic { background: var(--err); }
+.toast.toast-info { border-left-color: var(--state-info); }
+.toast.toast-info .toast-ic { background: var(--state-info); }
 .toast-body { flex: 1; min-width: 0; }
 .toast-title { font-size: 12.5px; font-weight: 700; color: var(--txt); }
 .toast-msg { font-size: 11.5px; color: var(--txt-dim); margin-top: 2px; line-height: 1.35; }
@@ -1585,27 +1537,8 @@ select {
 .appwin-body:has(.syn-root) .syn-root { height: 100%; }
 .appwin-blank { padding: 40px; text-align: center; color: var(--txt-dim); }
 
-/* Open windows row inside the taskbar */
-.tb-open { display: flex; gap: 2px; margin: 0 4px; }
-.tb-open-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 5px 10px; max-width: 180px;
-    background: rgba(255,255,255,.08);
-    border: 1px solid rgba(255,255,255,.12);
-    color: #fff;
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: inherit; font-size: 11.5px;
-}
-.tb-open-btn:hover { background: rgba(255,255,255,.18); }
-.tb-open-btn.active {
-    background: linear-gradient(180deg, rgba(74,140,255,.40), rgba(37,99,235,.30));
-    border-color: rgba(74,140,255,.60);
-    box-shadow: 0 -2px 0 #4a8cff inset;
-}
-.tb-open-btn.minimized { opacity: .55; }
-.tb-open-ic { font-size: 12px; }
-.tb-open-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* (removed) legacy .tb-open* taskbar window-chips incl. the retired neon-blue active gradient —
+   replaced by the GNOME Dash (.dock-item + .di-dot) in Taskbar.razor. */
 
 /* Clock font now ticks per second — give it room for seconds */
 .tb-clock { min-width: 64px; text-align: center; }
@@ -1859,6 +1792,7 @@ select {
     vertical-align: middle;
 }
 .spinner-small { width: 12px; height: 12px; border-width: 2px; }
+.spinner-medium { width: 18px; height: 18px; border-width: 2px; } /* default size — matches base .spinner */
 .spinner-large { width: 28px; height: 28px; border-width: 3px; }
 @keyframes sp-spin { to { transform: rotate(360deg); } }
 
@@ -2361,19 +2295,7 @@ input[type=range] { accent-color: var(--accent); }
 .toolbar .spacer { flex: 1; }
 .toolbar .lbl { font-size: 11.5px; color: var(--txt-dim); margin: 0 4px; font-weight: 500; }
 
-/* Status bar — bottom of shell-main */
-.statusbar {
-    height: 24px;
-    background: var(--bg-statusbar);
-    border-top: 1px solid var(--line-strong);
-    display: flex; align-items: center;
-    padding: 0 14px;
-    font-size: 11.5px;
-    color: var(--txt-dim);
-    gap: 14px;
-}
-.statusbar .sb-sep { width: 1px; height: 14px; background: var(--line-strong); }
-.statusbar .sb-spacer { flex: 1; }
+/* (removed) legacy .statusbar utility — GNOME has no desktop status strip; status lives in .topbar. */
 
 /* =================================================================
    Responsive — collapse sidebar on small screens
