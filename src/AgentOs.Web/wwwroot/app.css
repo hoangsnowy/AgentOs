@@ -118,7 +118,7 @@
     /* ----- Glass + wallpaper (overridden by [data-wallpaper]) ----- */
     --glass-blur: 0px;
     --glass-saturate: 100%;
-    --wallpaper-bg: radial-gradient(circle at 28% 18%, #dde7f7 0%, #c4d3ea 48%, #aebfdd 100%);
+    --wallpaper-bg: radial-gradient(80vw 70vh at 12% 0%, #8bbef5 0%, transparent 58%), radial-gradient(78vw 68vh at 100% 100%, #3a78da 0%, transparent 55%), linear-gradient(135deg, #c2dcf8 0%, #7ba9e8 52%, #4f86dd 100%);
     --wallpaper-animation: none;
 
     /* ----- Wallpaper-aware text (auto-flips on dark wallpapers) ----- */
@@ -172,16 +172,16 @@
     --shadow-window-focused: 0 18px 48px -12px rgba(0,0,0,.70), 0 8px 16px rgba(0,0,0,.50), 0 0 0 1px rgba(0,0,0,.55);
     --shadow-window-unfocused: 0 8px 20px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.45);
 
-    --wallpaper-bg: radial-gradient(circle at 28% 18%, #2c3a54 0%, #1b2433 52%, #12161f 100%);
+    --wallpaper-bg: radial-gradient(80vw 70vh at 12% 0%, #21477a 0%, transparent 58%), radial-gradient(78vw 68vh at 100% 100%, #0f2647 0%, transparent 55%), linear-gradient(135deg, #1b2c49 0%, #14203a 52%, #0d1730 100%);
 }
 
 /* ===== Wallpaper presets — orthogonal to data-theme ===== */
 :root[data-wallpaper="enterprise-light"] {
-    --wallpaper-bg: radial-gradient(circle at 28% 18%, #dde7f7 0%, #c4d3ea 48%, #aebfdd 100%);
+    --wallpaper-bg: radial-gradient(80vw 70vh at 12% 0%, #8bbef5 0%, transparent 58%), radial-gradient(78vw 68vh at 100% 100%, #3a78da 0%, transparent 55%), linear-gradient(135deg, #c2dcf8 0%, #7ba9e8 52%, #4f86dd 100%);
     --wallpaper-animation: none;
 }
 :root[data-wallpaper="enterprise-dark"] {
-    --wallpaper-bg: radial-gradient(circle at 28% 18%, #2c3a54 0%, #1b2433 52%, #12161f 100%);
+    --wallpaper-bg: radial-gradient(80vw 70vh at 12% 0%, #21477a 0%, transparent 58%), radial-gradient(78vw 68vh at 100% 100%, #0f2647 0%, transparent 55%), linear-gradient(135deg, #1b2c49 0%, #14203a 52%, #0d1730 100%);
     --wallpaper-animation: none;
 }
 :root[data-wallpaper="aurora"] {
@@ -243,8 +243,12 @@ html, body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
-    background: var(--bg);
 }
+/* Wallpaper must show through: the base colour lives on <html>; <body> stays transparent so the
+   fixed body::before wallpaper layer below is not painted over by an opaque body background
+   (a negative-z child renders UNDER the in-flow body background — the wallpaper was invisible). */
+html { background: var(--bg); }
+body { background: transparent; }
 
 /* Wallpaper layer driven by --wallpaper-bg (per data-wallpaper) */
 body::before {
@@ -1387,6 +1391,78 @@ select {
 .ko-fbtn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .ko-fbtn-danger:hover { background: rgba(220,38,38,.12); color: var(--err); }
 
+/* ===== Activities overview — GNOME full-screen (over the blurred wallpaper scrim) ===== */
+.kickoff.ko-overview {
+    position: fixed; inset: 0;
+    top: 0; left: 0; transform: none;
+    width: 100vw; height: 100dvh;
+    max-width: none; max-height: none;
+    background: transparent; border: 0; border-radius: 0; box-shadow: none;
+    overflow: hidden;
+    align-items: center;
+    padding-top: 44px; /* clear the top panel */
+    animation: login-fade var(--duration-base) var(--ease-standard);
+}
+/* Workspace thumbnails strip */
+.ko-workspaces { display: flex; justify-content: center; gap: 10px; margin: 2px 0 10px; }
+.ko-ws {
+    width: 128px; height: 74px; border-radius: 10px;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
+    display: grid; place-items: center; color: rgba(255,255,255,.7);
+}
+.ko-ws-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); background: rgba(255,255,255,.12); }
+.ko-ws-num { font-size: 13px; font-weight: 700; }
+
+.ko-overview .ko-search {
+    width: min(560px, 72vw);
+    padding: 0; background: transparent; border-bottom: 0; margin-bottom: 6px;
+}
+.ko-overview .ko-search-ic { left: 13px; color: rgba(255,255,255,.6); }
+.ko-overview .ko-search-input {
+    background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); color: #fff;
+}
+.ko-overview .ko-search-input::placeholder { color: rgba(255,255,255,.6); }
+
+.ko-overview .ko-body {
+    width: min(1120px, 92vw); max-height: none; flex: 1; padding: 6px 10px 120px;
+}
+.ko-overview .ko-section { color: rgba(255,255,255,.72); }
+.ko-overview .ko-section-count { color: rgba(255,255,255,.55); }
+
+/* Window exposé — thumbnails of open windows */
+.ko-expose {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+    gap: 14px; margin-bottom: 20px;
+}
+.ko-win {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 22px 12px; cursor: pointer; color: #fff; font-family: inherit;
+    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); border-radius: 12px;
+    transition: background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
+}
+.ko-win:hover { background: rgba(255,255,255,.15); transform: translateY(-2px); }
+.ko-win.min { opacity: .55; }
+.ko-win-ic { width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center; box-shadow: var(--shadow-2); }
+.ko-win-title { font-size: 12.5px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Recolor pinned tiles + recents/results for the dark overview */
+.ko-overview .ko-tile { background: transparent; border-color: transparent; }
+.ko-overview .ko-tile:hover { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.14); }
+.ko-overview .ko-tile-label { color: rgba(255,255,255,.92); }
+.ko-overview .ko-row { color: #fff; }
+.ko-overview .ko-row:hover { background: rgba(255,255,255,.10); }
+.ko-overview .ko-row-title { color: #fff; }
+.ko-overview .ko-row-ic { color: rgba(255,255,255,.8); }
+.ko-overview .ko-empty { color: rgba(255,255,255,.7); }
+
+/* Footer at the bottom of the overview */
+.ko-overview .ko-footer { width: min(1120px, 92vw); border-top: 1px solid rgba(255,255,255,.12); background: transparent; }
+.ko-overview .ko-user { color: #fff; }
+.ko-overview .ko-user:hover { background: rgba(255,255,255,.10); }
+.ko-overview .ko-user-name { color: #fff; }
+.ko-overview .ko-fbtn { color: rgba(255,255,255,.8); }
+.ko-overview .ko-fbtn:hover { background: rgba(255,255,255,.12); color: #fff; }
+
 /* =================================================================
    Toast notifications — bottom-right slide-in
    ================================================================= */
@@ -1443,7 +1519,9 @@ select {
 /* =================================================================
    Desktop mode — no sidebar, single content pane, app windows on top
    ================================================================= */
-.shell.shell-deskmode { grid-template-columns: 1fr; }
+/* Desktop mode: drop the frosted veil + blur so the bold GNOME wallpaper shows crisp.
+   Windows (.appwin) carry their own opaque chrome, so nothing needs the veil behind them. */
+.shell.shell-deskmode { grid-template-columns: 1fr; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 
 /* =================================================================
    AppFrame — KDE Plasma 6 Breeze window chrome
@@ -1611,6 +1689,9 @@ select {
 .topbar .tb-dot.err { background: var(--err); box-shadow: 0 0 6px rgba(220,38,38,.80); }
 .topbar .tb-clock { font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: .02em; }
 .topbar .tb-user { display: flex; align-items: center; gap: 7px; }
+/* GNOME aggregated system menu (network · sound · battery · health · avatar) */
+.topbar .tb-tray { display: inline-flex; align-items: center; gap: 7px; padding: 3px 9px; }
+.topbar .tb-tray-ic { display: inline-flex; opacity: .92; }
 .topbar .tb-avatar {
     width: 20px; height: 20px;
     border-radius: 50%;
@@ -1625,6 +1706,8 @@ select {
 
 /* Push Desktop content below the TopBar so wallpaper icons aren't clipped */
 .desktop { padding-top: 50px; }
+/* Empty GNOME desktop — fill the viewport so right-click works anywhere on the wallpaper. */
+.desktop-empty { min-height: calc(100dvh - 50px); }
 .desktop-clock { top: 50px; }
 
 /* AppFrame windows should not start inside the TopBar either */

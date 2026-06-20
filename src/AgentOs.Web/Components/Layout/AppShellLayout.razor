@@ -26,7 +26,11 @@
 @if (_startOpen)
 {
     <div class="start-menu-backdrop" @onclick="CloseStart" @oncontextmenu="CloseStart" @oncontextmenu:preventDefault="true"></div>
-    <div class="kickoff" @onclick:stopPropagation="true" role="menu" aria-label="Start menu">
+    <div class="kickoff ko-overview" @onclick:stopPropagation="true" role="menu" aria-label="Activities overview">
+
+        <div class="ko-workspaces" aria-label="Workspaces">
+            <div class="ko-ws ko-ws-active" title="Workspace 1"><span class="ko-ws-num">1</span></div>
+        </div>
 
         <div class="ko-search">
             <span class="ko-search-ic"><Icon Name="search" Size="15" /></span>
@@ -44,8 +48,25 @@
         <div class="ko-body">
             @if (string.IsNullOrWhiteSpace(_query))
             {
+                @if (WM.Open.Count > 0)
+                {
+                    <div class="ko-section-row">
+                        <span class="ko-section">Open windows</span>
+                        <span class="ko-section-count">@WM.Open.Count</span>
+                    </div>
+                    <div class="ko-expose">
+                        @foreach (var w in WM.Open.OrderByDescending(x => x.Z))
+                        {
+                            var winColor = AppCatalog.Find(w.AppKey)?.Color ?? "#3584e4";
+                            <button class="ko-win @(w.Minimized ? "min" : "")" @onclick="@(() => FocusWindow(w))" title="@w.Title">
+                                <span class="ko-win-ic" style="background:@winColor;color:#fff"><Icon Name="@w.Icon" Size="26" /></span>
+                                <span class="ko-win-title">@w.Title</span>
+                            </button>
+                        }
+                    </div>
+                }
                 <div class="ko-section-row">
-                    <span class="ko-section">Pinned</span>
+                    <span class="ko-section">All apps</span>
                 </div>
                 <div class="ko-grid">
                     @foreach (var app in AppCatalog.VisiblePinned(_isAdmin))
@@ -283,6 +304,14 @@
     private void Launch(DesktopApp app)
     {
         WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
+        _startOpen = false;
+    }
+
+    // Activities overview window exposé — click a thumbnail to focus (or restore) that window.
+    private void FocusWindow(AppWindowState w)
+    {
+        if (w.Minimized) { WM.Restore(w.Id); }
+        else { WM.Focus(w.Id); }
         _startOpen = false;
     }
 

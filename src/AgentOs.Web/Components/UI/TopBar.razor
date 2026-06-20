@@ -27,18 +27,21 @@
     </button>
 
     <div class="tb-right">
-        <span class="tb-indicator" title="@_healthTitle">
-            <span class="tb-dot @(_online ? "ok" : "err")"></span>
-        </span>
-
         <button class="tb-trigger tb-icon-btn" @onclick="ToggleTheme"
                 title="@(_theme == "dark" ? "Switch to light theme" : "Switch to dark theme")"
                 aria-label="Toggle color theme">
             <Icon Name="@(_theme == "dark" ? "sun" : "moon")" Size="15" />
         </button>
 
-        <button class="tb-trigger tb-user @(_userOpen ? "open" : "")" title="@(_user ?? "guest")"
-                @onclick="ToggleUser" @onclick:stopPropagation="true">
+        @* GNOME system menu — aggregated status (network · sound · battery) + gateway health +
+           account, opens the quick-settings dropdown. *@
+        <button class="tb-trigger tb-tray @(_userOpen ? "open" : "")"
+                @onclick="ToggleUser" @onclick:stopPropagation="true"
+                title="System — network, sound, power" aria-label="System menu">
+            <span class="tb-tray-ic"><Icon Name="wifi" Size="15" /></span>
+            <span class="tb-tray-ic"><Icon Name="speaker-high" Size="15" /></span>
+            <span class="tb-tray-ic"><Icon Name="battery" Size="15" /></span>
+            <span class="tb-dot @(_online ? "ok" : "err")" title="@_healthTitle"></span>
             <span class="tb-avatar">@AvatarLetter</span>
         </button>
     </div>
