@@ -988,6 +988,11 @@ select {
     display: flex; flex-direction: column;
     overflow: hidden;
     animation: dlg-pop .14s ease-out;
+    box-sizing: border-box;
+    /* Inline style sets a fixed px width — cap it so the dialog never spills off a
+       narrow viewport. 12px breathing room each side on phones. */
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
 }
 @keyframes dlg-pop {
     from { transform: translate(-50%, -50%) scale(.96); opacity: .6; }
@@ -1808,6 +1813,61 @@ select {
 .appwin-resize-se { bottom: -3px; right: -3px;  width: 14px; height: 14px; cursor: nwse-resize; }
 .appwin-resize-sw { bottom: -3px; left:  -3px;  width: 14px; height: 14px; cursor: nesw-resize; }
 .appwin.resizing { user-select: none; }
+
+/* =================================================================
+   Responsive windows
+   - Always cap a window to the viewport so an oversized default (e.g. 1000×660)
+     or a drag can never push it off-screen.
+   - At/below 1024px (phones, tablets, tablet-landscape) the floating-window
+     metaphor stops fitting, so windows collapse into full-bleed app sheets that
+     sit between the top bar and the dock. Resize handles + titlebar drag go away.
+   ================================================================= */
+.appwin {
+    max-width: calc(100vw - 8px);
+    max-height: calc(100vh - 40px);
+    max-height: calc(100dvh - 40px);
+}
+@media (max-width: 1024px) {
+    /* The deskmode shell has backdrop-filter, which makes IT the containing block
+       for the fixed windows + dock. On a phone its content (the app grid) runs
+       taller than the screen, so the whole shell — and with it the "fixed" dock
+       and windows — scrolled away. Lock the shell to the viewport and let only the
+       inner pane scroll, so the dock/windows stay pinned to the screen. */
+    .shell.shell-deskmode {
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+    .shell-deskmode .shell-pane {
+        height: 100vh;
+        height: 100dvh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    /* Height is driven by viewport units, NOT top+bottom: because of that glassy
+       containing block, `bottom` would resolve against the shell box, not the
+       screen. dvh keeps it pinned to the real viewport. 114px = 38 (top bar gap)
+       + 76 (dock gap). */
+    .appwin:not(.minimized) {
+        left: 0 !important;
+        right: 0 !important;
+        top: 38px !important;
+        bottom: auto !important;
+        width: auto !important;
+        height: calc(100vh - 114px) !important;
+        height: calc(100dvh - 114px) !important;
+        max-width: 100vw !important;
+        max-height: none !important;
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+        animation: none;
+    }
+    .appwin .appwin-resize { display: none !important; }
+    .appwin-titlebar { cursor: default; }
+    /* A full dock can exceed a phone's width — scroll it instead of overflowing. */
+    .dock { max-width: calc(100vw - 16px); overflow-x: auto; }
+}
 
 /* =================================================================
    SystemApp — tabbed OS settings dialog content
