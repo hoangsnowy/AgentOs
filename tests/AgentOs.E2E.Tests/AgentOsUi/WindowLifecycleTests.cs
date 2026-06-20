@@ -114,8 +114,7 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
 
         await _fx.GotoDesktopAsync();
 
-        // Start + 4 pinned apps.
-        await Assertions.Expect(_fx.Page.Locator(".dock-item.dock-start")).ToBeVisibleAsync();
+        // 4 pinned apps in the Dash (GNOME Dash — no Start button).
         foreach (var t in new[] { "Pipeline", "Workflow", "Settings", "System" })
         {
             await Assertions.Expect(_fx.Page.Locator($".dock-item[title=\"{t}\"]")).ToBeVisibleAsync();
@@ -138,7 +137,8 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
 
         await _fx.GotoDesktopAsync();
 
-        var center = _fx.Page.Locator(".topbar .tb-center");
+        // GNOME panel: focused-app title sits top-left (.tb-appname); the clock is centered.
+        var center = _fx.Page.Locator(".topbar .tb-appname");
         await Assertions.Expect(center).ToContainTextAsync("AgentOS — Desktop");
 
         await LaunchFromDockAsync("Pipeline");

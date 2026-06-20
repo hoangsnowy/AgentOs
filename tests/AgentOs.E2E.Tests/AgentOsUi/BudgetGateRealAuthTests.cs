@@ -72,8 +72,8 @@ public sealed class BudgetGateRealAuthTests : IClassFixture<AgentOsRealAuthFixtu
 
         await _fx.LoginAsync();
 
-        // Open the Cost app (desktop launcher icon, same pattern as the other desktop UI tests).
-        await _fx.Page.Locator(".dicon", new() { HasTextString = "Cost" }).First.ClickAsync();
+        // Open the Cost app from its Dash (dock) button — the GNOME desktop is empty.
+        await _fx.Page.Locator(".dock-item[title=\"Cost\"]").First.ClickAsync();
         var cost = _fx.Page.Locator(".appwin:has(.appwin-title:has-text(\"Cost\"))");
         await Assertions.Expect(cost).ToBeVisibleAsync(
             new LocatorAssertionsToBeVisibleOptions { Timeout = 15_000 });

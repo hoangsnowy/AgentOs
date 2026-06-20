@@ -62,14 +62,14 @@ public sealed class LoginAndDesktopTests : IClassFixture<AgentOsPageFixture>
     [InlineData("Evidence")]
     [InlineData("Settings")]
     [InlineData("System")]
-    public async Task DesktopIcon_Click_OpensAppWindow(string title)
+    public async Task DockIcon_Click_OpensAppWindow(string title)
     {
         if (!AgentOsPageFixture.IsEnabled) { Assert.Skip(AgentOsPageFixture.SkipReason); }
 
         await _fx.GotoDesktopAsync();
 
-        // Find the dicon button whose .dicon-title text matches.
-        var icon = _fx.Page.Locator(".dicon", new() { HasTextString = title }).First;
+        // Open the app from its Dash (dock) button — the GNOME desktop is empty (no desktop icons).
+        var icon = _fx.Page.Locator($".dock-item[title=\"{title}\"]").First;
         await icon.ClickAsync();
 
         // AppFrame renders with a titlebar that contains the title text.
