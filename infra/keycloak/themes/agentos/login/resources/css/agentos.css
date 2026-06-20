@@ -154,18 +154,16 @@ body, .login-pf body, .login-pf-page {
     align-items: center;
 }
 
-/* Lit-app-icon brand tile — accent gradient + glow + sheen (same as .login-brand .brand-mark). */
+/* Lit-app-icon brand tile — accent gradient + the AgentOS window/squares glyph (data-URI SVG),
+   matching the system-design mark (not a bare "A" letter). */
 #kc-header-wrapper::before {
-    content: "A";
-    width: 44px;
-    height: 44px;
-    display: grid;
-    place-items: center;
-    background: linear-gradient(160deg, #5b9bf0, var(--accent) 60%, var(--accent-active));
-    color: #fff;
-    border-radius: 10px;
-    font-size: 20px;
-    font-weight: 700;
+    content: "";
+    width: 46px;
+    height: 46px;
+    border-radius: 11px;
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='14' height='14' rx='2'/%3E%3Crect x='7' y='7' width='14' height='14' rx='2'/%3E%3C/svg%3E") center / 24px 24px no-repeat,
+        linear-gradient(160deg, #5b9bf0, var(--accent) 60%, var(--accent-active));
     box-shadow: 0 6px 16px -4px rgba(53,132,228,.55), inset 0 1px 0 rgba(255,255,255,.25);
     flex-shrink: 0;
 }
@@ -232,18 +230,21 @@ input:focus, select:focus, textarea:focus,
 input::placeholder { color: var(--txt-faint); }
 
 /* "Show password" eye toggle KC injects on password fields */
-.pf-c-input-group { display: flex; }
-.pf-c-input-group > input { flex: 1; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* Password field = ONE seamless pill. The show-password toggle floats transparent inside it on
+   the right (no separate boxed button / notch). */
+.pf-c-input-group { position: relative; display: flex; }
+.pf-c-input-group > input { flex: 1; border-radius: 10px; padding-right: 42px; }
 .pf-c-input-group > button {
-    background: var(--bg-3);
-    border: 1px solid var(--line-strong);
-    border-left: 0;
-    border-radius: 0 var(--r-3) var(--r-3) 0;
-    padding: 0 10px;
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    width: 32px; height: 30px;
+    display: grid; place-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
     color: var(--txt-dim);
     cursor: pointer;
 }
-.pf-c-input-group > button:hover { color: var(--txt); background: var(--bg-sunk); }
+.pf-c-input-group > button:hover { color: var(--txt); background: rgba(10,22,40,.06); }
 
 /* ===== Buttons ===== */
 input[type="submit"],
@@ -323,7 +324,7 @@ a:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 2
     margin: 0;
     color: var(--txt-soft);
 }
-#kc-form-options input[type="checkbox"] { width: auto; accent-color: var(--accent); margin: 0; }
+#kc-form-options input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); margin: 0; flex: none; }
 
 /* ===== Alerts (success / warning / error messages KC pushes inline) ===== */
 .alert, .pf-c-alert {
