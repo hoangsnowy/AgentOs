@@ -7,15 +7,7 @@
 @implements IDisposable
 
 @* ===== Dock (floating bottom-center pill) ===== *@
-<div class="dock" role="toolbar" aria-label="Application dock">
-    <button class="dock-item dock-start @(StartOpen ? "open" : "")"
-            @onclick="ToggleStart" @onclick:stopPropagation="true"
-            title="Start menu" aria-label="Start menu">
-        <span class="di-ic"><Icon Name="squares-four" Size="18" /></span>
-    </button>
-
-    <span class="dock-sep"></span>
-
+<div class="dock" role="toolbar" aria-label="Application dash">
     @foreach (var app in AppCatalog.VisiblePinned(_isAdmin))
     {
         var isOpen = WM.Open.Any(o => o.AppKey == app.Key);
@@ -107,9 +99,6 @@
     {
         WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
     }
-
-    private Task ToggleStart() => OnToggleStart.InvokeAsync();
-
 
     public void Dispose()
     {

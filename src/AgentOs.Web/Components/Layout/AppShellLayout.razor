@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
 @inject Microsoft.JSInterop.IJSRuntime JS
 @inject NavigationManager Nav
@@ -163,12 +164,22 @@
 
     protected override async Task OnInitializedAsync()
     {
+        WM.StartMenuToggleRequested += OnStartMenuToggle;
         if (AuthState is not null)
         {
             var state = await AuthState;
             _isAdmin = state.User.IsInRole("admin");
         }
     }
+
+    // GNOME "Activities" in the top bar routes here through the window manager.
+    private void OnStartMenuToggle() => InvokeAsync(async () =>
+    {
+        await ToggleStart();
+        StateHasChanged();
+    });
+
+    public void Dispose() => WM.StartMenuToggleRequested -= OnStartMenuToggle;
 
     private string AvatarLetter => string.IsNullOrEmpty(_user) ? "O" : _user[..1].ToUpperInvariant();
 

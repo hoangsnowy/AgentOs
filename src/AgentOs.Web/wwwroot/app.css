@@ -39,11 +39,11 @@
     --text-tertiary: var(--txt-dim);
     --text-disabled: var(--txt-faint);
 
-    /* ----- Accent — Breeze blue, single low-chroma ----- */
-    --accent: #3daee9;
-    --accent-hover: #2a93cc;
-    --accent-active: #1d7eb3;
-    --accent-soft: #d6ecf7;
+    /* ----- Accent — GNOME Adwaita blue, single hue ----- */
+    --accent: #3584e4;
+    --accent-hover: #1c71d8;
+    --accent-active: #1a5fb4;
+    --accent-soft: #d3e3fa;
     --accent-2: var(--accent);        /* deprecated alias — use --accent */
     --accent-2-soft: var(--accent-soft);
 
@@ -58,7 +58,7 @@
     --state-info: var(--accent);
 
     /* ----- Focus ring ----- */
-    --focus-ring: 0 0 0 2px rgba(61,174,233,.55);
+    --focus-ring: 0 0 0 2px rgba(53,132,228,.55);
     --focus-ring-offset: 1px;
 
     /* ----- Elevation ----- */
@@ -68,14 +68,14 @@
     --shadow-3: 0 8px 20px rgba(15,23,42,.10), 0 2px 4px rgba(15,23,42,.06);
     --shadow-4: 0 24px 48px -8px rgba(15,23,42,.18), 0 8px 16px rgba(15,23,42,.08);
     --shadow-inset: inset 0 1px 0 rgba(255,255,255,.6);
-    --shadow-window-focused: 0 16px 32px -8px rgba(15,23,42,.32), 0 6px 12px rgba(15,23,42,.14), 0 0 0 1px var(--accent);
-    --shadow-window-unfocused: 0 8px 16px rgba(15,23,42,.16), 0 0 0 1px rgba(15,23,42,.10);
+    --shadow-window-focused: 0 18px 48px -12px rgba(0,0,0,.40), 0 8px 16px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.10);
+    --shadow-window-unfocused: 0 8px 20px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.08);
 
-    /* ----- Radii (Breeze keeps things small) ----- */
-    --r-1: 2px;  --r-2: 4px;  --r-3: 5px;  --r-4: 6px;  --r-5: 8px;
+    /* ----- Radii (GNOME Adwaita — soft corners) ----- */
+    --r-1: 3px;  --r-2: 5px;  --r-3: 7px;  --r-4: 9px;  --r-5: 12px;
     --radius-none: 0;
-    --radius-sm: 4px;
-    --radius-md: 6px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
 
     /* ----- Spacing (4-base) ----- */
     --s-1: 4px;  --s-2: 8px;  --s-3: 12px;  --s-4: 16px;
@@ -118,7 +118,7 @@
     /* ----- Glass + wallpaper (overridden by [data-wallpaper]) ----- */
     --glass-blur: 0px;
     --glass-saturate: 100%;
-    --wallpaper-bg: linear-gradient(180deg, #e8eef5 0%, #d4dde8 100%);
+    --wallpaper-bg: radial-gradient(circle at 28% 18%, #dde7f7 0%, #c4d3ea 48%, #aebfdd 100%);
     --wallpaper-animation: none;
 
     /* ----- Wallpaper-aware text (auto-flips on dark wallpapers) ----- */
@@ -151,17 +151,17 @@
     --txt-dim: #7f8c8d;
     --txt-faint: #5d646b;
 
-    --accent: #3daee9;
-    --accent-hover: #4cbcf2;
-    --accent-active: #2196e1;
-    --accent-soft: #1d3a4d;
+    --accent: #62a0ea;
+    --accent-hover: #78aeed;
+    --accent-active: #3584e4;
+    --accent-soft: #1a3a5c;
 
     --ok: #2ecc71;
     --warn: #f39c12;
     --err: #e74c3c;
     --idle: #4e555c;
 
-    --focus-ring: 0 0 0 2px rgba(61,174,233,.70);
+    --focus-ring: 0 0 0 2px rgba(98,160,234,.70);
 
     --shadow-0: none;
     --shadow-1: 0 1px 2px rgba(0,0,0,.30);
@@ -169,19 +169,19 @@
     --shadow-3: 0 16px 40px rgba(0,0,0,.45);
     --shadow-4: 0 24px 56px rgba(0,0,0,.55);
     --shadow-inset: inset 0 1px 0 rgba(255,255,255,.06);
-    --shadow-window-focused: 0 16px 32px -8px rgba(0,0,0,.60), 0 6px 12px rgba(0,0,0,.40), 0 0 0 1px var(--accent);
-    --shadow-window-unfocused: 0 8px 16px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06);
+    --shadow-window-focused: 0 18px 48px -12px rgba(0,0,0,.70), 0 8px 16px rgba(0,0,0,.50), 0 0 0 1px rgba(0,0,0,.55);
+    --shadow-window-unfocused: 0 8px 20px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.45);
 
-    --wallpaper-bg: linear-gradient(180deg, #1a1d22 0%, #0e1014 100%);
+    --wallpaper-bg: radial-gradient(circle at 28% 18%, #2c3a54 0%, #1b2433 52%, #12161f 100%);
 }
 
 /* ===== Wallpaper presets — orthogonal to data-theme ===== */
 :root[data-wallpaper="enterprise-light"] {
-    --wallpaper-bg: linear-gradient(180deg, #e8eef5 0%, #d4dde8 100%);
+    --wallpaper-bg: radial-gradient(circle at 28% 18%, #dde7f7 0%, #c4d3ea 48%, #aebfdd 100%);
     --wallpaper-animation: none;
 }
 :root[data-wallpaper="enterprise-dark"] {
-    --wallpaper-bg: linear-gradient(180deg, #1a1d22 0%, #0e1014 100%);
+    --wallpaper-bg: radial-gradient(circle at 28% 18%, #2c3a54 0%, #1b2433 52%, #12161f 100%);
     --wallpaper-animation: none;
 }
 :root[data-wallpaper="aurora"] {
@@ -265,7 +265,7 @@ body::after {
     z-index: -1;
     pointer-events: none;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence baseFrequency='0.85' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.045 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-    opacity: .55;
+    opacity: .12;
     mix-blend-mode: overlay;
 }
 
@@ -1078,7 +1078,9 @@ select {
     max-width: 130px;
 }
 
-.desktop-clock {
+/* GNOME shows the clock in the top panel, not on the desktop. */
+.desktop-clock { display: none; }
+.desktop-clock-legacy {
     position: absolute;
     top: var(--space-5); right: var(--space-6);
     text-align: right;
@@ -1206,21 +1208,18 @@ select {
    ================================================================= */
 .dock {
     position: fixed;
-    left: 50%; bottom: 14px;
+    left: 50%; bottom: 12px;
     transform: translateX(-50%);
     z-index: 200;
     display: flex; align-items: center;
-    gap: 4px;
-    padding: 6px 10px;
-    background: rgba(15,23,42,.50);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    border: 1px solid rgba(255,255,255,.18);
+    gap: 6px;
+    padding: 8px 10px;
+    background: rgba(24,24,27,.82);
+    backdrop-filter: blur(20px) saturate(120%);
+    -webkit-backdrop-filter: blur(20px) saturate(120%);
+    border: 1px solid rgba(0,0,0,.30);
     border-radius: 18px;
-    box-shadow:
-        0 20px 60px rgba(0,0,0,.50),
-        0 1px 0 rgba(255,255,255,.20) inset,
-        0 0 0 1px rgba(0,0,0,.30);
+    box-shadow: 0 8px 28px rgba(0,0,0,.35);
     user-select: none;
 }
 
@@ -1231,49 +1230,28 @@ select {
     border: 1px solid rgba(255,255,255,.12);
     border-radius: 12px;
     cursor: pointer;
-    transition: transform .22s cubic-bezier(.34,1.65,.50,1), background .14s, border-color .14s, box-shadow .14s;
+    transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
     position: relative;
     color: #fff;
     font-family: inherit; font-size: 22px;
     padding: 0;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
 }
 .dock-item:hover {
-    transform: translateY(-9px) scale(1.18);
-    background: rgba(255,255,255,.22);
-    border-color: rgba(255,255,255,.40);
-    box-shadow: 0 8px 24px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.30);
-    z-index: 1;
-}
-.dock-item:hover .di-ic { filter: drop-shadow(0 4px 8px rgba(0,0,0,.30)); }
-.dock-item:active { transform: translateY(-2px) scale(1.05); }
-.di-ic { line-height: 1; transition: filter .18s; }
-
-.dock-start {
-    background: var(--accent);
+    background: rgba(255,255,255,.20);
     border-color: rgba(255,255,255,.30);
-    font-size: 24px; font-weight: 700;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 4px 12px rgba(124,58,237,.45);
 }
-.dock-start:hover { background: linear-gradient(135deg, #5a98ff, #8b5cf6); }
-.dock-start.open { background: linear-gradient(135deg, #2563eb, #6d28d9); transform: translateY(-2px) scale(1.05); }
+.dock-item:active { background: rgba(255,255,255,.28); }
+.di-ic { line-height: 1; }
 
-.dock-sep { width: 1px; height: 30px; background: rgba(255,255,255,.20); margin: 0 6px; }
-
+/* GNOME dash running indicator — flat accent dot under the icon, no glow/pulse. */
 .di-dot {
     position: absolute;
-    bottom: -8px; left: 50%; transform: translateX(-50%);
+    bottom: -6px; left: 50%; transform: translateX(-50%);
     width: 6px; height: 6px;
-    background: #4a8cff;
+    background: var(--accent);
     border-radius: 50%;
-    box-shadow: 0 0 10px rgba(74,140,255,1), 0 0 4px rgba(74,140,255,.80);
-    animation: dot-pulse 2.2s ease-in-out infinite;
 }
-@keyframes dot-pulse {
-    0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
-    50%      { opacity: .60; transform: translateX(-50%) scale(.80); }
-}
-.dock-item.min .di-dot { background: rgba(255,255,255,.40); box-shadow: none; }
+.dock-item.min .di-dot { background: rgba(255,255,255,.45); }
 
 .systray { display: none !important; }
 /* (legacy systray removed; TopBar replaces it) */
@@ -1639,13 +1617,15 @@ select {
 }
 .appwin.dragging { user-select: none; }
 .appwin.minimized { display: none; }
+/* GNOME CSD header bar — taller bar, centered title, circular Adwaita controls. */
 .appwin-titlebar {
-    height: 30px;
+    position: relative;
+    height: 42px;
     background: var(--bg-titlebar);
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border-subtle);
     display: flex; align-items: center;
-    padding: 0 var(--space-1) 0 var(--space-3);
+    padding: 0 var(--space-2) 0 var(--space-3);
     gap: var(--space-2);
     cursor: move;
     user-select: none;
@@ -1653,31 +1633,35 @@ select {
 }
 .appwin.focused .appwin-titlebar {
     color: var(--text-primary);
-    border-bottom-color: var(--accent);
+    border-bottom-color: var(--border-subtle);
 }
-.appwin-icon { font-size: var(--fs-md); display: inline-flex; align-items: center; }
+.appwin-icon { font-size: var(--fs-md); display: inline-flex; align-items: center; opacity: .8; }
 .appwin-title {
+    position: absolute;
+    left: 50%; transform: translateX(-50%);
+    max-width: 56%;
     font-size: var(--fs-sm);
     font-weight: var(--fw-semibold);
-    flex: 1;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     letter-spacing: .01em;
+    text-align: center;
+    pointer-events: none;
 }
-.appwin-actions { display: flex; gap: 1px; flex-shrink: 0; }
+.appwin-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: auto; }
 .appwin-btn {
-    width: 28px; height: 22px;
-    background: transparent;
+    width: 28px; height: 28px;
+    background: color-mix(in srgb, var(--text-primary) 8%, transparent);
     border: 0;
     color: var(--text-secondary);
-    border-radius: var(--radius-sm);
+    border-radius: 50%;
     cursor: pointer;
-    font-size: 13px; line-height: 1;
+    line-height: 1;
     font-family: inherit;
     display: inline-flex; align-items: center; justify-content: center;
     transition: background var(--duration-fast) var(--ease-standard),
                 color var(--duration-fast) var(--ease-standard);
 }
-.appwin-btn:hover { background: var(--bg-3); color: var(--text-primary); }
+.appwin-btn:hover { background: color-mix(in srgb, var(--text-primary) 18%, transparent); color: var(--text-primary); }
 .appwin-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .appwin-btn-close:hover { background: var(--err); color: #fff; }
 .appwin-body {
@@ -1727,32 +1711,47 @@ select {
     position: fixed;
     top: 0; left: 0; right: 0;
     height: 30px;
-    background: rgba(8,16,32,.65);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    border-bottom: 1px solid rgba(255,255,255,.10);
+    /* GNOME Shell top panel: near-black, translucent, real blur. Dark in both themes. */
+    background: rgba(24,24,27,.90);
+    backdrop-filter: blur(20px) saturate(120%);
+    -webkit-backdrop-filter: blur(20px) saturate(120%);
+    border-bottom: 1px solid rgba(0,0,0,.30);
     display: flex; align-items: center;
-    padding: 0 14px;
-    gap: 12px;
+    padding: 0 8px;
+    gap: 8px;
     color: #fff;
     font-size: 12px;
     user-select: none;
     z-index: 200;
-    box-shadow: 0 4px 16px rgba(0,0,0,.25);
+    box-shadow: 0 1px 4px rgba(0,0,0,.30);
 }
 .topbar .tb-left,
-.topbar .tb-right { display: flex; align-items: center; gap: 10px; }
+.topbar .tb-right { display: flex; align-items: center; gap: 6px; }
 .topbar .tb-left  { flex: 1; min-width: 0; }
 .topbar .tb-right { flex: 1; min-width: 0; justify-content: flex-end; }
-.topbar .tb-center {
-    flex: 2; min-width: 0; text-align: center;
-    font-weight: 600;
-    opacity: .85;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    letter-spacing: .01em;
-    /* Label only — never intercept clicks meant for the buttons beside it. */
-    pointer-events: none;
+
+/* GNOME Activities trigger + focused-app name (top-left) */
+.tb-activities {
+    appearance: none; border: 0; cursor: pointer;
+    background: transparent; color: #fff;
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    padding: 4px 12px; border-radius: 999px;
+    transition: background var(--duration-fast) var(--ease-standard);
 }
+.tb-activities:hover { background: rgba(255,255,255,.15); }
+.tb-activities:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tb-appname {
+    font-weight: 600; opacity: .78;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 28vw;
+}
+
+/* GNOME centered clock (day + time) */
+.topbar .tb-clock {
+    flex: 0 0 auto; margin: 0 auto;
+    display: inline-flex; align-items: baseline; gap: 8px;
+}
+.tb-clock-day  { font-weight: 600; opacity: .85; }
+.tb-clock-time { font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .topbar .tb-logo {
     width: 20px; height: 20px;
     display: grid; place-items: center;

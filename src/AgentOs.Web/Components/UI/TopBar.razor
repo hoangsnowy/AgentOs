@@ -13,19 +13,23 @@
 
 <div class="topbar">
     <div class="tb-left">
-        <span class="tb-logo"><Icon Name="diamond" Size="12" /></span>
-        <span class="tb-brand">AgentOS</span>
-        <span class="tb-sep"></span>
-        <span class="tb-workspace">Workspace 1</span>
+        <button class="tb-activities @(WM.Open.Count == 0 ? "" : "")" @onclick="ToggleActivities"
+                @onclick:stopPropagation="true" title="Activities — show all apps" aria-label="Activities">
+            Activities
+        </button>
+        <span class="tb-appname">@ActiveTitle</span>
     </div>
 
-    <div class="tb-center">@ActiveTitle</div>
+    <button class="tb-trigger tb-clock @(_clockOpen ? "open" : "")" title="@_today"
+            @onclick="ToggleClock" @onclick:stopPropagation="true">
+        <span class="tb-clock-day">@DateTime.Now.ToString("ddd d MMM")</span>
+        <span class="tb-clock-time">@_now</span>
+    </button>
 
     <div class="tb-right">
         <span class="tb-indicator" title="@_healthTitle">
-            <span class="tb-dot @(_online ? "ok" : "err")"></span> @(_online ? "Live" : "Offline")
+            <span class="tb-dot @(_online ? "ok" : "err")"></span>
         </span>
-        <span class="tb-sep"></span>
 
         <button class="tb-trigger tb-icon-btn" @onclick="ToggleTheme"
                 title="@(_theme == "dark" ? "Switch to light theme" : "Switch to dark theme")"
@@ -33,20 +37,9 @@
             <Icon Name="@(_theme == "dark" ? "sun" : "moon")" Size="15" />
         </button>
 
-        <span class="tb-sep"></span>
-
-        <button class="tb-trigger tb-clock @(_clockOpen ? "open" : "")" title="@_today"
-                @onclick="ToggleClock" @onclick:stopPropagation="true">
-            @_now
-        </button>
-
-        <span class="tb-sep"></span>
-
         <button class="tb-trigger tb-user @(_userOpen ? "open" : "")" title="@(_user ?? "guest")"
                 @onclick="ToggleUser" @onclick:stopPropagation="true">
             <span class="tb-avatar">@AvatarLetter</span>
-            <span class="tb-name">@(_user ?? "guest")</span>
-            <span class="tb-caret">▾</span>
         </button>
     </div>
 </div>
@@ -266,6 +259,9 @@
 
     private void ToggleUser()  { _userOpen = !_userOpen; _clockOpen = false; }
     private void ToggleClock() { _clockOpen = !_clockOpen; _userOpen = false; }
+
+    // GNOME "Activities" — route through the window manager to the shell launcher overview.
+    private void ToggleActivities() { WM.RequestStartMenuToggle(); _userOpen = false; _clockOpen = false; }
 
     private void OpenSystem()
     {
