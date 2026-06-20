@@ -18,6 +18,8 @@
     <PackageReference Include="MessagePack" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Playwright" />
+    <!-- Budget-gate E2E seeds run_metrics directly (offline runs cost $0, so spend must be seeded). -->
+    <PackageReference Include="Npgsql" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />

@@ -8,8 +8,16 @@ namespace AgentOs.Modules.Pipeline.Persistence;
 /// <summary>Stores + queries the pipeline run history.</summary>
 public interface IPipelineRunRepository
 {
-    /// <summary>Stores a single run (full PipelineResult + list of RunMetric per LLM call).</summary>
+    /// <summary>Stores a single run (full PipelineResult + list of RunMetric per LLM call). Stamps the
+    /// owning tenant from the ambient <c>ITenantContext</c>.</summary>
     Task SaveAsync(PipelineRunRecord record, CancellationToken ct = default);
+
+    /// <summary>Stores a single run stamping an <b>explicit</b> tenant id rather than reading it from the
+    /// ambient <c>ITenantContext</c>. Required for callers with no request scope — a Blazor circuit running
+    /// the Workflow studio has a blank <c>ITenantContext</c>, so the run + its <c>run_metrics</c> rows must
+    /// carry the signed-in tenant passed in, or the budget gate would never see (and so never cap) that
+    /// tenant's workflow spend.</summary>
+    Task SaveAsync(PipelineRunRecord record, string tenantId, CancellationToken ct = default);
 
     /// <summary>Gets a single full run by Id (null if not found).</summary>
     Task<PipelineRunRecord?> GetAsync(Guid id, CancellationToken ct = default);

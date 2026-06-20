@@ -24,6 +24,8 @@ using AgentOs.Domain.Requirements;
 using AgentOs.Domain.Testing;
 using AgentOs.Domain.Tools;
 using AgentOs.Modules.Pipeline.Agents;
+using AgentOs.Modules.Pipeline.Metrics;
+using AgentOs.Modules.Pipeline.Persistence;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -49,6 +51,10 @@ public sealed class GraphExecutor
     private readonly ILogger<GraphExecutor> _logger;
     // Optional: the per-tenant spend gate. Null in no-DB/standalone (nothing to meter against).
     private readonly IBudgetGuard? _budgetGuard;
+    // Optional: persists the run's own per-node LLM spend to run_metrics so the budget gate actually meters
+    // workflow-studio runs. Null/no-op repo in no-DB/standalone (nothing to persist to).
+    private readonly IPipelineRunRepository? _runRepository;
+    private readonly TimeProvider _clock;
 
     public GraphExecutor(
         IRequirementAgent requirement,
@@ -60,7 +66,9 @@ public sealed class GraphExecutor
         IToolGateway toolGateway,
         IOptions<AgentsOptions> agents,
         ILogger<GraphExecutor> logger,
-        IBudgetGuard? budgetGuard = null)
+        IBudgetGuard? budgetGuard = null,
+        IPipelineRunRepository? runRepository = null,
+        TimeProvider? clock = null)
     {
         _requirement = requirement ?? throw new ArgumentNullException(nameof(requirement));
         _coding = coding ?? throw new ArgumentNullException(nameof(coding));
@@ -73,6 +81,8 @@ public sealed class GraphExecutor
         _agents = agents.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _budgetGuard = budgetGuard;
+        _runRepository = runRepository;
+        _clock = clock ?? TimeProvider.System;
     }
 
     /// <summary>Validate (LLM-free) then compile + run the graph as a MAF Workflow, pushing per-node status
@@ -106,8 +116,9 @@ public sealed class GraphExecutor
         // server tokens, so it passes the same per-tenant spend check as the pipeline path (this was an
         // ungated server-token entrypoint). Returns a clean failed result — not throw — to match the
         // not-runnable channel so the canvas renders the block instead of crashing the circuit. Skipped
-        // when no guard is wired (no-DB/standalone). NOTE (follow-up): the graph's own spend is not yet
-        // persisted to run_metrics, so a workflow-only tenant doesn't accumulate toward its cap.
+        // when no guard is wired (no-DB/standalone). The graph's own per-node spend is persisted to
+        // run_metrics at the end of the run (see PersistRunAsync), so this gate meters workflow-only
+        // tenants too — over consecutive runs their accumulated workflow spend trips the same cap.
         var budgetTenant = Coalesce(tenantId, OperatorTenant);
         if (_budgetGuard is not null)
         {
@@ -126,7 +137,8 @@ public sealed class GraphExecutor
         }
 
         var clampedNMax = Math.Clamp(nMax, 1, 10);
-        var runId = Guid.NewGuid().ToString("N");
+        var runGuid = Guid.NewGuid();
+        var runId = runGuid.ToString("N");
         var state = new GraphState(userStoryText, clampedNMax, Coalesce(tenantId, OperatorTenant), runId);
 
         var supported = plan.Nodes
@@ -155,6 +167,7 @@ public sealed class GraphExecutor
         var invoked = 0;
         var activationBudget = Math.Max(200, graph.Nodes.Count * (clampedNMax + 2) * 4);
 
+        var startedAtUtc = _clock.GetUtcNow();
         await using var run = await InProcessExecution.RunStreamingAsync(workflow, state, runId, ct).ConfigureAwait(false);
         await foreach (var evt in run.WatchStreamAsync(ct).ConfigureAwait(false))
         {
@@ -187,8 +200,86 @@ public sealed class GraphExecutor
             failure = "Workflow stopped before reaching End — a branch or join did not complete (check Merge / If-Else wiring).";
         }
 
+        // Meter the run's own LLM spend. Persisted even on failure (the tenant is billed for whatever ran),
+        // stamping the explicit tenant so the budget gate sees it on the NEXT run — see PersistRunAsync.
+        await PersistRunAsync(runGuid, state, budgetTenant, failure, startedAtUtc, ct).ConfigureAwait(false);
+
         return new GraphRunResult(failure is null, failure);
     }
+
+    // Persist the per-node spend collected during the run as a PipelineRunRecord (one pipeline_runs row +
+    // one run_metrics row per billable node). This is what closes the loop on the pre-run budget gate: a
+    // tenant who only ever uses the Workflow studio still accumulates counted spend, so its cap eventually
+    // trips. Tenant-explicit (a Blazor circuit has a blank ITenantContext). Best-effort: a DB failure must
+    // not fail an otherwise-successful run. No-op when no repository is wired (no-DB/standalone) or nothing
+    // billable ran (a pure Transform/Print/Tool graph incurs no LLM cost).
+    private async Task PersistRunAsync(
+        Guid runId, GraphState state, string tenantId, string? failure, DateTimeOffset startedAtUtc, CancellationToken ct)
+    {
+        if (_runRepository is null)
+        {
+            return;
+        }
+
+        var metrics = state.Spend.ToArray();
+        if (metrics.Length == 0)
+        {
+            return;
+        }
+
+        var record = new PipelineRunRecord(
+            runId, BuildResult(state, metrics, failure), metrics, startedAtUtc, _clock.GetUtcNow());
+        try
+        {
+            await _runRepository.SaveAsync(record, tenantId, ct).ConfigureAwait(false);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) { OnPersistFailed(runId, ex); }
+        catch (System.Data.Common.DbException ex) { OnPersistFailed(runId, ex); }
+        catch (TimeoutException ex) { OnPersistFailed(runId, ex); }
+        catch (IOException ex) { OnPersistFailed(runId, ex); }
+        catch (InvalidOperationException ex) { OnPersistFailed(runId, ex); }
+
+        void OnPersistFailed(Guid id, Exception ex) =>
+            _logger.LogError(ex, "Failed to persist workflow run {RunId} spend — the run result still stands.", id);
+    }
+
+    // Synthesize a PipelineResult from whatever artifacts the graph produced (a graph need not run the full
+    // SDLC — fall back to empty artifacts) plus the summed spend. Only the run_metrics rows feed the budget
+    // gate; this result is the run-history record + the pipeline_runs totals column.
+    private static PipelineResult BuildResult(GraphState state, IReadOnlyList<RunMetric> metrics, string? failure)
+    {
+        decimal cost = 0m;
+        var tokensIn = 0;
+        var tokensOut = 0;
+        var latencyMs = 0d;
+        foreach (var m in metrics)
+        {
+            cost += m.CostUsd;
+            tokensIn += m.TokensIn;
+            tokensOut += m.TokensOut;
+            latencyMs += m.LatencyMs;
+        }
+
+        var total = new AgentMetrics("graph", "multiple", tokensIn, tokensOut, cost, TimeSpan.FromMilliseconds(latencyMs));
+        var storyText = string.IsNullOrWhiteSpace(state.Story.Description) ? "(workflow run)" : state.Story.Description;
+        return new PipelineResult(
+            UserStory: new UserStory(storyText, state.Story.NMax),
+            Spec: state.Spec ?? EmptySpec(),
+            Code: state.Code ?? EmptyCode(),
+            Tests: state.Tests ?? EmptyTests(),
+            QaHistory: state.LastQa is null ? [] : [state.LastQa],
+            Status: failure is null ? PipelineStatus.Done : PipelineStatus.Failed,
+            TotalMetrics: total);
+    }
+
+    private static RequirementSpec EmptySpec()
+        => new("(workflow)", string.Empty, [], [], [], [], [], [], AgentMetrics.Empty);
+
+    private static CodeArtifact EmptyCode()
+        => new("(none)", "Clean Architecture", [], null, AgentMetrics.Empty);
+
+    private static TestArtifact EmptyTests()
+        => new("xUnit", [], 0, 0, 0, 0, AgentMetrics.Empty);
 
     // ---- compile PlanGraph -> MAF Workflow ----
 
@@ -504,6 +595,7 @@ public sealed class GraphExecutor
             var request = new LlmRequest(sys, prompt, opt.Model, opt.Temperature, opt.MaxTokens);
             request.Validate();
             var response = await _llmFactory.Create(opt.Provider).SendAsync(request, ct).ConfigureAwait(false);
+            RecordLlmSpend(s, node, response);
             var match = MatchRoute(response.Content, routes);
             if (match is not null)
             {
@@ -578,6 +670,7 @@ public sealed class GraphExecutor
     {
         s.Spec = await _requirement.RunAsync(s.Story, ct).ConfigureAwait(false);
         s.Bag["spec"] = s.Spec.Title;
+        RecordAgentSpend(s, "RequirementAgent", "KC1", s.Spec.Metrics);
         return Metric(s.Spec.Metrics);
     }
 
@@ -587,6 +680,7 @@ public sealed class GraphExecutor
         EnsureSpec(s);
         s.Code = await _coding.RunAsync(s.Spec!, s.LastQa, ct).ConfigureAwait(false);
         s.Bag["code"] = $"{s.Code.Files.Count} files";
+        RecordAgentSpend(s, "CodingAgent", "KC2", s.Code.Metrics);
         return Metric(s.Code.Metrics);
     }
 
@@ -596,6 +690,7 @@ public sealed class GraphExecutor
         EnsureCode(s, "Testing");
         s.Tests = await _testing.RunAsync(s.Spec!, s.Code!, s.LastQa, ct).ConfigureAwait(false);
         s.Bag["tests"] = $"{s.Tests.TotalCount} tests";
+        RecordAgentSpend(s, "TestingAgent", "KC3", s.Tests.Metrics);
         return Metric(s.Tests.Metrics);
     }
 
@@ -611,6 +706,7 @@ public sealed class GraphExecutor
         }
         s.LastQa = await _qa.RunAsync(s.Spec!, s.Code!, s.Tests!, ct).ConfigureAwait(false);
         s.Bag["qa"] = s.LastQa.Score.ToString("0.00", CultureInfo.InvariantCulture);
+        RecordAgentSpend(s, "QaAgent", "KC5", s.LastQa.Metrics);
         s.Bump(nodeId);
         return $"{Metric(s.LastQa.Metrics)} · consistent={s.LastQa.IsConsistent}";
     }
@@ -622,6 +718,7 @@ public sealed class GraphExecutor
         var request = new LlmRequest(string.Empty, prompt, opt.Model, opt.Temperature, opt.MaxTokens);
         request.Validate();
         var response = await _llmFactory.Create(opt.Provider).SendAsync(request, ct).ConfigureAwait(false);
+        RecordLlmSpend(s, node, response);
         WriteOut(node, s, response.Content);
         return $"{response.InputTokens}→{response.OutputTokens} tok · ${response.CostUsd.ToString("0.0000", CultureInfo.InvariantCulture)}";
     }
@@ -753,6 +850,26 @@ public sealed class GraphExecutor
         }
     }
 
+    // ---- spend metering (feeds the budget gate via run_metrics) ----
+
+    // Record a typed-agent node's spend from its returned artifact metrics. KcId mirrors the pipeline
+    // convention (KC1/KC2/KC3/KC5) so workflow spend lines up with pipeline spend in the cost dashboard.
+    private void RecordAgentSpend(GraphState s, string agentName, string kcId, AgentMetrics m)
+        => s.Record(new RunMetric(
+            s.RunId, kcId, s.Iteration, agentName, m.Model, m.Provider,
+            m.InputTokens, m.OutputTokens, m.Latency.TotalMilliseconds, m.CostUsd, true, null, _clock.GetUtcNow()));
+
+    // Record a raw-LLM / decision node's spend from its LlmResponse. These call the gateway directly (not
+    // through a typed agent), so without this their tokens would never reach run_metrics.
+    private void RecordLlmSpend(GraphState s, PlanNode node, LlmResponse r)
+        => s.Record(new RunMetric(
+            s.RunId, "graph", 0, NodeLabel(node), r.Model, r.Provider,
+            r.InputTokens, r.OutputTokens, r.Latency.TotalMilliseconds, r.CostUsd, true, null, _clock.GetUtcNow()));
+
+    // run_metrics.AgentName is capped at 64 chars; a node title can be longer, so clamp it.
+    private static string NodeLabel(PlanNode node)
+        => Truncate(string.IsNullOrWhiteSpace(node.Title) ? node.Id : node.Title, 64);
+
     private static string Metric(AgentMetrics m)
         => $"{m.InputTokens}→{m.OutputTokens} tok · ${m.CostUsd.ToString("0.0000", CultureInfo.InvariantCulture)}";
 
@@ -797,6 +914,14 @@ public sealed class GraphExecutor
 
         /// <summary>Atomically increment a node's counter and return the new value.</summary>
         public int Bump(string nodeId) => Counters.AddOrUpdate(nodeId, 1, static (_, v) => v + 1);
+
+        /// <summary>Per-node LLM spend collected during the run (one entry per billable node). A
+        /// <see cref="ConcurrentBag{T}"/> because a Parallel fan-out records from several threads at once.
+        /// Persisted to run_metrics at the end of the run so the budget gate meters workflow spend.</summary>
+        public ConcurrentBag<RunMetric> Spend { get; } = new();
+
+        /// <summary>Append one node's spend (thread-safe).</summary>
+        public void Record(RunMetric metric) => Spend.Add(metric);
     }
 
     /// <summary>A MAF executor whose body is the node's work delegate. Returns the (mutated) state so MAF

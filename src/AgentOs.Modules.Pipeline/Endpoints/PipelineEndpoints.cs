@@ -11,10 +11,12 @@ using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.Persistence;
 using AgentOs.Modules.Pipeline.Pipeline;
 using AgentOs.Domain.Code;
+using AgentOs.Domain.Cost;
 using AgentOs.Domain.Pipeline;
 using AgentOs.Domain.Qa;
 using AgentOs.Domain.Requirements;
 using AgentOs.Domain.Testing;
+using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Persistence;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -30,11 +32,15 @@ public static class PipelineEndpoints
     {
         System.ArgumentNullException.ThrowIfNull(app);
 
-        app.MapPost("/requirement", async (UserStory? body, IRequirementAgent agent, CancellationToken ct) =>
+        app.MapPost("/requirement", async (UserStory? body, IRequirementAgent agent, IBudgetGuard budget, ITenantContext tenant, CancellationToken ct) =>
         {
             if (PipelineRequestValidation.ForStory(body) is { } errors)
             {
                 return Microsoft.AspNetCore.Http.Results.ValidationProblem(errors);
+            }
+            if (await PipelineBudgetGate.BlockIfExceededAsync(budget, tenant, ct).ConfigureAwait(false) is { } blocked)
+            {
+                return blocked;
             }
             var spec = await agent.RunAsync(body!, ct).ConfigureAwait(false);
             return Microsoft.AspNetCore.Http.Results.Ok(spec);
@@ -44,13 +50,18 @@ public static class PipelineEndpoints
         .WithTags("Agents")
         .Produces<RequirementSpec>()
         .ProducesValidationProblem()
+        .ProducesProblem(StatusCodes.Status402PaymentRequired)
         .RequireAuthorization();
 
-        app.MapPost("/code", async (CodeRequest? body, ICodingAgent agent, CancellationToken ct) =>
+        app.MapPost("/code", async (CodeRequest? body, ICodingAgent agent, IBudgetGuard budget, ITenantContext tenant, CancellationToken ct) =>
         {
             if (PipelineRequestValidation.ForCode(body) is { } errors)
             {
                 return Microsoft.AspNetCore.Http.Results.ValidationProblem(errors);
+            }
+            if (await PipelineBudgetGate.BlockIfExceededAsync(budget, tenant, ct).ConfigureAwait(false) is { } blocked)
+            {
+                return blocked;
             }
             var artifact = await agent.RunAsync(body!.Spec, body.PreviousFeedback, ct).ConfigureAwait(false);
             return Microsoft.AspNetCore.Http.Results.Ok(artifact);
@@ -60,13 +71,18 @@ public static class PipelineEndpoints
         .WithTags("Agents")
         .Produces<CodeArtifact>()
         .ProducesValidationProblem()
+        .ProducesProblem(StatusCodes.Status402PaymentRequired)
         .RequireAuthorization();
 
-        app.MapPost("/test", async (TestRequest? body, ITestingAgent agent, CancellationToken ct) =>
+        app.MapPost("/test", async (TestRequest? body, ITestingAgent agent, IBudgetGuard budget, ITenantContext tenant, CancellationToken ct) =>
         {
             if (PipelineRequestValidation.ForTest(body) is { } errors)
             {
                 return Microsoft.AspNetCore.Http.Results.ValidationProblem(errors);
+            }
+            if (await PipelineBudgetGate.BlockIfExceededAsync(budget, tenant, ct).ConfigureAwait(false) is { } blocked)
+            {
+                return blocked;
             }
             var artifact = await agent.RunAsync(body!.Spec, body.Code, body.PreviousFeedback, ct).ConfigureAwait(false);
             return Microsoft.AspNetCore.Http.Results.Ok(artifact);
@@ -76,13 +92,18 @@ public static class PipelineEndpoints
         .WithTags("Agents")
         .Produces<TestArtifact>()
         .ProducesValidationProblem()
+        .ProducesProblem(StatusCodes.Status402PaymentRequired)
         .RequireAuthorization();
 
-        app.MapPost("/qa", async (QaRequest? body, IQaAgent agent, CancellationToken ct) =>
+        app.MapPost("/qa", async (QaRequest? body, IQaAgent agent, IBudgetGuard budget, ITenantContext tenant, CancellationToken ct) =>
         {
             if (PipelineRequestValidation.ForQa(body) is { } errors)
             {
                 return Microsoft.AspNetCore.Http.Results.ValidationProblem(errors);
+            }
+            if (await PipelineBudgetGate.BlockIfExceededAsync(budget, tenant, ct).ConfigureAwait(false) is { } blocked)
+            {
+                return blocked;
             }
             var report = await agent.RunAsync(body!.Spec, body.Code, body.Tests, ct).ConfigureAwait(false);
             return Microsoft.AspNetCore.Http.Results.Ok(report);
@@ -92,6 +113,7 @@ public static class PipelineEndpoints
         .WithTags("Agents")
         .Produces<QaReport>()
         .ProducesValidationProblem()
+        .ProducesProblem(StatusCodes.Status402PaymentRequired)
         .RequireAuthorization();
 
         app.MapPost("/pipeline", async (UserStory? body, IOrchestratorAgent orchestrator, CancellationToken ct) =>
@@ -179,6 +201,36 @@ public static class PipelineEndpoints
 
     /// <summary>Historical default page size for <c>GET /runs</c> when the caller passes no limit.</summary>
     private const int DefaultRunsPageSize = 50;
+}
+
+/// <summary>The per-agent budget gate. The direct-agent endpoints (<c>/requirement</c>, <c>/code</c>,
+/// <c>/test</c>, <c>/qa</c>) run real billed LLM work but — unlike <c>/pipeline</c>, which goes through the
+/// gated orchestrator — invoke an agent directly. Without this check an authenticated, over-cap tenant
+/// could drive unbounded billed calls one agent at a time. Each endpoint calls this before invoking.</summary>
+internal static class PipelineBudgetGate
+{
+    /// <summary>Returns <c>null</c> when the run may proceed, or a <c>402 Payment Required</c> problem when
+    /// the tenant is over an <b>enforced</b> cap — the same block condition the orchestrator uses
+    /// (<c>State == Exceeded &amp;&amp; EnforceOn</c>). An unset cap (the standalone / no-DB default) never
+    /// blocks, so this is a no-op until a tenant configures + enforces a budget.</summary>
+    public static async Task<IResult?> BlockIfExceededAsync(
+        IBudgetGuard budget, ITenantContext tenant, CancellationToken ct)
+    {
+        System.ArgumentNullException.ThrowIfNull(budget);
+        System.ArgumentNullException.ThrowIfNull(tenant);
+
+        var status = await budget.EvaluateAsync(tenant.TenantId, ct).ConfigureAwait(false);
+        if (status is not { State: BudgetState.Exceeded, EnforceOn: true })
+        {
+            return null;
+        }
+
+        return Microsoft.AspNetCore.Http.Results.Problem(
+            detail: $"Monthly LLM budget reached: spent ${status.SpentUsd:0.00} of the ${status.CapUsd:0.00} cap. "
+                + "Raise the cap or turn off enforcement in the Cost app to continue.",
+            statusCode: StatusCodes.Status402PaymentRequired,
+            title: "LLM budget reached");
+    }
 }
 
 /// <summary>Field-level request validation for the pipeline endpoints. Returns <c>null</c> when the

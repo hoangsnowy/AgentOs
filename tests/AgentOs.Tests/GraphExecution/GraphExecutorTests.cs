@@ -16,6 +16,8 @@ using AgentOs.Domain.Testing;
 using AgentOs.Domain.Tools;
 using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.GraphExecution;
+using AgentOs.Modules.Pipeline.Metrics;
+using AgentOs.Modules.Pipeline.Persistence;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -326,6 +328,93 @@ public sealed class GraphExecutorTests
         events.ShouldNotContain(e => e.NodeId == "end" && e.Phase == GraphNodePhase.Done);
     }
 
+    // ---- spend metering (follow-up to PR #98: the graph must persist its own spend so the gate works) ----
+
+    [Fact]
+    public async Task RunAsync_PersistsPerNodeSpend_StampingTheExplicitTenant()
+    {
+        PipelineRunRecord? saved = null;
+        string? savedTenant = null;
+        var repo = Substitute.For<IPipelineRunRepository>();
+        repo.When(r => r.SaveAsync(Arg.Any<PipelineRunRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>()))
+            .Do(ci => { saved = ci.Arg<PipelineRunRecord>(); savedTenant = ci.Arg<string>(); });
+        var (exec, _) = Build(qaConsistent: true, repo: repo);
+
+        var result = await exec.RunAsync(Sdlc(), "story", nMax: 3, "acme", _ => Task.CompletedTask);
+
+        result.Completed.ShouldBeTrue();
+        // The crux: spend is persisted stamping the EXPLICIT tenant passed to RunAsync, not the (blank)
+        // ambient ITenantContext of a Blazor circuit — otherwise the budget gate would never see it.
+        savedTenant.ShouldBe("acme");
+        saved.ShouldNotBeNull();
+        // One run_metrics row per billable agent node, tagged with the matching KC id.
+        saved.Metrics.Select(m => m.KcId).ShouldBe(["KC1", "KC2", "KC3", "KC5"], ignoreOrder: true);
+        saved.Metrics.Select(m => m.AgentName).ShouldContain("CodingAgent");
+        // Billed cost == the sum of the four agent nodes' stub metrics (0.0001 + 0.0002 + 0.00015 + 0.0001).
+        saved.Metrics.Sum(m => m.CostUsd).ShouldBe(0.00055m);
+        saved.Result.TotalMetrics.CostUsd.ShouldBe(0.00055m);
+    }
+
+    [Fact]
+    public async Task RunAsync_RawLlmNodeSpend_IsPersisted()
+    {
+        PipelineRunRecord? saved = null;
+        var repo = Substitute.For<IPipelineRunRepository>();
+        repo.When(r => r.SaveAsync(Arg.Any<PipelineRunRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>()))
+            .Do(ci => saved = ci.Arg<PipelineRunRecord>());
+        var (exec, _) = Build(llmReply: "ok", repo: repo, llmCost: 0.0009m);
+        var graph = new PlanGraph("g", "llm",
+            [N("s", "Llm", start: true), N("end", "End")],
+            [E("s", "end")]);
+
+        var result = await exec.RunAsync(graph, "go", 3, "acme", _ => Task.CompletedTask);
+
+        result.Completed.ShouldBeTrue();
+        saved.ShouldNotBeNull();
+        // A raw-LLM node calls the gateway directly (not via a typed agent); its tokens/cost must still be
+        // metered or workflow LLM spend would be invisible to the budget gate.
+        var llmMetric = saved.Metrics.ShouldHaveSingleItem();
+        llmMetric.KcId.ShouldBe("graph");
+        llmMetric.CostUsd.ShouldBe(0.0009m);
+        llmMetric.TokensIn.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task RunAsync_BudgetBlocked_PersistsNothing()
+    {
+        var guard = Substitute.For<AgentOs.Domain.Cost.IBudgetGuard>();
+        guard.EvaluateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(new AgentOs.Domain.Cost.BudgetStatus(
+                 CapUsd: 10m, SpentUsd: 25m, RemainingUsd: -15m, Percent: 2.5,
+                 State: AgentOs.Domain.Cost.BudgetState.Exceeded, EnforceOn: true));
+        var repo = Substitute.For<IPipelineRunRepository>();
+        var (exec, _) = Build(qaConsistent: true, budget: guard, repo: repo);
+
+        var result = await exec.RunAsync(Sdlc(), "story", 3, "over-cap", _ => Task.CompletedTask);
+
+        result.Completed.ShouldBeFalse();
+        // Blocked before any node ran → no spend incurred → nothing to persist.
+        await repo.DidNotReceive().SaveAsync(
+            Arg.Any<PipelineRunRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_NoBillableNodes_DoesNotPersist()
+    {
+        var repo = Substitute.For<IPipelineRunRepository>();
+        var (exec, _) = Build(repo: repo);
+        // Print echoes its input; no agent / LLM runs → zero spend → no run row.
+        var graph = new PlanGraph("g", "print",
+            [N("p", "Print", start: true), N("end", "End")],
+            [E("p", "end")]);
+
+        var result = await exec.RunAsync(graph, "hello", 3, "acme", _ => Task.CompletedTask);
+
+        result.Completed.ShouldBeTrue();
+        await repo.DidNotReceive().SaveAsync(
+            Arg.Any<PipelineRunRecord>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
     // req(Requirement,start) -> cod(Coding) -> tst(Testing) -> qa(Evaluator) -> end; qa loops to cod on fail.
     private static PlanGraph Sdlc(int qaMaxIter = 3)
         => new("g1", "SDLC",
@@ -348,7 +437,8 @@ public sealed class GraphExecutorTests
 
     private static (GraphExecutor Exec, Agents Agents) Build(
         bool qaConsistent = true, string? llmReply = null, bool yieldLlm = false,
-        AgentOs.Domain.Cost.IBudgetGuard? budget = null)
+        AgentOs.Domain.Cost.IBudgetGuard? budget = null,
+        IPipelineRunRepository? repo = null, TimeProvider? clock = null, decimal llmCost = 0m)
     {
         var req = Substitute.For<IRequirementAgent>();
         req.RunAsync(Arg.Any<UserStory>(), Arg.Any<CancellationToken>()).Returns(StubSpec());
@@ -370,7 +460,7 @@ public sealed class GraphExecutorTests
         if (llmReply is not null)
         {
             var llm = Substitute.For<ILlmClient>();
-            var resp = new LlmResponse(llmReply, 1, 1, 0m, System.TimeSpan.Zero, "m", "Offline");
+            var resp = new LlmResponse(llmReply, 1, 1, llmCost, System.TimeSpan.Zero, "m", "Offline");
             if (yieldLlm)
             {
                 // Force a real async suspension on the threadpool so fan-out branches genuinely run in
@@ -392,7 +482,9 @@ public sealed class GraphExecutorTests
             Substitute.For<IToolGateway>(),
             Options.Create(new AgentsOptions()),
             NullLogger<GraphExecutor>.Instance,
-            budget);
+            budget,
+            repo,
+            clock);
 
         return (exec, new Agents(req, coding, testing, qa));
     }
