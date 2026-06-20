@@ -87,10 +87,18 @@ body, .login-pf body, .login-pf-page {
     min-height: 100vh;
     padding: 32px 16px;
 }
-/* Single clean brand: the card's own lockup (A tile + "AgentOS") is the logo — no giant wordmark
-   above (it doubled the name). Matches the approved Adwaita login reference. */
+/* GDM lock-screen wordmark above the card — thin white, THE brand identity (the in-card A-tile
+   is hidden so the name shows once). */
+.login-pf-page::before {
+    content: "AgentOS";
+    order: 1;
+    color: #fff;
+    font: 200 clamp(48px, 9vw, 84px)/1 var(--font);
+    letter-spacing: -.03em;
+    text-shadow: 0 2px 14px rgba(0,0,0,.42);
+}
 
-/* The PF Keycloak frame — strip it; the card is centered over the wallpaper. */
+/* The PF Keycloak frame — strip it; the card sits below the wordmark. */
 .login-pf-page .container,
 .login-pf-page > div {
     order: 2;
@@ -119,13 +127,8 @@ body, .login-pf body, .login-pf-page {
 /* ===== Header — replace the stock KC logo with the AgentOS mark ===== */
 #kc-header,
 .login-pf-page-header {
-    justify-content: center;
-    text-align: center;
-    margin: 0 0 12px;
-    padding-bottom: 0;
-    border-bottom: 0;
-    display: flex;
-    align-items: center;
+    /* A-tile + repeated name removed — the big "AgentOS" wordmark above is the single brand. */
+    display: none;
 }
 
 #kc-header-wrapper {
@@ -194,9 +197,9 @@ select, textarea,
 .pf-c-form-control,
 .form-control {
     width: 100%;
-    background: rgba(255,255,255,.85);
+    background: #ffffff;
     color: var(--txt);
-    border: 1px solid rgba(120,130,150,.40);
+    border: 1px solid var(--line-strong);
     border-radius: var(--r-3);
     padding: 7px 10px;
     font-family: inherit;

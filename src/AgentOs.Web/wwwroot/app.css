@@ -1461,6 +1461,7 @@ select {
 .ko-overview .ko-row { color: #fff; }
 .ko-overview .ko-row:hover { background: rgba(255,255,255,.10); }
 .ko-overview .ko-row-title { color: #fff; }
+.ko-overview .ko-row-cap { color: rgba(255,255,255,.62); }
 .ko-overview .ko-row-ic { background: rgba(255,255,255,.10); color: rgba(255,255,255,.85); }
 .ko-overview .ko-empty { color: rgba(255,255,255,.7); }
 
