@@ -64,7 +64,20 @@ public static class JwtAuthExtensions
                 };
                 options.Events = new JwtBearerEvents
                 {
-                    OnTokenValidated = ctx => { FlattenRealmRoles(ctx.Principal); return Task.CompletedTask; },
+                    OnTokenValidated = ctx =>
+                    {
+                        // Issuer/audience/lifetime/signature alone don't pin the token KIND: Keycloak
+                        // signs refresh + logout tokens with the same realm key + audience, so a leaked
+                        // one would otherwise be accepted here as an API access token. Reject anything
+                        // whose payload `typ` says it isn't an access token before trusting its roles.
+                        if (IsNonAccessToken(ctx.Principal, out var tokenType))
+                        {
+                            ctx.Fail($"Rejected non-access token (typ='{tokenType}').");
+                            return Task.CompletedTask;
+                        }
+                        FlattenRealmRoles(ctx.Principal);
+                        return Task.CompletedTask;
+                    },
                 };
             });
 
@@ -77,6 +90,23 @@ public static class JwtAuthExtensions
         Uri.TryCreate(authority, UriKind.Absolute, out var uri)
         && uri.Scheme == Uri.UriSchemeHttp
         && uri.IsLoopback;
+
+    /// <summary>
+    /// True when the validated principal is NOT a Keycloak access token, and so must be rejected.
+    /// Keycloak stamps the token kind in the PAYLOAD <c>typ</c> claim — <c>"Bearer"</c> for access
+    /// tokens, <c>"Refresh"</c> / <c>"Logout"</c> / <c>"ID"</c> for the rest — while the JWT *header*
+    /// typ is <c>"JWT"</c> for every kind, so header-keyed
+    /// <see cref="TokenValidationParameters.ValidTypes"/> can't tell them apart. A token with no
+    /// <c>typ</c> claim is treated as an access token, so non-Keycloak callers are never locked out;
+    /// only a present-and-not-<c>"Bearer"</c> claim fails. Comparison is case-insensitive so a
+    /// legitimately-cased bearer token is never rejected.
+    /// </summary>
+    internal static bool IsNonAccessToken(ClaimsPrincipal? principal, out string? tokenType)
+    {
+        tokenType = principal?.FindFirst("typ")?.Value;
+        return !string.IsNullOrEmpty(tokenType)
+            && !string.Equals(tokenType, "Bearer", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>Flatten Keycloak's nested <c>realm_access.roles</c> JSON into individual role claims.</summary>
     public static void FlattenRealmRoles(System.Security.Claims.ClaimsPrincipal? principal)
