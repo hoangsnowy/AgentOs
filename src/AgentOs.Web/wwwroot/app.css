@@ -729,9 +729,9 @@ select {
 
 .start-menu-backdrop {
     position: fixed; inset: 0; z-index: 990;
-    /* GNOME Activities overview scrim — dark + blurred wallpaper behind the launcher. */
-    background: rgba(0,0,0,.45);
-    backdrop-filter: blur(28px) saturate(115%);
+    /* GNOME Activities overview scrim — uniform dark over the blurred wallpaper (hides window ghosts). */
+    background: rgba(8,12,20,.55);
+    backdrop-filter: blur(32px) saturate(120%);
     -webkit-backdrop-filter: blur(28px) saturate(115%);
     animation: login-fade var(--duration-base) var(--ease-standard);
 }
@@ -1445,10 +1445,11 @@ select {
 .ko-win {
     display: flex; flex-direction: column; align-items: center; gap: 10px;
     padding: 22px 12px; cursor: pointer; color: #fff; font-family: inherit;
-    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); border-radius: 12px;
+    /* Clean transparent at rest — only the colored app-icon tile + label show; highlight on hover. */
+    background: transparent; border: 1px solid transparent; border-radius: 12px;
     transition: background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
 }
-.ko-win:hover { background: rgba(255,255,255,.15); transform: translateY(-2px); }
+.ko-win:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); transform: translateY(-2px); }
 .ko-win.min { opacity: .55; }
 .ko-win-ic { width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center; box-shadow: var(--shadow-2); }
 .ko-win-title { font-size: 12.5px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1460,7 +1461,7 @@ select {
 .ko-overview .ko-row { color: #fff; }
 .ko-overview .ko-row:hover { background: rgba(255,255,255,.10); }
 .ko-overview .ko-row-title { color: #fff; }
-.ko-overview .ko-row-ic { color: rgba(255,255,255,.8); }
+.ko-overview .ko-row-ic { background: rgba(255,255,255,.10); color: rgba(255,255,255,.85); }
 .ko-overview .ko-empty { color: rgba(255,255,255,.7); }
 
 /* Footer at the bottom of the overview */

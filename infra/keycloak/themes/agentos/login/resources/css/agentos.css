@@ -87,17 +87,10 @@ body, .login-pf body, .login-pf-page {
     min-height: 100vh;
     padding: 32px 16px;
 }
-/* GDM lock-screen wordmark above the card — thin white, mirrors the in-app .lock-time. */
-.login-pf-page::before {
-    content: "AgentOS";
-    order: 1;
-    color: #fff;
-    font: 200 clamp(48px, 9vw, 84px)/1 var(--font);
-    letter-spacing: -.03em;
-    text-shadow: 0 2px 14px rgba(0,0,0,.42);
-}
+/* Single clean brand: the card's own lockup (A tile + "AgentOS") is the logo — no giant wordmark
+   above (it doubled the name). Matches the approved Adwaita login reference. */
 
-/* The PF Keycloak frame — strip it; the card sits below the wordmark. */
+/* The PF Keycloak frame — strip it; the card is centered over the wallpaper. */
 .login-pf-page .container,
 .login-pf-page > div {
     order: 2;
