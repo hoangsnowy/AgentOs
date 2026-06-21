@@ -1,0 +1,106 @@
+api-version: 2024-02-02-preview
+location: {{ .Env.AZURE_LOCATION }}
+identity:
+  type: UserAssigned
+  userAssignedIdentities:
+    ? "{{ .Env.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID }}"
+    : {}
+properties:
+  environmentId: {{ .Env.AZURE_CONTAINER_APPS_ENVIRONMENT_ID }}
+  configuration:
+    activeRevisionsMode: single
+    runtime:
+      dotnet:
+        autoConfigureDataProtection: true
+    ingress:
+      external: true
+      targetPort: 8080
+      transport: http
+      allowInsecure: false
+    registries:
+      - server: {{ .Env.AZURE_CONTAINER_REGISTRY_ENDPOINT }}
+        identity: {{ .Env.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID }}
+    secrets:
+      - name: auth--keycloak--admin--password
+        value: '{{ .Env.KeycloakAdminPassword }}'
+      - name: auth--keycloak--clientsecret
+        value: '{{ .Env.KeycloakWebClientSecret }}'
+      - name: defaultconnection-password
+        value: '{{ .Env.PostgresPassword }}'
+      - name: defaultconnection-uri
+        value: postgresql://{{ parameter "PostgresUsername" }}:{{ .Env.PostgresPassword }}@{{ .Env.POSTGRES_HOSTNAME }}/agentos
+      - name: connectionstrings--defaultconnection
+        keyVaultUrl: '{{ .Env.POSTGRES_KV_VAULTURI }}secrets/connectionstrings--DefaultConnection'
+        identity: {{ .Env.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID }}
+  template:
+    containers:
+      - image: {{ .Image }}
+        name: web
+        env:
+          - name: AZURE_CLIENT_ID
+            value: {{ .Env.MANAGED_IDENTITY_CLIENT_ID }}
+          - name: ASPNETCORE_ENVIRONMENT
+            value: Production
+          - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+            value: "true"
+          - name: Auth__DevAutoLogin
+            value: "false"
+          - name: Auth__Keycloak__Admin__BaseUrl
+            value: https://keycloak.{{ .Env.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN }}
+          - name: Auth__Keycloak__Admin__ClientId
+            value: admin-cli
+          - name: Auth__Keycloak__Admin__Realm
+            value: agentic
+          - name: Auth__Keycloak__Admin__Username
+            value: '{{ parameter "KeycloakAdminUsername" }}'
+          - name: Auth__Keycloak__Audience
+            value: agentic-api
+          - name: Auth__Keycloak__Authority
+            value: https://keycloak.{{ .Env.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN }}/realms/agentic
+          - name: Auth__Keycloak__MetadataAddress
+            value: http://keycloak.{{ .Env.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN }}/realms/agentic/.well-known/openid-configuration
+          - name: Auth__Keycloak__RequireHttpsMetadata
+            value: "false"
+          - name: Auth__Keycloak__ClientId
+            value: agentic-web
+          - name: DEFAULTCONNECTION_DATABASENAME
+            value: agentos
+          - name: DEFAULTCONNECTION_HOST
+            value: '{{ .Env.POSTGRES_HOSTNAME }}'
+          - name: DEFAULTCONNECTION_JDBCCONNECTIONSTRING
+            value: jdbc:postgresql://{{ .Env.POSTGRES_HOSTNAME }}/agentos?sslmode=require&authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin
+          - name: DEFAULTCONNECTION_PORT
+            value: "5432"
+          - name: DEFAULTCONNECTION_USERNAME
+            value: '{{ parameter "PostgresUsername" }}'
+          - name: Email__From
+            value: noreply@agentic.local
+          - name: Email__FromName
+            value: AgentOS
+          - name: Email__SmtpHost
+            value: '{{ parameter "SmtpHost" }}'
+          - name: Email__SmtpPort
+            value: '{{ parameter "SmtpPort" }}'
+          - name: HTTP_PORTS
+            value: "8080"
+          - name: KEYCLOAK_HTTP
+            value: http://keycloak.{{ .Env.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN }}
+          - name: OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY
+            value: in_memory
+          - name: services__keycloak__http__0
+            value: http://keycloak.{{ .Env.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN }}
+          - name: Auth__Keycloak__Admin__Password
+            secretRef: auth--keycloak--admin--password
+          - name: Auth__Keycloak__ClientSecret
+            secretRef: auth--keycloak--clientsecret
+          - name: DEFAULTCONNECTION_PASSWORD
+            secretRef: defaultconnection-password
+          - name: DEFAULTCONNECTION_URI
+            secretRef: defaultconnection-uri
+          - name: ConnectionStrings__DefaultConnection
+            secretRef: connectionstrings--defaultconnection
+    scale:
+      minReplicas: 1
+tags:
+  azd-service-name: web
+  aspire-resource-name: web

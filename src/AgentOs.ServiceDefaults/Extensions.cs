@@ -120,10 +120,17 @@ public static class Extensions
                 timeout: TimeSpan.FromSeconds(5)));
         }
 
+        // Probe the discovery document over the backend-reachable URL: behind ACA the public
+        // authority is not hairpin-reachable from inside the environment, so an explicit
+        // MetadataAddress (internal http) wins over the public Authority when configured.
+        var metadataAddress = builder.Configuration["Auth:Keycloak:MetadataAddress"];
         var authority = builder.Configuration["Auth:Keycloak:Authority"];
+        var probeUrl = !string.IsNullOrWhiteSpace(metadataAddress)
+            ? metadataAddress
+            : string.IsNullOrWhiteSpace(authority) ? null : authority.TrimEnd('/') + "/.well-known/openid-configuration";
         if (!builder.Environment.IsDevelopment()
-            && !string.IsNullOrWhiteSpace(authority)
-            && Uri.TryCreate(authority.TrimEnd('/') + "/.well-known/openid-configuration", UriKind.Absolute, out var metadataUri))
+            && !string.IsNullOrWhiteSpace(probeUrl)
+            && Uri.TryCreate(probeUrl, UriKind.Absolute, out var metadataUri))
         {
             builder.Services.AddHttpClient(OidcMetadataHealthCheck.ClientName);
             checks.Add(new HealthCheckRegistration(

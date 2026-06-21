@@ -78,8 +78,8 @@
       "secret": "agentic-web-dev-secret",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["https://localhost:5180/*"],
-      "webOrigins": ["https://localhost:5180"],
+      "redirectUris": ["https://localhost:5180/*", "https://web.prouddesert-9f23b6b1.southeastasia.azurecontainerapps.io/*"],
+      "webOrigins": ["https://localhost:5180", "https://web.prouddesert-9f23b6b1.southeastasia.azurecontainerapps.io"],
       "defaultClientScopes": ["tenant"],
       "protocolMappers": [
         {
@@ -152,7 +152,7 @@
       "lastName": "Operator",
       "attributes": { "tenant": ["default"] },
       "credentials": [
-        { "type": "password", "value": "operator", "temporary": true }
+        { "type": "password", "value": "operator", "temporary": false }
       ],
       "realmRoles": ["admin"]
     },
@@ -165,7 +165,7 @@
       "lastName": "Member",
       "attributes": { "tenant": ["default"] },
       "credentials": [
-        { "type": "password", "value": "member", "temporary": true }
+        { "type": "password", "value": "member", "temporary": false }
       ],
       "realmRoles": ["member"]
     }
