@@ -1,46 +1,46 @@
-# postprovision.ps1 — run by `azd` after `azd provision` completes (Windows; POSIX runs postprovision.sh).
+# postdeploy.ps1 — run by `azd` after `azd deploy` (Windows; POSIX runs postdeploy.sh).
 #
-# Brings the imported 'agentic' realm in line with the cloud deployment:
+# Runs on POSTDEPLOY (not postprovision) so the Keycloak container app is actually up. Brings the
+# imported 'agentic' realm in line with the cloud deployment:
 #   1. Patches the 'agentic-web' client's redirectUris + webOrigins to the real ACA Web FQDN
-#      (the realm import hardcodes https://localhost:5180) AND rotates the client secret to the
-#      KEYCLOAKWEBCLIENTSECRET azd parameter (the import bakes the public dev secret — the Web app
+#      (the realm import hardcodes https://localhost:5180) and rotates the client secret to the
+#      KeycloakWebClientSecret azd parameter (the import bakes the public dev secret; the Web app
 #      already receives the azd value, so without this patch every login fails on secret mismatch).
-#   2. Disables realm verifyEmail in cloud — no SMTP is wired yet (roadmap decision D4).
+#   2. Disables realm verifyEmail in cloud — no SMTP wired by default.
 #   3. Rotates the imported seed users' passwords (operator/member) to OPERATORPASSWORD /
 #      MEMBERPASSWORD when set — the import ships public placeholder passwords.
 #
-# Required env vars (set via `azd env set`): KEYCLOAK_BASE_URL, WEB_BASE_URL, KEYCLOAKADMINPASSWORD,
-# KEYCLOAKWEBCLIENTSECRET. Optional: OPERATORPASSWORD, MEMBERPASSWORD.
-#
-# Run manually:  pwsh infra/hooks/postprovision.ps1
+# URLs are derived from the ACA environment default domain (azd output) — no manual base-URL step.
+# Run manually:  pwsh infra/hooks/postdeploy.ps1
 $ErrorActionPreference = 'Stop'
 
-$kcUrl       = $env:KEYCLOAK_BASE_URL
-$webUrl      = $env:WEB_BASE_URL
-$adminPass   = $env:KEYCLOAKADMINPASSWORD
-$adminUser   = if ($env:KEYCLOAKADMINUSERNAME) { $env:KEYCLOAKADMINUSERNAME } else { 'admin' }
-$webSecret   = $env:KEYCLOAKWEBCLIENTSECRET
+$domain      = $env:AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN
+$kcUrl       = if ($env:KEYCLOAK_BASE_URL) { $env:KEYCLOAK_BASE_URL } elseif ($domain) { "https://keycloak.$domain" } else { $null }
+$webUrl      = if ($env:WEB_BASE_URL) { $env:WEB_BASE_URL } elseif ($domain) { "https://web.$domain" } else { $null }
+$adminPass   = if ($env:KeycloakAdminPassword) { $env:KeycloakAdminPassword } else { $env:KEYCLOAKADMINPASSWORD }
+$adminUser   = if ($env:KeycloakAdminUsername) { $env:KeycloakAdminUsername } elseif ($env:KEYCLOAKADMINUSERNAME) { $env:KEYCLOAKADMINUSERNAME } else { 'admin' }
+$webSecret   = if ($env:KeycloakWebClientSecret) { $env:KeycloakWebClientSecret } else { $env:KEYCLOAKWEBCLIENTSECRET }
 $realm       = 'agentic'
 $clientId    = 'agentic-web'
 
 if (-not $kcUrl -or -not $webUrl -or -not $adminPass) {
-    Write-Host "Skipping KC realm patch — KEYCLOAK_BASE_URL, WEB_BASE_URL, or KEYCLOAKADMINPASSWORD not set."
-    Write-Host ""
-    Write-Host "After the first 'azd up', run:"
-    Write-Host "  azd env set KEYCLOAK_BASE_URL  'https://keycloak.<env>.azurecontainerapps.io'"
-    Write-Host "  azd env set WEB_BASE_URL       'https://web.<env>.azurecontainerapps.io'"
-    Write-Host "  azd provision   # re-runs this hook"
+    Write-Host "Skipping KC realm patch — could not resolve KC/Web URL (AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN) or KeycloakAdminPassword."
     exit 0
 }
 
 Write-Host "Patching realm '$realm' for $webUrl"
 
-# Admin token
-$tokenResp = Invoke-RestMethod -Method Post -Uri "$kcUrl/realms/master/protocol/openid-connect/token" `
-    -ContentType 'application/x-www-form-urlencoded' `
-    -Body @{ grant_type = 'password'; client_id = 'admin-cli'; username = $adminUser; password = $adminPass }
-$token = $tokenResp.access_token
-if (-not $token) { Write-Error "Failed to get KC admin token. Is KC_URL correct and KC up?"; exit 1 }
+# Admin token — retry while Keycloak finishes starting (JVM warmup can 503 right after deploy).
+$token = $null
+for ($i = 0; $i -lt 12 -and -not $token; $i++) {
+    try {
+        $resp = Invoke-RestMethod -Method Post -Uri "$kcUrl/realms/master/protocol/openid-connect/token" `
+            -ContentType 'application/x-www-form-urlencoded' `
+            -Body @{ grant_type = 'password'; client_id = 'admin-cli'; username = $adminUser; password = $adminPass }
+        $token = $resp.access_token
+    } catch { Start-Sleep -Seconds 8 }
+}
+if (-not $token) { Write-Warning "Failed to get KC admin token after retries — skipping realm patch."; exit 0 }
 
 $headers = @{ Authorization = "Bearer $token" }
 
@@ -55,7 +55,7 @@ Invoke-RestMethod -Method Put -Headers $headers -Uri "$kcUrl/admin/realms/$realm
     -ContentType 'application/json' -Body ($clientPatch | ConvertTo-Json) | Out-Null
 Write-Host "Client patched: redirectUris=$webUrl/* secret=$(if ($webSecret) { 'rotated' } else { 'unchanged' })"
 
-# 2. Realm: verifyEmail off in cloud (no SMTP yet — D4)
+# 2. Realm: verifyEmail off in cloud (no SMTP by default)
 try {
     Invoke-RestMethod -Method Put -Headers $headers -Uri "$kcUrl/admin/realms/$realm" `
         -ContentType 'application/json' -Body (@{ realm = $realm; verifyEmail = $false } | ConvertTo-Json) | Out-Null

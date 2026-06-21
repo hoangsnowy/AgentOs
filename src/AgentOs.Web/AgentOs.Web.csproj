@@ -6,6 +6,8 @@
     <UserSecretsId>agentos-prototype</UserSecretsId>
     <InvariantGlobalization>false</InvariantGlobalization>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- azd builds this project to a container image via `dotnet publish -t:PublishContainer`. -->
+    <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
   </PropertyGroup>
 
   <ItemGroup>

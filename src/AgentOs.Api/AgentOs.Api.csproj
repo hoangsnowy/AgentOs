@@ -5,6 +5,8 @@
     <AssemblyName>AgentOs.Api</AssemblyName>
     <UserSecretsId>agentos-prototype</UserSecretsId>
     <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- azd builds this project to a container image via `dotnet publish -t:PublishContainer`. -->
+    <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
   </PropertyGroup>
 
   <ItemGroup>

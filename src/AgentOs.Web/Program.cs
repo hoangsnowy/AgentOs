@@ -137,6 +137,13 @@ builder.Services
     .AddOpenIdConnect(options =>
     {
         options.Authority = oidcAuthority;
+        // Behind ACA the public authority is not hairpin-reachable from inside the environment.
+        // When set, MetadataAddress points the back-channel (discovery/token/jwks) at the internal
+        // http endpoint while Authority stays the public https URL for browser redirects + issuer.
+        if (keycloak["MetadataAddress"] is { Length: > 0 } oidcMetadata)
+        {
+            options.MetadataAddress = oidcMetadata;
+        }
         options.ClientId = keycloak["ClientId"] ?? "agentic-web";
         options.ClientSecret = keycloakClientSecret ?? string.Empty;
         options.ResponseType = "code";

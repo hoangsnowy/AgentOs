@@ -1,0 +1,71 @@
+api-version: 2024-02-02-preview
+location: {{ .Env.AZURE_LOCATION }}
+identity:
+  type: UserAssigned
+  userAssignedIdentities:
+    ? "{{ .Env.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID }}"
+    : {}
+properties:
+  environmentId: {{ .Env.AZURE_CONTAINER_APPS_ENVIRONMENT_ID }}
+  configuration:
+    activeRevisionsMode: single
+    runtime:
+      dotnet:
+        autoConfigureDataProtection: true
+    ingress:
+      additionalPortMappings:
+        - targetPort: 9000
+          external: false
+      external: true
+      targetPort: 8080
+      transport: http
+      allowInsecure: false
+    registries:
+      - server: {{ .Env.AZURE_CONTAINER_REGISTRY_ENDPOINT }}
+        identity: {{ .Env.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID }}
+    secrets:
+      - name: kc-bootstrap-admin-password
+        value: '{{ .Env.KeycloakAdminPassword }}'
+      - name: kc-db-password
+        value: '{{ .Env.PostgresPassword }}'
+  template:
+    containers:
+      - image: {{ .Image }}
+        name: keycloak
+        args:
+          - start
+          - --import-realm
+        env:
+          - name: AZURE_CLIENT_ID
+            value: {{ .Env.MANAGED_IDENTITY_CLIENT_ID }}
+          - name: KC_BOOTSTRAP_ADMIN_USERNAME
+            value: '{{ parameter "KeycloakAdminUsername" }}'
+          - name: KC_DB
+            value: postgres
+          - name: KC_DB_URL
+            value: jdbc:postgresql://{{ .Env.POSTGRES_HOSTNAME }}:5432/keycloak2?sslmode=require
+          - name: KC_DB_USERNAME
+            value: '{{ parameter "PostgresUsername" }}'
+          - name: KC_FEATURES
+            value: opentelemetry
+          - name: KC_HEALTH_ENABLED
+            value: "true"
+          - name: KC_HOSTNAME
+            value: https://keycloak.{{ .Env.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN }}
+          - name: KC_HOSTNAME_STRICT
+            value: "false"
+          - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+            value: "true"
+          - name: KC_HTTP_ENABLED
+            value: "true"
+          - name: KC_PROXY_HEADERS
+            value: xforwarded
+          - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+            secretRef: kc-bootstrap-admin-password
+          - name: KC_DB_PASSWORD
+            secretRef: kc-db-password
+    scale:
+      minReplicas: 1
+tags:
+  azd-service-name: keycloak
+  aspire-resource-name: keycloak

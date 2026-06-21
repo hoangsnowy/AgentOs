@@ -152,7 +152,7 @@
       "lastName": "Operator",
       "attributes": { "tenant": ["default"] },
       "credentials": [
-        { "type": "password", "value": "operator", "temporary": true }
+        { "type": "password", "value": "operator", "temporary": false }
       ],
       "realmRoles": ["admin"]
     },
@@ -165,7 +165,7 @@
       "lastName": "Member",
       "attributes": { "tenant": ["default"] },
       "credentials": [
-        { "type": "password", "value": "member", "temporary": true }
+        { "type": "password", "value": "member", "temporary": false }
       ],
       "realmRoles": ["member"]
     }

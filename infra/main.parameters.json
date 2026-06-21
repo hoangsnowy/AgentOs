@@ -1,0 +1,36 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "principalId": {
+        "value": "${AZURE_PRINCIPAL_ID}"
+      },
+      "KeycloakAdminPassword": {
+        "value": "${KeycloakAdminPassword}"
+      },
+      "KeycloakAdminUsername": {
+        "value": "${KeycloakAdminUsername}"
+      },
+      "KeycloakWebClientSecret": {
+        "value": "${KeycloakWebClientSecret}"
+      },
+      "PostgresPassword": {
+        "value": "${PostgresPassword}"
+      },
+      "PostgresUsername": {
+        "value": "${PostgresUsername}"
+      },
+      "SmtpHost": {
+        "value": "${SmtpHost}"
+      },
+      "SmtpPort": {
+        "value": "${SmtpPort}"
+      },
+      "environmentName": {
+        "value": "${AZURE_ENV_NAME}"
+      },
+      "location": {
+        "value": "${AZURE_LOCATION}"
+      }
+    }
+  }

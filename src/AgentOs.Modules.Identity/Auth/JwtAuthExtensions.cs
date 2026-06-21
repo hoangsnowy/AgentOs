@@ -49,6 +49,13 @@ public static class JwtAuthExtensions
             .AddJwtBearer(options =>
             {
                 options.Authority = authority;
+                // Behind ACA the public authority is not hairpin-reachable from inside the
+                // environment; MetadataAddress (internal http) points jwks/discovery at the
+                // back-channel while Authority/ValidIssuer stay the public https URL.
+                if (kc["MetadataAddress"] is { Length: > 0 } metadataAddress)
+                {
+                    options.MetadataAddress = metadataAddress;
+                }
                 options.Audience = audience;
                 options.RequireHttpsMetadata = requireHttps;
                 options.TokenValidationParameters = new TokenValidationParameters
