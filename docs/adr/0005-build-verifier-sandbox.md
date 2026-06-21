@@ -37,9 +37,8 @@ input layer alone is the cheapest, most decisive cut of the RCE surface.
 2. **Always synthesize the project ourselves** — a single fixed SDK-style `net10.0` `.csproj` with
    **no** `PackageReference`/`Analyzer`/`ProjectReference`, so no source generator or build-time
    package code can be introduced.
-3. **Cut the feed.** A synthesized `nuget.config` with `<clear />` (no remote sources) + a
-   scratch-local `NUGET_PACKAGES`; combined with a zero-dependency project, restore touches no
-   network.
+3. **Cut the feed.** A synthesized `nuget.config` with `<clear />` (no remote sources); combined
+   with a zero-dependency project, restore touches no network.
 4. **Confine the filesystem.** Paths are normalised and confined to the scratch dir (existing
    traversal guard); `HOME`/`USERPROFILE` are redirected into the scratch dir so a build cannot read
    the server's user profile or NuGet credentials; telemetry/first-run/node-reuse/MSBuild-server are
@@ -72,8 +71,9 @@ that slips through Layer 1 cannot touch the host or network:
 ## Consequences
 
 - **Layer 1 — shipped + unit-tested.** A `*.csproj`/`*.targets`/`*.props`/`nuget.config`/
-  `Directory.Build.props`/`*.rsp` fixture is **rejected and never built**; the synthesized project +
-  cleared feed are always used; `HOME`/`USERPROFILE` are redirected (`BuildInputSanitizerTests`).
+  `Directory.Build.props`/`*.rsp` fixture is **rejected and never built**
+  (`BuildInputSanitizerTests`); the synthesized project + cleared feed are always used;
+  `HOME`/`USERPROFILE` are redirected (`InProcessBuildRunner`, not unit-asserted).
 - **Layer 2 — shipped + locally E2E-verified.** `ISandboxedBuildRunner` with `InProcess` (Dev
   default) and `Container` runners; `ContainerCommand` composes the `docker run` argv
   (`ContainerCommandTests` assert the isolation flags). Verified on a real Docker host: a valid

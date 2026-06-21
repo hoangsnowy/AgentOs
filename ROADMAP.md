@@ -56,7 +56,12 @@ AgentOS is a working platform, not a sketch. Already shipped:
 
 - **One engine, three surfaces** — Pipeline (sandbox story), Workflow (visual graph of the same 5
   agents, [#52](https://github.com/hoangsnowy/AgentOs/pull/52)), and Spine (real ticket →
-  PR) all run the same engine. Spine tickets run either the **Quality** brain (full 5-agent pipeline
+  PR) all run the same engine. The Workflow surface is re-platformed onto **Microsoft Agent
+  Framework Workflows** — `GraphExecutor` compiles the drawn `PlanGraph` into a MAF `Workflow` run on
+  the MAF in-process runtime (QA pass/fail become conditional edges), node work delegating to the
+  real typed agents + the governed tool gateway
+  ([#87](https://github.com/hoangsnowy/AgentOs/pull/87),
+  [#100](https://github.com/hoangsnowy/AgentOs/pull/100)). Spine tickets run either the **Quality** brain (full 5-agent pipeline
   with a greenfield router) or the **Quick** brain, with a user-facing toggle, cost label, and
   bidirectional cross-links between all three apps
   ([#54](https://github.com/hoangsnowy/AgentOs/pull/54),
@@ -91,7 +96,7 @@ deployment), **Shipped, cloud-unverified** (in code and tested, but no real clou
 |---|---|
 | Cloud hardening (ForwardedHeaders, DataProtection, env gating) | Shipped, **cloud-unverified** — no real `azd up` round-trip yet |
 | Multi-tenant isolation | Shipped+verified at row level; B4 residue now closed in code — run-history tenant stamping (run + metric rows), `AuthSession` null-`HttpContext` fail-open, `OrchestrationStore` per-tenant keying ([#72](https://github.com/hoangsnowy/AgentOs/pull/72)); full-stack two-tenant E2E pending the `azd up` round-trip |
-| `build_verifier` execution | **Not sandboxed** — runs MSBuild on LLM-influenced code in-process ([audit #10](docs/deploy-readiness-audit.md)); gated **off by default in Production** ([#72](https://github.com/hoangsnowy/AgentOs/pull/72)) until the Q1 sandbox lands |
+| `build_verifier` execution | **Sandboxed** — ADR-0005 Accepted ([docs/adr/0005](docs/adr/0005-build-verifier-sandbox.md)); Layer-1 input hardening (`BuildInputSanitizer`: build-control files rejected, project synthesized, feed cut) + Layer-2 OS isolation (`docker run --network none --read-only --user --cap-drop ALL`) shipped ([#96](https://github.com/hoangsnowy/AgentOs/pull/96)). **Cloud-unverified** — only the ACA-Jobs cloud round-trip on a real `azd up` remains |
 | Scale-out (≥2 replicas) | **Unverified** — single-instance only until a 2-replica test (see Q2) |
 
 ---
@@ -100,8 +105,9 @@ deployment), **Shipped, cloud-unverified** (in code and tested, but no real clou
 
 Sequencing is dependency-driven with one hard external commitment in the **Sep–Dec 2026** window.
 The spine: **identity decision → `azd up` round-trip → tenant residue + secrets → demo hardening →
-enterprise ops → OSS launch**. The `build_verifier` sandbox is a parallel Q1 track — it does not
-depend on the Azure deployment. PR-level slicing for the E/F/G workstreams lives in
+enterprise ops → OSS launch**. The `build_verifier` sandbox shipped in code as a parallel Q1 track
+([#96](https://github.com/hoangsnowy/AgentOs/pull/96)) — only its ACA-Jobs cloud round-trip rides on
+the Azure deployment. PR-level slicing for the E/F/G workstreams lives in
 [coherence-plan.md](coherence-plan.md), the engineering appendix to this roadmap.
 
 ### Q1 (Jun–Aug 2026) — Live on Azure
@@ -115,12 +121,14 @@ depend on the Azure deployment. PR-level slicing for the E/F/G workstreams lives
     stripped, secrets via `azd env` / Key Vault.
   - **Real `azd up` round-trip:** provision → configure → redeploy → smoke test — OIDC login on the
     real FQDN, an authenticated pipeline run that persists under the real tenant, realm + saved LLM
-    keys surviving a restart. Fix the dead `/auth/token` CD smoke step.
-  - **Sandboxed `build_verifier`, done properly ([audit #10](docs/deploy-readiness-audit.md)):**
-    ADR for the sandbox architecture ([D2](#4--open-architecture-decisions)) in month 1;
-    implementation months 2–3 — ephemeral per-build container, no egress, CPU/mem/disk/timeout
-    quotas, always-synthesized project file (model-authored `.csproj`/`.targets`/`.props` rejected),
-    `--no-restore` with a locked feed.
+    keys surviving a restart.
+  - **Sandboxed `build_verifier`, done properly ([audit #10](docs/deploy-readiness-audit.md)) — ✅ shipped:**
+    ADR-0005 ([D2](#4--open-architecture-decisions)) Accepted; the two-layer sandbox is in code
+    ([#96](https://github.com/hoangsnowy/AgentOs/pull/96)) — Layer-1 input hardening
+    (`BuildInputSanitizer`: model-authored `.csproj`/`.targets`/`.props` rejected, project file
+    always synthesized, feed cut) + Layer-2 ephemeral per-build container, no egress
+    (`docker run --network none --read-only --user --cap-drop ALL`), CPU/mem/PID/timeout quotas.
+    Only the ACA-Jobs cloud round-trip on a real `azd up` remains.
   - **Multi-tenant residue (audit B4) — ✅ closed in code:** run-history repo tenant stamping (run +
     metric rows) and `AuthSession` null-`HttpContext` fail-open are fixed; the
     [#72](https://github.com/hoangsnowy/AgentOs/pull/72) `OrchestrationStore` per-tenant keying ships;
@@ -150,8 +158,11 @@ depend on the Azure deployment. PR-level slicing for the E/F/G workstreams lives
 - **Deliverables:**
   - **Latency/UX:** LLM token streaming (`GetStreamingResponseAsync`) + prompt-keyed HybridCache
     (E5); per-shell-command streaming in session runs; "Find boards" picker.
-  - **Operability:** deploy-time migrations with an advisory lock (E1); observability backend wired
-    (App Insights / OTLP exporter) so a demo run is visible as traces + cost telemetry.
+  - **Operability:** deploy-time migrations with an advisory lock (E1) — ✅ shipped
+    ([#79](https://github.com/hoangsnowy/AgentOs/pull/79)): `PgAdvisoryLock` serialises concurrent
+    replicas racing the boot migration, wired into every module's migrate hook (Pipeline, Sessions,
+    Tenants, Tools, AppConfig); observability backend wired (App Insights / OTLP exporter) so a demo
+    run is visible as traces + cost telemetry.
   - **Scale-out honesty resolved:** run the 2-replica test; then either ship the backplane choice
     ([D3](#4--open-architecture-decisions)) or pin sticky sessions + `minReplicas=1` and *document*
     single-instance as the supported posture.
@@ -240,7 +251,7 @@ Long-term architecture commitments — where we are → where we go.
 - **LLM abstraction** — *Now:* Claude + Azure OpenAI + MAF + RemoteAgent behind `ILlmClient`/`ILlmClientFactory`, per-tenant BYO keys. *Next:* token streaming + response cache (Q2); **local models** (Ollama, vLLM) for fully air-gapped on-prem; capability negotiation (tool-calling/vision/context window) so the router picks per task. Rule: **always ≥2 providers wired.**
 - **State** — *Now:* per-module Postgres contexts (modular monolith). *Next:* event-sourced agent runs → replay + time-travel debugging; snapshot a run, branch it, re-run with a different prompt/model (doubles as the prompt-drift regression harness).
 - **Observability** — *Now:* OTel wired (spans + metrics) but no backend; structured logs drive `cost-report`. *Next:* exporter to App Insights / OTLP (Q2); OpenTelemetry GenAI semantic conventions; cost telemetry as a first-class signal, not a log scrape.
-- **Security** — *Now:* Keycloak OIDC, JWT, tenant row-level isolation, per-tenant rate limit + budget gate + `runner_shell` cap, fail-closed tool-policy gates, SSRF guard, CodeQL SAST at 0. *Next:* **sandboxed code execution** — ADR + ephemeral quota'd container scheduled Q1 (see [D2](#4--open-architecture-decisions)); then zero-trust between modules, prompt-injection defense, and output filtering (PII/secrets).
+- **Security** — *Now:* Keycloak OIDC, JWT, tenant row-level isolation, per-tenant rate limit + budget gate + `runner_shell` cap, fail-closed tool-policy gates, SSRF guard, CodeQL SAST at 0; **sandboxed code execution** shipped — ADR-0005 + a two-layer `build_verifier` sandbox (input hardening + ephemeral no-egress quota'd container, [#96](https://github.com/hoangsnowy/AgentOs/pull/96)), with the ACA-Jobs cloud round-trip pending (see [D2](#4--open-architecture-decisions)). *Next:* zero-trust between modules, prompt-injection defense, and output filtering (PII/secrets).
 - **Multi-tenant** — *Now:* row-level isolation via tenant context + isolation tests. *Next:* tiered isolation — row-level → schema-per-tenant → isolated infra per tenant; sell isolation level as a pricing axis.
 - **Knowledge** — *Now:* agents are stateless beyond prompt context. *Next:* RAG over the tenant's own codebase + docs (pgvector, stays in Postgres); citation tracking so a claim links back to a source line.
 - **Tools** — *Now:* MCP client + server, GitHub PR service, build verifier, `runner_shell`. *Next:* broader MCP tool catalog, browser automation for agents that verify a running app, richer native API calls.
@@ -274,7 +285,7 @@ a *later optional* offering, not the core bet.
 | **LLM cost explosion** | A runaway loop burns the budget in hours | ✅ per-tenant/per-run budget gate + rate limit (shipped); cheaper-model routing (beyond-12mo); prompt-keyed cache (Q2) |
 | **Agent loop / hallucination** | Confidently wrong code, infinite loops | ✅ QA gate + max-iteration cap (shipped); human-in-the-loop checkpoints; a quality benchmark in CI |
 | **Multi-tenant data leak** | Tenant A sees tenant B → trust dead, legal exposure | ✅ row-level isolation + fail-closed gates + tenant-filter freeze (shipped); B4 residue scheduled Q1; audit the tenant context on every data-access PR; tiered isolation for high-assurance tenants |
-| **Sandbox escape** | Agent-run code touches the host | ADR-0005 + ephemeral quota'd sandbox **scheduled Q1**; interim mitigation: `build_verifier` gated **off by default in Production** + fail-closed tool-policy gates ([#72](https://github.com/hoangsnowy/AgentOs/pull/72)) |
+| **Sandbox escape** | Agent-run code touches the host | ✅ ADR-0005 + two-layer sandbox shipped ([#96](https://github.com/hoangsnowy/AgentOs/pull/96)): Layer-1 input hardening + Layer-2 ephemeral no-egress container (`--network none --read-only --cap-drop ALL`) with CPU/mem/PID quotas; fail-closed tool-policy gates; ACA-Jobs cloud round-trip pending |
 | **Hard external deadline (Sep–Dec 2026)** | A slipped milestone breaks an external commitment | Q1+Q2 scope is the minimum defensible set; Q3/Q4 content is explicitly off the critical path and can slip without breaking the commitment |
 | **Prompt drift** | Yesterday's good prompt silently regresses | Version prompts v1→vN; snapshot fixtures; regression test in CI (`prompt-tune` scores variants) |
 | **Vendor lock-in** | A provider changes pricing/API | ✅ `IChatClient` abstraction + ≥2 providers wired; add a local model (Ollama/vLLM) as the always-available floor |

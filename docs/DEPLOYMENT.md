@@ -16,19 +16,25 @@ the whole app model (API + Web + Keycloak + managed Postgres + Container Apps en
 
 ---
 
-## Keycloak storage: H2 vs Postgres
+## Keycloak storage: Postgres in the cloud (durable from the first deploy)
 
-**H2 (default — fine for dev/demo):**
-Keycloak starts with an embedded H2 database. The realm (`agentic`) and seed users (`operator`,
-`member`) are baked into the container image — they re-import automatically on every deploy.
-H2 data survives while the container is running; it resets on `azd up` (new container image).
-_Use this until you have real users signing up._
+**Postgres (cloud default — durable from the first `azd up`):**
+Keycloak is backed by a dedicated `keycloak` database on the provisioned Azure Postgres flexible
+server from the **first** `azd up` — no manual H2→Postgres step. The AppHost provisions the database
+(`postgres.AddDatabase("keycloak-db", databaseName: "keycloak")`) and the publish branch wires
+`KC_DB` / `KC_DB_URL` / `KC_DB_USERNAME` / `KC_DB_PASSWORD` from the server's bicep outputs
+(`infra/AgentOs.AppHost/Program.cs`). User accounts created via the signup form survive across
+redeploys — nothing manual to do.
 
-**Postgres (production — follow `docs/keycloak-prod-runbook.md`):**
-User accounts created via the signup form survive across redeploys. Required when you have real
-users. Involves creating a `keycloak` database on the provisioned Postgres server and running a
-second `azd up` with the DB params set. See the runbook — it is intentionally a one-time
-manual step after the first provision.
+The realm (`agentic`) and seed users (`operator`, `member`) are baked into the cloud image
+(`infra/keycloak/Dockerfile`, `CMD ["start", "--import-realm", "--optimized"]`) and imported on
+**first start only** — `--import-realm` is idempotent, so KC skips re-import once the realm exists in
+the Postgres store. Edits to the committed realm JSON do **not** re-apply on later deploys; use the
+`postprovision` hook or `kcadm` to change a live realm.
+
+**H2 (local dev only):**
+The embedded H2 database is used only by the local `dotnet run --project infra/AgentOs.AppHost`
+stack (a Keycloak data volume). It is never the cloud backend.
 
 ---
 
@@ -196,11 +202,20 @@ After `azd up`, patch the KC redirect URIs automatically:
 
 ### B.4 — Turn on auto-deploy
 
-```bash
-gh variable set AZURE_DEPLOY_ENABLED --body true
-```
+The workflow ships with auto-CD **disabled in the file itself** — `gh variable set AZURE_DEPLOY_ENABLED --body true`
+alone does nothing. In [`azd-deploy.yml`](../.github/workflows/azd-deploy.yml) the `workflow_run:`
+trigger and the `AZURE_DEPLOY_ENABLED` gate are commented out, and the job `if:` is pinned to
+`github.event_name == 'workflow_dispatch'`. To enable continuous delivery you must edit the workflow:
 
-Once set, every push to `main` that passes CI auto-deploys via the workflow.
+1. Add a federated credential for `refs/heads/main` (see the `az ad app federated-credential create`
+   snippet in the file's `on:` comment, or run `azd pipeline config`).
+2. Uncomment the `workflow_run: { workflows: [ "CI" ], types: [ completed ], branches: [ main ] }`
+   trigger under `on:`.
+3. Restore the gated job `if:`:
+   `${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && vars.AZURE_DEPLOY_ENABLED == 'true') }}`
+4. Then: `gh variable set AZURE_DEPLOY_ENABLED --body true`.
+
+Once all four are in place, every push to `main` that passes CI auto-deploys via the workflow.
 
 ---
 
@@ -257,9 +272,9 @@ az containerapp revision activate -n api -g <rg> --revision <name>
 | Symptom | Cause | Fix |
 |---|---|---|
 | `Invalid redirect_uri` on login | KC client still points to localhost | Run `postprovision.sh` (A.2) |
-| `Correlation failed` on OIDC callback | DataProtection key mismatch | Both API+Web must share `SetApplicationName("AgentOS")` — already wired in `ServiceDefaults` |
+| `Correlation failed` on OIDC callback | DataProtection key mismatch | Both API+Web must share `SetApplicationName("AgentOS")` — already wired by `AddAgentOsDataProtection()` (`src/AgentOs.Modules.AppConfig/DataProtectionExtensions.cs`), called from each host's `Program.cs` |
 | 401 on API calls from Web | KC issuer mismatch | Set `KC_HOSTNAME` via `azd env set KeycloakHostname` then redeploy |
-| Pipeline 404 on Claude calls | Wrong model id | `Llm:DefaultModel` must be `claude-sonnet-4-6` — check `appsettings.json` |
-| Users lost after redeploy | KC on H2 (ephemeral) | Expected — follow KC Postgres runbook if you need persistent users |
+| Pipeline 404 on Claude calls | Wrong model id | Models are per-agent under `Agents:<Name>:Model` (e.g. `Agents:Requirement:Model` = `claude-sonnet-4-6`, `Agents:Orchestrator:Model` = `claude-haiku-4-5`) — check `appsettings.json` |
+| Users lost after redeploy | KC not actually on Postgres (e.g. stale env / failed `KC_DB_*` wiring) | Cloud KC is Postgres-backed from the first deploy — confirm `KC_DB`/`KC_DB_URL` are set on the `keycloak` container app and the `keycloak` database exists on the flexible server |
 | Container 503 after deploy | `/health` startup not ready | `az containerapp logs show -n <app> -g <rg>` — check DB connection string |
 | `azd up` role assignment error | SP lacks permission | Grant Owner or Contributor + User Access Administrator |

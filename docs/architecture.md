@@ -26,12 +26,12 @@ flowchart TB
   end
 
   subgraph aca["Azure Container Apps env"]
-    Web["AgentOs.Web<br/>Blazor Server · 9 modules<br/>(no RemoteAgent / Mcp)"]
+    Web["AgentOs.Web<br/>Blazor Server · 10 modules<br/>(no RemoteAgent)"]
     Api["AgentOs.Api<br/>minimal API + Scalar<br/>/mcp + /hubs/remote-agent<br/>11 modules"]
   end
 
   subgraph managed["Managed / external services"]
-    PG[("PostgreSQL flexible server<br/>schemas: pipeline · tenants · config<br/>workspaces · sessions")]
+    PG[("PostgreSQL flexible server<br/>schemas: pipeline · tenants · config<br/>workspaces · sessions · tools")]
     KC["Keycloak<br/>OIDC realm 'agentic'<br/>⚠ currently an Aspire container"]
     KV["Key Vault<br/>secrets"]
     SMTP["SMTP (prod)<br/>⚠ MailHog only in dev"]
@@ -60,11 +60,12 @@ flowchart TB
 ```
 
 **Deploy notes / risks**
-- `azd up` deploys the whole Aspire app model. Keycloak + MailHog are declared as **containers** in
-  `infra/AgentOs.AppHost/Program.cs` → they land in ACA too. Keycloak-in-a-container (bootstrap
+- `azd up` deploys the whole Aspire app model. Keycloak is declared as a **container** in
+  `infra/AgentOs.AppHost/Program.cs` → it lands in ACA too. Keycloak-in-a-container (bootstrap
   admin param, data volume, theme bind-mount) is **not a production identity story** — use a managed
   Keycloak / Entra External ID and point `Auth:Keycloak:Authority` at it.
-- MailHog is a dev catcher; prod needs a real `Email:SmtpHost`.
+- MailHog is gated behind `if (!isPublish)` (run-mode only, "never ship to cloud"), so it does **not**
+  land in ACA; it is a dev catcher and prod needs a real `Email:SmtpHost`.
 - The runner's default hub is `https://localhost:5080/hubs/remote-agent` (**Api**). The Web host does
   **not** include the RemoteAgent module, so pairing must target the Api host.
 
@@ -84,7 +85,7 @@ flowchart BT
 
   AppConfig["AppConfig<br/>schema: config"]
   Llm["Llm<br/>gateway · pool · failover"]
-  Tools["Tools<br/>registry · policy · log"]
+  Tools["Tools<br/>registry · policy · log<br/>schema: tools"]
   Pipeline["Pipeline<br/>schema: pipeline"]
   Integration["Integration<br/>GitHub PR · build verifier"]
   Identity["Identity"]
@@ -120,7 +121,7 @@ flowchart BT
 | Host | Modules included |
 |---|---|
 | **Api** | AppConfig, Llm, Tools, Pipeline, Integration, Identity, Tenants, Workspaces, Sessions, **Mcp**, **RemoteAgent** (all 11) |
-| **Web** | AppConfig, Llm, Tools, Pipeline, Integration, Identity, Tenants, Workspaces, Sessions (9 — no Mcp/RemoteAgent) |
+| **Web** | AppConfig, Llm, Tools, Pipeline, Integration, Identity, Tenants, Workspaces, Sessions, **Mcp** (10 — no RemoteAgent) |
 
 ---
 
@@ -151,9 +152,10 @@ flowchart LR
   Cfg -.hydrate per request.-> Factory
 ```
 
-> ⚠ Canonical keys are **`Claude`** and **`AzureOpenAI`**. `appsettings.json` currently sets
-> `Agents:*:Provider = "Anthropic"` and Web `Llm:Provider = "Anthropic"` — a name mismatch to verify
-> against the registration keys.
+> Canonical keys are **`Claude`** and **`AzureOpenAI`**. `appsettings.json` may set
+> `Agents:*:Provider = "Anthropic"` and Web `Llm:Provider = "Anthropic"` — `Anthropic` is a supported
+> alias for `Claude` (and `Azure`/`OpenAI` for `AzureOpenAI`): `LlmClientFactory.NormalizeKey` maps
+> these to the canonical key before the keyed lookup.
 
 ---
 
@@ -188,10 +190,13 @@ runner only executes ("server thinks, runner does").
 ## 5. Persistence & multi-tenancy
 
 - One Postgres, **one schema per module** (`pipeline`, `tenants`, `config`, `workspaces`,
-  `sessions`), each with its own `__EFMigrationsHistory`. Each module applies its migrations at
-  startup via its init hook.
-- Without a connection string, modules fall back to **no-op repositories** so a host boots stateless
-  (CI / standalone dev). In prod this means: no connection string ⇒ silent data loss.
+  `sessions`, `tools`), each with its own `__EFMigrationsHistory`. Each module applies its migrations
+  at startup via its init hook.
+- No connection string **+ `Persistence:RequireDatabase=false`** ⇒ modules fall back to **no-op
+  repositories** so a host boots stateless (dev / CI). Production sets `RequireDatabase=true` (default
+  in Api; forced true for Web in Production), so the persistence modules (Pipeline, Workspaces,
+  Sessions, …) **throw at startup** when the connection string is empty — a missing connection string
+  fails to boot rather than losing data.
 - Row-level isolation: tenant-scoped entities carry `TenantId` + an EF global query filter reading
   `ITenantContext.TenantId`. `Auth:Mode` switches `operator` (HS256, single pseudo-tenant) vs
   `keycloak` (RS256, `tenant` claim).

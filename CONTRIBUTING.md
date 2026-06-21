@@ -14,7 +14,7 @@ dotnet test    AgentOs.slnx -c Release
 ```
 
 Prerequisites: the **.NET 10 SDK** (pinned via `global.json`). No API keys are required —
-unit + integration tests rely on NSubstitute, no live API keys required. See
+unit tests rely on NSubstitute; no live API keys required. See
 [docs/SETUP.md](docs/SETUP.md) for secrets, local Postgres, and CI configuration.
 
 ## Development workflow
@@ -36,7 +36,8 @@ unit + integration tests rely on NSubstitute, no live API keys required. See
   and minimal. The hosts (`Api`, `Web`) reference every module and wire them. Don't add a
   module-to-module reference that isn't strictly needed.
 - **LLM access**: agents depend on `ILlmClient`, never on a vendor SDK directly. A new provider
-  is a new `ILlmClient` + a `LlmClientFactory` case.
+  is a new `ILlmClient` registered as a keyed service under its canonical name
+  (e.g. `services.AddKeyedSingleton<ILlmClient>("Claude", …)` in `LlmModule`).
 - **Language**: code, comments, and docs are English.
 
 ## Reporting bugs / requesting features

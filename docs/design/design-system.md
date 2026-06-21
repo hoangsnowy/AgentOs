@@ -13,9 +13,9 @@ feature is an **app** you launch into a window, not a route you navigate to.
 Three feelings, in priority order:
 
 1. **Familiar OS** — anyone who's used GNOME / KDE Plasma / macOS / Win11 knows where things are.
-   Top bar = status + clock + user. Dock = launch + running apps. Windows = focus ring, traffic
-   lights, drag, resize, minimize.
-2. **Calm enterprise** — Breeze-leaning: low-chroma single accent (`#3daee9`), small radii, flat
+   Top bar = status + clock + user. Dock = launch + running apps. Windows = focus ring, Adwaita CSD
+   controls (min/max/close), drag, resize, minimize.
+2. **Calm enterprise** — Breeze-leaning: low-chroma single accent (`#3584e4`), small radii, flat
    surfaces, restrained shadows. It runs all day without fatigue. Color carries *state*, never
    decoration.
 3. **A touch of game** — alive, not sterile: the dock magnifies on hover, windows scale-in, the
@@ -45,11 +45,11 @@ Don't memorize values — reference these names. Full list in `app.css`; the fam
 - **Borders**: `--line`, `--line-strong` (= `--border-subtle`, `--border-strong`).
 - **Text**: `--txt`, `--txt-soft`, `--txt-dim`, `--txt-faint`, `--txt-on-accent` (= `--text-primary`
   … `--text-disabled`). Four levels of emphasis — pick by hierarchy, don't hand-pick greys.
-- **Accent**: `--accent` `#3daee9` + `-hover` / `-active` / `-soft`. **One** accent. There is a
-  legacy `--accent-2` (violet) — *deprecated*, alias to `--accent`; do not introduce new violet.
+- **Accent**: `--accent` `#3584e4` (dark `#62a0ea`) + `-hover` / `-active` / `-soft`. **One** accent;
+  do not introduce a second brand hue.
 - **State**: `--ok` `--warn` `--err` `--idle` (= `--state-success/-warning/-danger/-info`). Color
   = state only.
-- **Radii**: `--r-1`(2) `--r-2`(4) `--r-3`(5) `--r-4`(6) `--r-5`(8). Small. Cards 6, pills 999.
+- **Radii**: `--r-1`(3) `--r-2`(5) `--r-3`(7) `--r-4`(9) `--r-5`(12). Small. Cards `--r-4`(9), pills 999.
 - **Spacing**: 4-base — `--space-1`(4) … `--space-8`(48), plus `--s-1..10`. No raw px gaps.
 - **Type**: `--font` (Inter), `--mono` (JetBrains Mono). Sizes `--fs-xs`(11) … `--fs-2xl`(28).
   Weights `--fw-regular/medium/semibold` (400/500/600 — never 700+ for UI text; 700 is reserved for
@@ -127,7 +127,5 @@ Don't memorize values — reference these names. Full list in `app.css`; the fam
 
 ## Known debt (don't widen it)
 
-- `--accent-2` (violet) is deprecated → aliased to `--accent`. Don't add new uses; migrate when you
-  touch a file that still references it.
 - Two card primitives exist (`.card` legacy, `.panel` preferred) — prefer `Panel`; don't add new
   `.card` usages.
