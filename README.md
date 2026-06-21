@@ -10,6 +10,12 @@
 ![C#](https://img.shields.io/badge/C%23-14-239120)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
+<p align="center">
+  <img src="docs/images/hero-light.png" alt="The AgentOS desktop — the Pipeline, Workflow editor, and Cost windows over a GNOME/Adwaita shell" width="100%">
+  <br>
+  <sub><em>The <strong>AgentOS</strong> desktop — a Blazor Server window manager driving the realtime agent pipeline, the visual workflow editor, and per-tenant cost/budget governance.</em></sub>
+</p>
+
 AgentOS turns a plain-English user story into reviewed, test-backed C# scaffolding. Five agents
 collaborate under a central orchestrator; a QA agent scores requirement–code–test consistency and
 loops until convergence or an iteration cap. The platform itself is a modular monolith — each
@@ -20,7 +26,7 @@ Postgres schema, so any one of them can later ship as a standalone NuGet package
 > **Status:** pre-1.0. The core pipeline, gateway, modular runtime, and multi-tenant identity are
 > working; public surfaces may shift before `v1.0`.
 
-**Contents:** [Why AgentOS](#why-agentos) · [Concepts](#concepts) · [Architecture](#architecture) ·
+**Contents:** [Why AgentOS](#why-agentos) · [Screenshots](#screenshots) · [Concepts](#concepts) · [Architecture](#architecture) ·
 [Quick start](#quick-start) · [Modules](#modules) · [LLM gateway](#llm-gateway) ·
 [Configuration](#configuration) · [Multi-tenant](#multi-tenant) · [API](#api) ·
 [Extending](#extending) · [Deploy](#deploy) · [Contributing](#contributing)
@@ -47,8 +53,9 @@ Postgres schema, so any one of them can later ship as a standalone NuGet package
   MAF (Microsoft Agent Framework), and a remote dev-IDE agent all register as keyed
   `ILlmClient` under their canonical name. Swap a provider in `appsettings.json`; no code change.
 - **Multi-tenant from day one.** Row-level isolation via EF Core global query filters; a
-  Keycloak-backed OIDC `tenant` claim drives `ITenantContext`. An operator mode keeps a single
-  pseudo-tenant for unauthenticated local runs.
+  Keycloak-backed OIDC `tenant` claim drives `ITenantContext`. A Development-only `DevAutoLogin`
+  handler keeps a fixed user for standalone local runs; anonymous requests fall back to a default
+  tenant.
 - **Per-module DbContext + schema.** `pipeline.*`, `tenants.*`, `config.*` live in their own
   schemas with their own migration histories. Each module owns its persistence end-to-end.
 - **Resilient gateway.** Multi-key round-robin with HTTP 429 cooldown / `Retry-After`, exponential
@@ -58,6 +65,35 @@ Postgres schema, so any one of them can later ship as a standalone NuGet package
 - **Operator-friendly desktop.** A Blazor Server AgentOS desktop — windowed UI with a Start menu,
   dock, light/dark themes, live pipeline runner, drag-and-drop workflow editor, and runtime
   settings to rotate LLM keys without a redeploy.
+
+## Screenshots
+
+A GNOME/Adwaita desktop in the browser — every capability ships as a window, not a wall of
+config. All shots are the standalone Web (`dotnet run --project src/AgentOs.Web`).
+
+| Realtime pipeline | Visual workflow editor |
+|:---:|:---:|
+| [![Pipeline — the five agents running the Leader-Specialists-Quality Loop](docs/images/app-pipeline.png)](docs/images/app-pipeline.png) | [![Workflow — the same agents as an editable Microsoft Agent Framework graph](docs/images/app-workflow.png)](docs/images/app-workflow.png) |
+| The five agents (Orchestrator → Requirement → Coding → Testing → QA) with live token/cost/QA-round metrics. | The same pipeline as an editable MAF Workflow graph — drag LLM / Tool / Evaluator / Loop / Human nodes. |
+
+| Boards → Tickets → Sessions | Tool-call evidence |
+|:---:|:---:|
+| [![Spine — connect a GitHub Projects board and drive remote repo execution](docs/images/app-spine.png)](docs/images/app-spine.png) | [![Evidence — every governed tool invocation recorded](docs/images/app-evidence.png)](docs/images/app-evidence.png) |
+| Connect a GitHub/ADO board, decompose an idea into tickets, drive remote repo-execution sessions. | Every tool an agent calls passes the policy gate and is recorded as auditable evidence. |
+
+| Cost & budget gate | Runtime settings |
+|:---:|:---:|
+| [![Cost — per-tenant spend with a monthly budget cap and enforce toggle](docs/images/app-cost.png)](docs/images/app-cost.png) | [![Settings — provider, API keys, and persistence status](docs/images/app-settings.png)](docs/images/app-settings.png) |
+| Per-tenant LLM spend, a monthly cap with an enforce toggle, CSV export. | Rotate provider keys and switch providers at runtime — no redeploy. |
+
+Light and dark are first-class (system menu → toggle):
+
+| Light | Dark |
+|:---:|:---:|
+| [![AgentOS desktop, light theme](docs/images/desktop-light.png)](docs/images/desktop-light.png) | [![AgentOS desktop, dark theme](docs/images/desktop-dark.png)](docs/images/desktop-dark.png) |
+
+More windows — multi-tenant **Users**, **Policy**, **Prompts**, **Plugins**, **System** — live in
+[`docs/images/`](docs/images/).
 
 ## Concepts
 
@@ -78,7 +114,7 @@ src/
 ├── AgentOs.Modules.AppConfig/  # Encrypted KV store, AppConfigDbContext (schema: config)
 ├── AgentOs.Modules.Llm/        # Gateway, providers, key pool, runtime overrides
 ├── AgentOs.Modules.Pipeline/   # Agents + prompts + orchestrator + PipelineDbContext (schema: pipeline)
-├── AgentOs.Modules.Identity/   # JwtAuth + DefaultTenantContext + HttpTenantContext + /auth
+├── AgentOs.Modules.Identity/   # Keycloak JwtAuth + HttpTenantContext + Admin/Member policies
 ├── AgentOs.Modules.Tenants/    # Keycloak admin + TenantsDbContext (schema: tenants) + /tenants
 ├── AgentOs.Modules.Integration/# GitHub PR + dotnet build verifier (+ BuildVerifierTool)
 ├── AgentOs.Modules.Workspaces/ # Connected source workspaces + WorkspacesDbContext (schema: workspaces)
@@ -199,12 +235,13 @@ process restart keeps the operator's last-saved keys.
 | Agent | Default provider | Default model |
 |---|---|---|
 | Orchestrator | Claude | `claude-haiku-4-5` |
-| Requirement | Claude | `claude-sonnet-4` |
+| Requirement | Claude | `claude-sonnet-4-6` |
 | Coding | AzureOpenAI | `gpt-4.1` |
 | Testing | AzureOpenAI | `gpt-4o-mini` |
 | QA | Claude | `claude-haiku-4-5` |
 
-Illustrative only — reassign any agent to any provider in `appsettings.json`.
+Illustrative only — reassign any agent to any provider in `appsettings.json`. The shipped config
+uses the provider alias `Anthropic`, which `LlmClientFactory.NormalizeKey` normalizes to `Claude`.
 
 ## Configuration
 
@@ -227,7 +264,7 @@ Per-agent provider/model lives in `appsettings.json`:
   },
   "Agents": {
     "Orchestrator": { "Provider": "Claude",      "Model": "claude-haiku-4-5", "Temperature": 0.3, "MaxTokens": 2000 },
-    "Requirement":  { "Provider": "Claude",      "Model": "claude-sonnet-4",  "Temperature": 0.1, "MaxTokens": 2000 },
+    "Requirement":  { "Provider": "Claude",      "Model": "claude-sonnet-4-6", "Temperature": 0.1, "MaxTokens": 2000 },
     "Coding":       { "Provider": "AzureOpenAI", "Model": "gpt-4.1",          "Temperature": 0.2, "MaxTokens": 4000 },
     "Testing":      { "Provider": "AzureOpenAI", "Model": "gpt-4o-mini",      "Temperature": 0.2, "MaxTokens": 3000 },
     "Qa":           { "Provider": "Claude",      "Model": "claude-haiku-4-5", "Temperature": 0.1, "MaxTokens": 1500 }
@@ -274,13 +311,16 @@ export Persistence__RequireDatabase=false      # bash
 
 ## Multi-tenant
 
-| `Auth:Mode` | Tenant context | Token | Provisioning |
-|---|---|---|---|
-| `operator` (default) | `DefaultTenantContext` → tenant `"default"`, role `admin` | cookie session via the Web `/account/login` (operator password) | n/a (one pseudo-tenant) |
-| `keycloak` | `HttpTenantContext` → reads `tenant` claim + realm roles | RS256 validated against Keycloak JWKS | `POST /tenants` provisions a tenant + admin user via `IKeycloakAdminClient` |
+| Host | Authentication | Tenant context |
+|---|---|---|
+| **Api** | Keycloak RS256 bearer — a resource server that validates the token against the realm JWKS | `HttpTenantContext` reads the `tenant` claim + realm roles |
+| **Web** | Cookie + OpenID Connect against Keycloak (seeded `operator` / `member` realm users), or `Auth:DevAutoLogin` — a Development-only fixed-user handler — for standalone runs | the same `HttpTenantContext`; anonymous requests fall back to the default tenant |
 
-The Aspire AppHost runs Keycloak with an auto-imported `agentic` realm (`infra/keycloak/`), so a
-full Keycloak-mode smoke is one `dotnet run --project infra/AgentOs.AppHost` away.
+There is no `Auth:Mode` switch and no operator-password form — a single claims-based
+`HttpTenantContext` is wired for both hosts. `POST /tenants` provisions a new tenant + admin user in
+Keycloak via `IKeycloakAdminClient`. The Aspire AppHost runs Keycloak with an auto-imported
+`agentic` realm (`infra/keycloak/`), so a full multi-tenant smoke is one
+`dotnet run --project infra/AgentOs.AppHost` away.
 
 Row-level isolation: `PipelineRun`, `RunMetric`, `Orchestration`, and `AppConfig` rows carry a
 `TenantId` column and a global EF query filter that reads `ITenantContext.TenantId`. Writes stamp
@@ -290,8 +330,8 @@ the tenant id; reads only see your own.
 
 All `/pipeline*`, `/requirement`, `/code`, `/test`, `/qa`, `/runs*`, `/settings*`, and `/tenants*`
 endpoints require an authenticated principal. The API host validates a Keycloak-issued bearer
-token in the `Authorization` header; the Web host authenticates the operator via a cookie session
-(`GET /account/login` → operator password / OIDC). `/health` and `/` are public.
+token in the `Authorization` header; the Web host authenticates the user via a cookie session
+(`GET /account/login` → an OIDC challenge against Keycloak). `/health`, `/alive`, and `/` are public.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
@@ -308,10 +348,13 @@ token in the `Authorization` header; the Web host authenticates the operator via
 | `POST` | `/pipeline` | any | Run the full end-to-end flow |
 | `POST` | `/pipeline/stream` | any | Run the pipeline, streaming progress over SSE |
 | `GET`  | `/runs`, `/runs/{id}` | any | List / fetch persisted runs |
-| `GET`  | `/settings/{prefix}` | any | Read encrypted runtime config under a prefix |
-| `POST` | `/settings` | any | Set / rotate a runtime config value |
+| `GET`  | `/settings/{prefix}` | Admin | Read encrypted runtime config under a prefix |
+| `POST` | `/settings` | Admin | Set / rotate a runtime config value |
+| `DELETE` | `/settings/{key}` | Admin | Delete a runtime config value |
 | `POST` | `/llm/test` | any | Probe the configured provider with a minimal call |
-| `GET`  | `/health` | none | Liveness + LLM readiness |
+| `GET`  | `/health` | none | Readiness — self + Postgres + Keycloak (when configured) |
+| `GET`  | `/alive` | none | Liveness |
+| `GET`  | `/health/llm` | none | LLM provider-key readiness |
 
 ## Extending
 

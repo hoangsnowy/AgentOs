@@ -17,16 +17,22 @@ in `config.app_config`; the allowlist lives in `SettingsKeyRegistry`.
 
 ## LLM gateway (`Llm:*`)
 
-| Key | Default | Validated at startup | Runtime (Settings UI) | Notes |
-|---|---|---|---|---|
-| `Llm:Provider` | `Claude` | ✔ (LlmOptions) | — | Default provider when an agent names none. |
-| `Llm:ForceProvider` | empty | ✔ | ✔ `Llm:ForceProvider` | Forces every agent to one provider: `Claude` / `AzureOpenAI` / `MAF` / `RemoteAgent`. |
-| `Llm:Claude:ApiKey` / `ApiKeys` | empty | ✔ | ✔ `Llm:Claude:ApiKey` | Platform fallback key(s). Per-tenant keys via Settings UI win. Set via user-secrets/env — never commit. |
-| `Llm:Claude:Endpoint` | `https://api.anthropic.com` | ✔ | — | |
-| `Llm:Claude:ApiVersion` | `2023-06-01` | ✔ | — | Anthropic API version header. |
-| `Llm:AzureOpenAi:ApiKey` / `ApiKeys` / `Endpoint` | empty | ✔ | ✔ same keys | Endpoint must be absolute `https://`. |
-| `Llm:*:TimeoutSeconds` | 60 | ✔ | — | |
-| `Llm:Fallbacks` | — | — | — | Ordered fallback provider list (FailoverLlmClient). |
+The LLM section is **not startup-validated**: `LlmModule` binds `LlmOptions` with `.Bind(…).ValidateOnStart()`
+but registers no `.Validate(…)` rule and `LlmOptions` carries no DataAnnotations, so `ValidateOnStart`
+is a no-op. The provider-name + `https://` shape checks run only at **runtime** when a value goes through
+the Settings UI (`POST /settings` → `SettingsKeyRegistry`); a bad value in `appsettings.json` is not rejected at boot.
+
+| Key | Default | Runtime (Settings UI) | Notes |
+|---|---|---|---|
+| `Llm:Provider` | `Claude` | — | Default provider when an agent names none. |
+| `Llm:ForceProvider` | empty | ✔ `Llm:ForceProvider` | Forces every agent to one provider: `Claude` (alias `Anthropic`) / `AzureOpenAI` / `MAF` / `RemoteAgent`. |
+| `Llm:Claude:ApiKey` / `ApiKeys` | empty | ✔ `Llm:Claude:ApiKey` | Platform fallback key(s). Per-tenant keys via Settings UI win. Set via user-secrets/env — never commit. |
+| `Llm:Claude:Endpoint` | `https://api.anthropic.com` | — | |
+| `Llm:Claude:ApiVersion` | `2023-06-01` | — | Anthropic API version header. |
+| `Llm:AzureOpenAi:ApiKey` / `ApiKeys` / `Endpoint` | empty | ✔ same keys | Endpoint must be absolute `https://` (enforced only on the Settings-UI path, not at startup). |
+| `Llm:*:TimeoutSeconds` | 60 | — | |
+| `Llm:OfflineFallback` | Web `true`, Production/Api `false` | — | When true, appends a keyless deterministic `Offline` provider to the END of every provider's failover chain (LlmClientFactory + OfflineLlmClient): a keyless run falls through to canned, schema-valid output so the pipeline + Workflow studio run on a fresh checkout with no secrets. Off in Production so a missing cloud key fails loudly. |
+| `Llm:Fallbacks` | — | — | Ordered fallback provider list (FailoverLlmClient). |
 
 ## Agents (`Agents:*`) — validated at startup
 
@@ -59,8 +65,7 @@ Keep model ids in sync with `CostCalculator`'s price table or cost reports show 
 
 | Key | Default | Notes |
 |---|---|---|
-| `Api:BaseUrl` | empty | Empty = Web runs the engine in-process. Set = Web becomes a thin client of the Api host (settings, pipeline, health probes go over HTTP). Deployment-time only — not in the Settings UI. |
-| `Api:BearerToken` | empty | Static bearer for the split-mode client when no user token is forwarded. |
+| `Api:BaseUrl` | empty | Empty = Web runs the engine in-process. Set = Web becomes a thin client of the Api host (settings, pipeline, health probes go over HTTP). Deployment-time only — not in the Settings UI. The split-mode client (`HttpPipelineClient`) forwards the user's token from `IAuthTokenProvider`; there is no static-bearer key. |
 
 ## Tools & integration
 
@@ -102,9 +107,8 @@ Keep model ids in sync with `CostCalculator`'s price table or cost reports show 
 |---|---|---|
 | `Plugins:Path` | `plugins` | Folder scanned for `IAgentOsPlugin` assemblies. |
 | `Metrics:CsvPath` | — | Optional CSV export of per-run metrics. |
-| `Llm:Budget:*` | — | Monthly budget gate (BudgetGuard) on server-token entrypoints. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Enables OTLP trace/metric export when set. |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | — | Enables App Insights (Api). |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | — | Enables App Insights (Api + Web). |
 
 ## Runtime-settable keys (the `/settings` allowlist)
 

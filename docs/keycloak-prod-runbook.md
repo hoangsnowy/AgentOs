@@ -1,216 +1,220 @@
 # Keycloak-on-Postgres production runbook (azd → Azure Container Apps)
 
-This is the **azd-only** half of deploy blocker #1/#2/#6 — the parts that can only be validated by an
-actual `azd up` against your subscription. Topology chosen: **persistent Keycloak backed by the same
-Postgres flexible server** (keeps the `agentic` realm + AgentOS theme + the Tenants module's Keycloak
-admin provisioning). Batch-3 code hardening (ForwardedHeaders, durable DataProtection, Web→Production,
-`KC_PROXY=edge`) is already in `main`; this runbook layers the remaining infra on top.
+How the deployed Keycloak works, and how to operate + verify it on Azure. The cloud topology is
+**already wired in code** — a single `azd up` provisions a durable, Postgres-backed Keycloak with the
+`agentic` realm + AgentOS login theme baked into a custom image. This is **not** a paste-these-snippets
+TODO; the infra ships in `main`. Your job on a real deploy is: set a few secrets, run `azd up`, set the
+two public URLs, re-run the realm-patch hook, verify.
 
-> Legend: ✅ = stable command, run as-is · ⚠️ = needs a deploy iteration to confirm against the preview
-> `Aspire.Hosting.Keycloak` 13.3.5 API (verify in the first `azd up` logs).
+Everything below is cross-referenced to the source of truth. If a step here disagrees with the code,
+the code wins — fix this doc.
 
-Prereqs: `azd`, `az`, .NET 10 SDK, an Azure subscription. `AZURE_ENV_NAME` + `AZURE_LOCATION` chosen.
+| Concern | Where it lives |
+|---|---|
+| Provisioning + KC env wiring | `infra/AgentOs.AppHost/Program.cs` |
+| Custom KC image (realm + theme baked) | `infra/keycloak/Dockerfile` |
+| Realm definition (dev defaults) | `infra/keycloak/agentic-realm.json` |
+| Post-provision realm patch | `infra/hooks/postprovision.sh` / `.ps1` (wired in `azure.yaml`) |
+| azd parameters (dev defaults) | `infra/AgentOs.AppHost/appsettings.json` → `"Parameters"` |
+
+Prereqs: `azd`, `az`, .NET 10 SDK, an Azure subscription, `AZURE_ENV_NAME` + `AZURE_LOCATION` chosen.
 
 ---
 
-## Step 0 — first provision (gets you the FQDNs you need for everything else)
+## What's already automated (do NOT do these by hand)
 
-The Web/Keycloak ingress FQDNs only exist *after* provisioning. Do one provisioning pass first, read
-the names back, then configure.
+These were once manual steps; they are now code. Re-doing them by hand breaks the build/config.
+
+- **Keycloak's own database.** The AppHost provisions a second database on the same Azure Postgres
+  flexible server: `postgres.AddDatabase("keycloak-db", databaseName: "keycloak")`
+  (`Program.cs:63`). There is **no** `az postgres flexible-server db create keycloak` step.
+- **The JDBC URL.** Composed at deploy time from the server's bicep `hostName` output by
+  `KeycloakJdbcUrl(postgres)` → `jdbc:postgresql://<host>:5432/keycloak?sslmode=require`
+  (`Program.cs:199-206`), wired as `KC_DB_URL` with `KC_DB=postgres` and `KC_DB_USERNAME`/`KC_DB_PASSWORD`
+  reusing the Postgres `PostgresUsername`/`PostgresPassword` params (`Program.cs:113-116`). Do **not**
+  hand-build a JDBC URL or set a `KeycloakDbUrl`/`KeycloakDbUsername`/`KeycloakDbPassword` parameter —
+  none exist.
+- **The realm + AgentOS theme.** Baked into a custom image by `infra/keycloak/Dockerfile`
+  (`quay.io/keycloak/keycloak:26.6`, `kc.sh build --db=postgres`, realm JSON copied to
+  `/opt/keycloak/data/import/`, theme to `/opt/keycloak/themes/agentos`, `CMD ["start", "--import-realm",
+  "--optimized"]`). The publish branch points the resource at it via
+  `.WithDockerfile("../../infra/keycloak")` (`Program.cs:104`). No ACR pre-build, no volume mount, no
+  bind-mount in cloud.
+- **The reverse-proxy env.** ACA terminates TLS and forwards plain HTTP with `X-Forwarded-*`. KC is
+  configured for that with `KC_HTTP_ENABLED=true` + `KC_PROXY_HEADERS=xforwarded` +
+  `KC_HOSTNAME_STRICT=false` (`Program.cs:105-107`). **There is no `KC_PROXY=edge`** — that option was
+  removed in Keycloak 24 and the image is 26.6. Don't reintroduce it.
+- **External ingress + plain-HTTP listen.** KC's `http` endpoint is marked external (`Program.cs:110`);
+  the Web listens on plain HTTP `targetPort: 8080` behind the ACA ingress (`Program.cs:160-161`).
+
+Run mode (`dotnet run --project infra/AgentOs.AppHost`) is unchanged — it uses the local H2 volume +
+bind-mount theme + MailHog branch (`Program.cs:79-94`) and is gated off the publish branch.
+
+---
+
+## Step 1 — set secrets BEFORE the first `azd up`
+
+The dev defaults in `appsettings.json` (`KeycloakAdminPassword=admin`,
+`KeycloakWebClientSecret=agentic-web-dev-secret`, `PostgresPassword=postgres`) are public placeholders.
+Override them as azd parameters (stored in Key Vault, injected as Aspire parameters) **before** the first
+provision:
 
 ```bash
 azd auth login
-azd up                      # pick env name + subscription + region; creates RG, ACR, ACA env, Postgres, etc.
-azd env get-values          # note SERVICES_WEB_URL, SERVICES_KEYCLOAK_URL (or the containerapp FQDNs)
+azd env set KeycloakAdminPassword    "$(openssl rand -base64 24)"
+azd env set KeycloakWebClientSecret  "$(openssl rand -base64 32)"
+azd env set PostgresPassword         "$(openssl rand -base64 24)"
+# Optional overrides — defaults are fine to start:
+# azd env set KeycloakAdminUsername "agentos-admin"   # default: admin
+# azd env set PostgresUsername      "agentos"         # default: postgres
 ```
 
-If `azd env get-values` doesn't surface the Keycloak URL, read it from Azure:
+> The complete parameter set is exactly: `KeycloakAdminUsername`, `KeycloakAdminPassword`,
+> `KeycloakWebClientSecret`, `PostgresUsername`, `PostgresPassword`, `SmtpHost`, `SmtpPort`
+> (`appsettings.json:10-16`, `Program.cs:43-56`). Parameters like `KeycloakDbUrl`, `WebPublicOrigin`,
+> or `KeycloakHostname` **do not exist** — KC derives its hostname from the forwarded headers and its
+> DB URL from the provisioned server.
+
+The same `KeycloakWebClientSecret` value is also what the Web app receives as
+`Auth__Keycloak__ClientSecret` (`Program.cs:171`); the realm import bakes the *dev* secret, so the
+post-provision hook (Step 3) rotates the realm's `agentic-web` client secret to this value — otherwise
+every login fails on a secret mismatch.
+
+---
+
+## Step 2 — first provision (gets you the public FQDNs)
 
 ```bash
+azd up        # provisions RG, ACR, ACA env, Postgres (app + keycloak DBs), KC, API, Web
+```
+
+The post-provision hook runs automatically (`azure.yaml` → `hooks.postprovision`) but **skips silently**
+on this first pass because `KEYCLOAK_BASE_URL` / `WEB_BASE_URL` aren't set yet (`postprovision.sh:32-40`).
+That's expected — the FQDNs only exist after ingress is created. Read them back:
+
+```bash
+azd env get-values            # look for the web + keycloak container-app URLs
 RG=$(azd env get-values | sed -n 's/^AZURE_RESOURCE_GROUP=//p' | tr -d '"')
 az containerapp show -n keycloak -g "$RG" --query properties.configuration.ingress.fqdn -o tsv
 az containerapp show -n web      -g "$RG" --query properties.configuration.ingress.fqdn -o tsv
 ```
 
-Call them `KC_FQDN` (e.g. `keycloak.<hash>.<region>.azurecontainerapps.io`) and `WEB_FQDN`.
+---
+
+## Step 3 — set the public URLs + re-run the realm patch
+
+The realm JSON ships **dev** values that only the hook can fix in cloud: the `agentic-web` client's
+`redirectUris`/`webOrigins` are hardcoded to `https://localhost:5180` (`agentic-realm.json:81-82`), its
+`secret` is the public `agentic-web-dev-secret` (`agentic-realm.json:78`), and `verifyEmail` is `true`
+(`agentic-realm.json:11`). The post-provision hook patches all of these via the KC admin API. Set the two
+URLs and re-provision to fire the hook:
+
+```bash
+azd env set KEYCLOAK_BASE_URL "https://<KC_FQDN>"    # e.g. https://keycloak.<hash>.<region>.azurecontainerapps.io
+azd env set WEB_BASE_URL      "https://<WEB_FQDN>"
+azd provision                                        # re-runs the postprovision hook
+```
+
+What the hook does (`postprovision.sh` / `.ps1`), using an `admin-cli` token:
+
+1. **PUT `agentic-web` client** → `redirectUris=["$WEB_BASE_URL/*"]`, `webOrigins=["$WEB_BASE_URL"]`,
+   and `secret` rotated to `KEYCLOAKWEBCLIENTSECRET` (`postprovision.sh:58-75`).
+2. **PUT realm** → `verifyEmail=false` (no app SMTP wired by default — see Step 4) (`postprovision.sh:77-80`).
+3. **Reset seed-user passwords** for `operator` and `member` to `OPERATORPASSWORD` / `MEMBERPASSWORD`
+   when those are set; left on the public imported password (with a warning) otherwise
+   (`postprovision.sh:82-102`).
+
+Hook env vars (set via `azd env set`):
+
+| Env var | Required | Purpose |
+|---|---|---|
+| `KEYCLOAK_BASE_URL` | yes | Public KC FQDN the hook calls |
+| `WEB_BASE_URL` | yes | Public Web FQDN written into the client |
+| `KEYCLOAKADMINPASSWORD` | yes | KC admin password (the `KeycloakAdminPassword` param) |
+| `KEYCLOAKADMINUSERNAME` | no (default `admin`) | KC admin username |
+| `KEYCLOAKWEBCLIENTSECRET` | for secret rotation | New `agentic-web` client secret |
+| `OPERATORPASSWORD` | no | New `operator` seed password (kept as-is if unset) |
+| `MEMBERPASSWORD` | no | New `member` seed password (kept as-is if unset) |
+
+Run the hook manually any time without a full provision:
+
+```bash
+bash infra/hooks/postprovision.sh      # POSIX
+pwsh infra/hooks/postprovision.ps1     # Windows
+```
+
+> **Strip or rotate the seed users before a public env.** Either set `OPERATORPASSWORD`/`MEMBERPASSWORD`
+> so the hook rotates them, or delete the `operator`/`member` entries from the realm JSON's `users` array
+> and rebuild the image. Leaving the imported placeholder passwords on a public deployment is a hole.
 
 ---
 
-## Step 1 — rotate the seeded credentials (blocker #2) ✅
+## Step 4 — (optional) wire real SMTP
 
-A default deploy ships `admin/admin`, the committed OIDC secret `agentic-web-dev-secret`, and seed realm
-users `operator/operator` + `member/member`. Rotate the secrets via azd (stored in Key Vault, injected
-as the Aspire parameters), then redeploy:
+Email is **off by default in cloud**: the hook sets realm `verifyEmail=false`, and with no SMTP host the
+Tenants module registers `NullEmailSender` (logs only) so the app boots. Wire a real provider only when
+you need signup verification + invites to actually send.
+
+Two independent SMTP surfaces:
+
+**(a) App-sent mail** (Tenants invitations/notifications) — bound to `EmailOptions`
+(`src/AgentOs.Modules.Tenants/Email/EmailOptions.cs`). The AppHost already injects
+`Email__SmtpHost` / `Email__SmtpPort` from the `SmtpHost` / `SmtpPort` azd parameters
+(`Program.cs:132-133, 179-180`). For an authenticated provider, also set the auth keys directly on the
+container (env-var form of `Email:User` / `Email:Password` / `Email:UseStartTls`):
 
 ```bash
-azd env set KeycloakAdminUsername    "agentos-admin"
-azd env set KeycloakAdminPassword    "$(openssl rand -base64 24)"
-azd env set KeycloakWebClientSecret  "$(openssl rand -base64 32)"
+azd env set SmtpHost "smtp.sendgrid.net"
+azd env set SmtpPort "587"
+# auth (note the real key names — NOT Email__SmtpUser / Email__SmtpPass):
+#   Email__User        <user-or-apikey-id>
+#   Email__Password    <password-or-apikey>
+#   Email__UseStartTls true        # STARTTLS on 587; port 465 implies implicit TLS regardless
 ```
 
-Keep the client secret value — Step 4 writes the *same* value into the realm's `agentic-web` client.
-**Strip the seed users** from `infra/keycloak/agentic-realm.json` before they ship to a public env
-(delete the `operator`/`member` entries under `"users"`), or keep them only behind a run-mode-gated
-realm (see Step 3 note). Commit the stripped realm.
+> The option names are `SmtpHost`, `SmtpPort`, `From`, `FromName`, `User`, `Password`, `UseStartTls`
+> (`EmailOptions.cs:15-33`). Auth is `Email:User` / `Email:Password` (env `Email__User` /
+> `Email__Password`), **not** `Email__SmtpUser` / `Email__SmtpPass`. When `SmtpHost` is empty the module
+> falls back to `NullEmailSender`.
+
+**(b) Keycloak-sent mail** (its own verify/reset emails) — the realm's `smtpServer` block reads
+`${KC_SMTP_*:default}` env vars (`agentic-realm.json:15-25`: `KC_SMTP_HOST`, `KC_SMTP_PORT`,
+`KC_SMTP_FROM`, `KC_SMTP_FROM_NAME`, `KC_SMTP_SSL`, `KC_SMTP_STARTTLS`, `KC_SMTP_AUTH`, `KC_SMTP_USER`,
+`KC_SMTP_PASSWORD`). To turn KC email on, add those as KC container env in the AppHost publish branch and
+flip `verifyEmail` back on (drop the hook's `verifyEmail=false`, or re-enable via the admin API).
 
 ---
 
-## Step 2 — give Keycloak its own database on the flexible server ✅
+## Step 5 — verify
 
-Don't share the `agentos` app DB. Create a `keycloak` database:
+Confirm the things only a real deploy proves:
 
-```bash
-RG=$(azd env get-values | sed -n 's/^AZURE_RESOURCE_GROUP=//p' | tr -d '"')
-PG=$(az postgres flexible-server list -g "$RG" --query "[0].name" -o tsv)
-az postgres flexible-server db create -g "$RG" -s "$PG" -d keycloak
-PG_HOST=$(az postgres flexible-server show -g "$RG" -n "$PG" --query fullyQualifiedDomainName -o tsv)
-echo "KC_DB_URL=jdbc:postgresql://$PG_HOST:5432/keycloak?sslmode=require"
-```
-
-Capture the admin login of the flexible server (azd set it at provision; read from Key Vault or reset):
-
-```bash
-az postgres flexible-server update -g "$RG" -n "$PG" --admin-password "$(openssl rand -base64 24)"
-```
-
----
-
-## Step 3 — make the AppHost Keycloak persistent + themed (publish mode) ⚠️
-
-Apply this to `infra/AgentOs.AppHost/Program.cs`. It is **publish-mode only** — the `if (!isPublish)`
-branch (local H2 + bind-mount theme) is untouched, so `dotnet run` is unchanged. Add to the existing
-`else` branch (which already sets `KC_PROXY=edge`):
-
-```csharp
-else
-{
-    var kcDbUrl      = builder.AddParameter("KeycloakDbUrl");                 // azd env set (Step 2)
-    var kcDbUsername = builder.AddParameter("KeycloakDbUsername");
-    var kcDbPassword = builder.AddParameter("KeycloakDbPassword", secret: true);
-    var webOrigin    = builder.AddParameter("WebPublicOrigin");               // https://<WEB_FQDN>
-
-    keycloak
-        .WithEnvironment("KC_PROXY", "edge")
-        .WithEnvironment("KC_PROXY_HEADERS", "xforwarded")
-        .WithEnvironment("KC_HTTP_ENABLED", "true")
-        .WithEnvironment("KC_HOSTNAME", kcHostname)        // https://<KC_FQDN> — set as a parameter too
-        // Persist to Postgres instead of ephemeral H2:
-        .WithEnvironment("KC_DB", "postgres")
-        .WithEnvironment("KC_DB_URL", kcDbUrl)
-        .WithEnvironment("KC_DB_USERNAME", kcDbUsername)
-        .WithEnvironment("KC_DB_PASSWORD", kcDbPassword)
-        // Realm import still runs; the realm's redirectUris read ${WEB_ORIGIN} (Step 4):
-        .WithEnvironment("WEB_ORIGIN", webOrigin);
-}
-```
-
-```bash
-azd env set KeycloakDbUrl       "jdbc:postgresql://$PG_HOST:5432/keycloak?sslmode=require"
-azd env set KeycloakDbUsername  "<pg-admin-user>"
-azd env set KeycloakDbPassword  "<pg-admin-password>"
-azd env set WebPublicOrigin     "https://$WEB_FQDN"
-azd env set KeycloakHostname    "https://$KC_FQDN"
-```
-
-**Theme baking** (the bind-mount path doesn't exist in ACA): the Aspire Keycloak image won't carry the
-`agentos` theme in publish. Easiest reliable route — bake a custom image and point the resource at it:
-
-```dockerfile
-# infra/keycloak/Dockerfile
-FROM quay.io/keycloak/keycloak:26.1 AS build
-ENV KC_DB=postgres
-COPY themes/agentos /opt/keycloak/themes/agentos
-RUN /opt/keycloak/bin/kc.sh build
-FROM quay.io/keycloak/keycloak:26.1
-COPY --from=build /opt/keycloak/ /opt/keycloak/
-```
-
-⚠️ Wiring `AddKeycloak` to a custom Dockerfile under the preview integration is the one step to confirm
-interactively — if `.WithDockerfile(...)` isn't exposed on the Keycloak resource builder in 13.3.5, fall
-back to: push the image to your ACR (`az acr build -r <acr> -t agentos-keycloak:1 infra/keycloak`) and
-reference it, or ship the theme via an ACA volume mount. The login still works on the default theme — the
-theme is cosmetic, not a blocker.
-
----
-
-## Step 4 — point the realm at the real Web FQDN (blocker #6)
-
-Two ways; pick one.
-
-**(a) Parameterize the realm JSON** (keeps local working via the default). In
-`infra/keycloak/agentic-realm.json`, change the `agentic-web` client:
-
-```jsonc
-"redirectUris": ["${WEB_ORIGIN:https://localhost:5180}/*"],
-"webOrigins":   ["${WEB_ORIGIN:https://localhost:5180}"],
-"secret":       "${KC_WEB_CLIENT_SECRET:agentic-web-dev-secret}",
-```
-
-Keycloak substitutes `${ENV:default}` at import. `WEB_ORIGIN` is injected in Step 3; also inject
-`KC_WEB_CLIENT_SECRET` (= the `KeycloakWebClientSecret` value). ⚠️ Confirm substitution in the first
-`azd up` Keycloak logs (`Imported realm agentic`) — env-substitution in realm import is supported but
-version-sensitive.
-
-**(b) Configure post-provision via the admin API** (no realm edit, fully deterministic):
-
-```bash
-KC_ADMIN_PW=$(azd env get-values | sed -n 's/^KeycloakAdminPassword=//p' | tr -d '"')
-TOKEN=$(curl -s -X POST "https://$KC_FQDN/realms/master/protocol/openid-connect/token" \
-  -d "grant_type=password&client_id=admin-cli&username=agentos-admin&password=$KC_ADMIN_PW" \
-  | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')
-CID=$(curl -s "https://$KC_FQDN/admin/realms/agentic/clients?clientId=agentic-web" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c 'import json,sys;print(json.load(sys.stdin)[0]["id"])')
-curl -s -X PUT "https://$KC_FQDN/admin/realms/agentic/clients/$CID" \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"redirectUris\":[\"https://$WEB_FQDN/*\"],\"webOrigins\":[\"https://$WEB_FQDN\"]}"
-```
-
----
-
-## Step 5 — real SMTP (so signup verification + invites actually send)
-
-MailHog is dev-only. The realm has `verifyEmail:true`, so without real SMTP, signup is blocked. Wire a
-provider (Azure Communication Services Email, SendGrid, etc.) into both the app and the realm:
-
-```bash
-azd env set Email__SmtpHost  "<smtp-host>"
-azd env set Email__SmtpPort  "587"
-azd env set Email__SmtpUser  "<user>"
-azd env set Email__SmtpPass  "<pass>"
-azd env set Email__From      "noreply@<your-domain>"
-```
-
-Set the realm `smtpServer` block (host/port/from/auth) the same way — via the admin API (like Step 4b) or
-in `agentic-realm.json`. Or, to defer email entirely for a first deploy, set the realm `verifyEmail:false`.
-
----
-
-## Step 6 — redeploy + verify ✅
-
-```bash
-azd up
-```
-
-Then confirm the things only a real deploy proves:
-
-1. **Login** — open `https://$WEB_FQDN`, sign in. No `Invalid redirect_uri`, no `Correlation failed`
-   (ForwardedHeaders + durable DataProtection now handle these).
-2. **Persistence across restart** — `az containerapp revision restart -n keycloak -g $RG`; log in again →
-   the realm/users survive (proves Postgres backing, not H2).
-3. **Saved secrets survive** — in the AgentOS Settings app save an LLM key, restart the `web` app, confirm
+1. **Login** — open `https://<WEB_FQDN>`, sign in (`operator` + your `OPERATORPASSWORD`). No
+   `Invalid redirect_uri` (proves the hook patched the client) and no `Correlation failed`
+   (ForwardedHeaders + durable DataProtection from the Batch-3 code).
+2. **Secret match** — login succeeding at all proves the realm's `agentic-web` secret was rotated to
+   `KeycloakWebClientSecret` (the value the Web app holds).
+3. **Persistence across restart** — `az containerapp revision restart -n keycloak -g "$RG"`; log in
+   again → realm + users survive (proves the Postgres `keycloak` DB backing, not ephemeral H2).
+4. **Saved app secrets survive** — in AgentOS Settings save an LLM key, restart the `web` app, confirm
    it still decrypts (proves the durable DataProtection key ring).
-4. **Bearer** — `curl https://<API_FQDN>/health` then an authenticated `/pipeline` call returns 200
-   (proves `KC_HOSTNAME`/issuer alignment).
+5. **Bearer / issuer** — an authenticated API call (`Auth__Keycloak__Authority` =
+   `<KC_URL>/realms/agentic`, `Program.cs:123,168,189-195`) returns 200, proving issuer/hostname
+   alignment through the proxy.
 
-If any step fails, `az containerapp logs show -n keycloak -g $RG --tail 200` is the first place to look.
+First place to look on failure:
+
+```bash
+az containerapp logs show -n keycloak -g "$RG" --tail 200
+```
 
 ---
 
-## What's intentionally NOT automated here
+## Notes / scope
 
-- The `.WithDockerfile` theme-image wiring (Step 3) and realm env-substitution (Step 4a) are the two
-  preview-API-sensitive bits — confirm them in your first `azd up`, fall back to the admin-API / ACR-build
-  routes if the fluent call isn't there.
-- This runbook assumes the chosen topology (persistent Keycloak). If you later move to a managed IdP
-  (Entra External ID), Steps 1–4 are replaced by an app-registration + a rewrite of the Tenants module's
-  Keycloak admin REST calls to Microsoft Graph.
+- **Why password auth (not Entra) for Postgres + KC.** The app talks plain Npgsql and Keycloak talks
+  JDBC; neither can use the Entra-token plugin Aspire's default provisioning assumes — hence
+  `.WithPasswordAuthentication(...)` (`Program.cs:57-59`) and password-based `KC_DB_*`.
+- **MailHog is dev-only** — it's never added in publish mode (`Program.cs:65-72`).
+- If you later migrate to a managed IdP (Entra External ID), this whole runbook is replaced by an
+  app-registration + rewriting the Tenants module's Keycloak admin REST calls to Microsoft Graph.

@@ -25,7 +25,7 @@ dotnet build  AgentOs.slnx --configuration Release
 dotnet test   AgentOs.slnx --configuration Release
 ```
 
-The suite is ~460 tests; all should pass.
+The suite is ~790+ tests; all should pass.
 
 ## 3. Configure LLM secrets (local)
 
@@ -54,17 +54,22 @@ Browse to:
 - Scalar API Reference (UI): <https://localhost:5080/scalar/v1>
 - OpenAPI spec (JSON): <https://localhost:5080/openapi/v1.json>
 
-## 5. Configure GitHub Actions secrets (for CI to call the LLM)
+## 5. Configure GitHub Actions secrets (for deploy)
 
-In GitHub: **Settings → Secrets and variables → Actions → New repository secret**
+CI (`.github/workflows/ci.yml`) only restores, builds, and runs the test suite — no test
+calls a real LLM, so **CI needs no LLM secrets**.
+
+Secrets are only consumed by the optional azd deploy workflow
+(`.github/workflows/azd-deploy.yml`). LLM keys there are per-tenant (set in-app via
+**Settings → API keys**); a shared platform fallback is only needed for a dev/demo deploy.
+In GitHub (**Settings → Secrets and variables → Actions → New repository secret**):
 
 | Name | Value |
 |---|---|
-| `ANTHROPIC_API_KEY` | sk-ant-... |
-| `AZURE_OPENAI_ENDPOINT` | https://\<resource\>.openai.azure.com |
-| `AZURE_OPENAI_API_KEY` | ... |
+| `LLM__CLAUDE__APIKEY` | sk-ant-... (optional — only for a dev/demo deploy) |
 
-The CI workflow reads these secrets for the experimental tests that call a real LLM.
+When present, the deploy workflow runs `azd env set Llm__Claude__ApiKey` so the containers pick
+it up. Leave it unset for a real BYO-key multi-tenant deploy.
 
 ## 6. Branch protection (recommended)
 
@@ -77,7 +82,7 @@ The CI workflow reads these secrets for the experimental tests that call a real 
 ## 7. One-shot local dev — Aspire AppHost (Postgres + Keycloak + MailHog + API + Web)
 
 `AgentOs.AppHost` is an Aspire AppHost: one `dotnet run` brings up every dev dependency in
-containers (Postgres + Keycloak) and starts the API + Blazor Web alongside them, with connection
+containers (Postgres + Keycloak + MailHog) and starts the API + Blazor Web alongside them, with connection
 strings + the OIDC authority wired across via Aspire service discovery — no docker-compose, no
 hand-edited env vars.
 

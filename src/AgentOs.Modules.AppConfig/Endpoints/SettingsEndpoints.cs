@@ -1,5 +1,5 @@
 // Operator-only runtime configuration endpoints. The Web Settings UI calls these to rotate LLM
-// keys, JWT signing secret, operator password, etc. without restarting the API.
+// keys and GitHub settings (the only keys in SettingsKeyRegistry) without restarting the API.
 
 using System.Collections.Generic;
 using System.Threading;

@@ -1,10 +1,10 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to AI coding assistants when working with code in this repository.
 
 ## Project
 
-**AgentOS** — a .NET-native multi-agent AI platform for the software development lifecycle. A central orchestrator coordinates 5 specialist agents — Orchestrator, Requirement, Coding, Testing, QA — in a **Leader-Specialists-Quality Loop** (QA scores requirement↔code↔test consistency and loops until convergence or an iteration cap `NMax`). Hybrid, provider-agnostic LLM gateway (Anthropic Codex + Azure OpenAI + Microsoft Agent Framework + a paired dev-machine agent); providers/models are assigned in `appsettings.json`. A Blazor Server **AgentOS** desktop-style UI drives the engine. Full context in [README.md](README.md). For local setup, secrets, and GitHub Actions, see [docs/SETUP.md](docs/SETUP.md).
+**AgentOS** — a .NET-native multi-agent AI platform for the software development lifecycle. A central orchestrator coordinates 5 specialist agents — Orchestrator, Requirement, Coding, Testing, QA — in a **Leader-Specialists-Quality Loop** (QA scores requirement↔code↔test consistency and loops until convergence or an iteration cap `NMax`). Hybrid, provider-agnostic LLM gateway (Anthropic Claude + Azure OpenAI + Microsoft Agent Framework + a paired dev-machine agent); providers/models are assigned in `appsettings.json`. A Blazor Server **AgentOS** desktop-style UI drives the engine. Full context in [README.md](README.md). For local setup, secrets, and GitHub Actions, see [docs/SETUP.md](docs/SETUP.md).
 
 The platform is a **modular monolith**: each feature is a self-contained `IModule` with its own DI surface, EF Core context, and Postgres schema, so any module can later ship as a standalone NuGet package. Framed as a credible OSS product, not a thesis demo.
 
@@ -25,7 +25,7 @@ dotnet run --project src/AgentOs.Api
 
 # Local secrets (DO NOT commit). UserSecretsId = "agentos-prototype"
 cd src/AgentOs.Api
-dotnet user-secrets set "Llm:Codex:ApiKey"      "sk-ant-..."
+dotnet user-secrets set "Llm:Claude:ApiKey"      "sk-ant-..."
 dotnet user-secrets set "Llm:AzureOpenAi:ApiKey" "..."
 dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://<resource>.openai.azure.com"
 
@@ -58,10 +58,12 @@ Modular monolith. Solution file is **`AgentOs.slnx`** (the .NET 10 XML format). 
 | `AgentOs.Modules.AppConfig` | Encrypted runtime KV store (DataProtection), `AppConfigDbContext` (schema `config`). Powers per-tenant LLM key overrides + the Settings UI. |
 | `AgentOs.Modules.Llm` | Provider-agnostic gateway: `LlmClientFactory` + keyed `ILlmClient` per provider, `PooledChatLlmClient` (multi-key pool + 429 failover), `CostCalculator`, `AIToolFunction` (ITool→AIFunction adapter). |
 | `AgentOs.Modules.Pipeline` | 5 agents + prompts + `PipelineOrchestrator` (+ optional MAF workflow engine) + `PipelineDbContext` (schema `pipeline`). |
-| `AgentOs.Modules.Identity` | JWT auth + `DefaultTenantContext` (operator mode) + `HttpTenantContext` (Keycloak claims) + `/auth`. |
+| `AgentOs.Modules.Identity` | JWT auth + `HttpTenantContext` (Keycloak claims) + Admin/Member authorization policies. No DbContext, no module-mapped `/auth` route — login is OIDC/cookie via the host. |
 | `AgentOs.Modules.Tenants` | Tenant registry + Keycloak admin client (member lifecycle) + signup/invitations + audit, `TenantsDbContext` (schema `tenants`). |
 | `AgentOs.Modules.Tools` | `IToolRegistry`, `IToolPolicy` (per-tenant gate), `IToolInvocationLog` (evidence), `IToolGateway` (the policy→invoke→log seam). |
 | `AgentOs.Modules.Integration` | `IGitHubPrService` (Octokit) + `IBuildVerifier` (`dotnet build` in a temp dir), exposed as ITools. |
+| `AgentOs.Modules.Workspaces` | Connected source workspaces (repo/token registry) + `IWorkspaceConnector`, `WorkspacesDbContext` (schema `workspaces`). |
+| `AgentOs.Modules.Sessions` | Remote-runner registry + pairing handshake + session-run feed (`IRunnerPairingService`, `ISessionRunFeed`), `SessionsDbContext` (schema `sessions`). |
 | `AgentOs.Modules.Mcp` | MCP client (consume external tool servers) + server adapter; Api also serves MCP at `/mcp`. |
 | `AgentOs.Modules.RemoteAgent` | SignalR hub + transport + `RemoteAgentLlmClient` — dispatches work to a paired dev-machine agent (zero server API tokens). |
 | `AgentOs.Api` | ASP.NET Core minimal API (REST + Scalar UI + `/mcp`). A composition root. |
@@ -73,11 +75,11 @@ Modular monolith. Solution file is **`AgentOs.slnx`** (the .NET 10 XML format). 
 
 The 5 agents **do not call vendor SDKs directly** — they depend on `ILlmClient` (Domain). `LlmClientFactory.Create(name)` / `.CreateDefault()` resolve a keyed `ILlmClient` registered under its canonical provider name. Providers:
 
-- **`Codex`** / **`AzureOpenAI`** — `PooledChatLlmClient`: a pool of `Microsoft.Extensions.AI` `IChatClient` instances (Anthropic.SDK / `Azure.AI.OpenAI`) keyed by API key, with round-robin + HTTP 429 cooldown failover across the (runtime override + appsettings) key pool.
+- **`Claude`** / **`AzureOpenAI`** — `PooledChatLlmClient`: a pool of `Microsoft.Extensions.AI` `IChatClient` instances (Anthropic.SDK / `Azure.AI.OpenAI`) keyed by API key, with round-robin + HTTP 429 cooldown failover across the (runtime override + appsettings) key pool.
 - **`MAF`** — Microsoft Agent Framework `ChatClient` (`Microsoft.Agents.AI`).
 - **`RemoteAgent`** — dispatches to a paired dev-machine agent over SignalR (owned by `Modules.RemoteAgent`).
 
-Provider selection: `Llm:ForceProvider` / per-agent `Agents:<Name>:Provider` + runtime overrides from the Settings UI (hydrated per request from tenant-scoped `AppConfig`). Cost: `CostCalculator.Calculate(model, in, out)` looks up hardcoded pricing (Sonnet 4 / Haiku 4.5 / GPT-4.1 / GPT-4o-mini, USD per 1M tokens, Q2/2026 snapshot); case-insensitive `StartsWith` match (allows suffixes like `Codex-sonnet-4-20250514`); no match → `0m`.
+Provider selection: `Llm:ForceProvider` / per-agent `Agents:<Name>:Provider` + runtime overrides from the Settings UI (hydrated per request from tenant-scoped `AppConfig`). Cost: `CostCalculator.Calculate(model, in, out)` looks up hardcoded pricing (Sonnet 4 / Haiku 4.5 / GPT-4.1 / GPT-4o-mini, USD per 1M tokens, Q2/2026 snapshot); case-insensitive `StartsWith` match (allows suffixes like `claude-sonnet-4-20250514`); no match → `0m`.
 
 ### Tools, policy & evidence (governance)
 
@@ -99,7 +101,7 @@ Agents call **tools** through the gateway: `LlmRequest.Tools = ["build_verifier"
 
 **UI / design**: before adding or editing any screen/component, read [docs/design/design-system.md](docs/design/design-system.md) **or run `/design-review`** — it is the single source of truth. Reuse the **defined** vocabulary (`Btn`/`Field`/`Panel`/`Icon` components; the `prefs-*`, `.page-head`, `.settings-table` classes SystemApp uses; `var(--…)` tokens). **Never reference a CSS class that is not defined in `app.css` or a scoped `.razor.css`** — phantom classes render unstyled and were the root cause of past Spine/Users layout breakage; `/design-review` greps `.razor` class tokens against defined CSS to catch them. Surface chrome outside the shell (the Keycloak login at `infra/keycloak/themes/agentos`) mirrors the same tokens + branding (it is **AgentOS**, never "AgentOs").
 
-**Commits**: Conventional Commits in English (e.g. `feat(tools):`, `fix(llm):`, `chore(deps):`). Co-author Codex when pair-coded. CI fails if the Release build/test fails.
+**Commits**: Conventional Commits in English (e.g. `feat(tools):`, `fix(llm):`, `chore(deps):`). Co-author Claude when pair-coded. CI fails if the Release build/test fails.
 
 **Language**: code, comments, docs, and LLM prompts/output are English (the repo was standardized from Vietnamese). The agent system prompts (`Modules.Pipeline/Prompts/*.cs`) open with `"You are the <X> Agent …"` — this opening line is used as a routing key; keep the prompt and any matcher in sync if reworded.
 

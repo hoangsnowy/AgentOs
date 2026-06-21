@@ -58,7 +58,7 @@ Modular monolith. Solution file is **`AgentOs.slnx`** (the .NET 10 XML format). 
 | `AgentOs.Modules.AppConfig` | Encrypted runtime KV store (DataProtection), `AppConfigDbContext` (schema `config`). Powers per-tenant LLM key overrides + the Settings UI. |
 | `AgentOs.Modules.Llm` | Provider-agnostic gateway: `LlmClientFactory` + keyed `ILlmClient` per provider, `PooledChatLlmClient` (multi-key pool + 429 failover), `CostCalculator`, `AIToolFunction` (ITool→AIFunction adapter). |
 | `AgentOs.Modules.Pipeline` | 5 agents + prompts + `PipelineOrchestrator` (+ optional MAF workflow engine) + `PipelineDbContext` (schema `pipeline`). |
-| `AgentOs.Modules.Identity` | JWT auth + `DefaultTenantContext` (operator mode) + `HttpTenantContext` (Keycloak claims) + `/auth`. |
+| `AgentOs.Modules.Identity` | Keycloak JWT auth + `HttpTenantContext` (reads the `tenant` claim) + `Admin`/`Member` authorization policies. No DbContext, no module `/auth` route — login is OIDC/cookie via the host. |
 | `AgentOs.Modules.Tenants` | Tenant registry + Keycloak admin client (member lifecycle) + signup/invitations + audit, `TenantsDbContext` (schema `tenants`). |
 | `AgentOs.Modules.Tools` | `IToolRegistry`, `IToolPolicy` (per-tenant gate), `IToolInvocationLog` (evidence), `IToolGateway` (the policy→invoke→log seam). |
 | `AgentOs.Modules.Integration` | `IGitHubPrService` (Octokit) + `IBuildVerifier` (`dotnet build` in a temp dir), exposed as ITools. |
@@ -87,7 +87,7 @@ Agents call **tools** through the gateway: `LlmRequest.Tools = ["build_verifier"
 
 ### Persistence & multi-tenancy
 
-`ConnectionStrings:DefaultConnection` (Postgres) is the only required wiring; **each module attaches its own DbContext + schema + migration history** (`pipeline.*`, `tenants.*`, `config.*`) and applies migrations at startup via its module init hook. Without a connection string (CI / local), modules fall back to no-op repositories so the app boots stateless. Row-level isolation: tenant-scoped entities carry a `TenantId` + an EF global query filter reading `ITenantContext.TenantId`. `Auth:Mode` switches between `operator` (single pseudo-tenant, HS256) and `keycloak` (RS256, `tenant` claim). Local Postgres via Aspire AppHost; Azure deploy via `azd up` (Container Apps).
+`ConnectionStrings:DefaultConnection` (Postgres) is the only required wiring; **each module attaches its own DbContext + schema + migration history** (`pipeline.*`, `tenants.*`, `config.*`) and applies migrations at startup via its module init hook. Without a connection string (CI / local), modules fall back to no-op repositories so the app boots stateless. Row-level isolation: tenant-scoped entities carry a `TenantId` + an EF global query filter reading `ITenantContext.TenantId`. Auth is Keycloak-only: the Api validates RS256 bearer tokens against the realm JWKS, the Web uses cookie + OIDC (or a Development-only `Auth:DevAutoLogin` fixed-user handler for standalone runs); a single `HttpTenantContext` reads the `tenant` claim and falls back to the default tenant for anonymous requests (no `Auth:Mode` switch, no HS256). Local Postgres via Aspire AppHost; Azure deploy via `azd up` (Container Apps).
 
 ## Conventions
 

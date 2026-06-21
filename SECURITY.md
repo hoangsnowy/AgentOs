@@ -13,7 +13,8 @@ When reporting, include: affected component, reproduction steps, and impact.
 - **LLM keys & secrets** are never committed. Set them via `dotnet user-secrets`, environment
   variables, or the runtime Settings store (encrypted with ASP.NET Core Data Protection). See
   [docs/SETUP.md](docs/SETUP.md).
-- **API auth** is JWT bearer; protect the signing secret and rotate it via the settings store.
+- **API auth** is Keycloak OIDC JWT bearer (RS256); tokens are signed by the Keycloak realm key
+  and validated against its JWKS — rotate the signing key in Keycloak, not in AgentOS.
 - The **remote dev-agent runtime** executes work on a developer machine — treat the pairing
   credential as a secret and run it behind an approval gate (tracked in the runtime design).
 
