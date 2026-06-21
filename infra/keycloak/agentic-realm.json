@@ -78,8 +78,8 @@
       "secret": "agentic-web-dev-secret",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["https://localhost:5180/*", "https://web.prouddesert-9f23b6b1.southeastasia.azurecontainerapps.io/*"],
-      "webOrigins": ["https://localhost:5180", "https://web.prouddesert-9f23b6b1.southeastasia.azurecontainerapps.io"],
+      "redirectUris": ["https://localhost:5180/*"],
+      "webOrigins": ["https://localhost:5180"],
       "defaultClientScopes": ["tenant"],
       "protocolMappers": [
         {

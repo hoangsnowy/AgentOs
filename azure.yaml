@@ -11,14 +11,16 @@ services:
     host: containerapp
 
 hooks:
-  postprovision:
+  # postDEPLOY (not postprovision): the Keycloak container app must be running before we can patch
+  # its realm. Derives the KC/Web URLs from the ACA env default-domain output — no manual step.
+  postdeploy:
     posix:
       shell: sh
-      run: ./infra/hooks/postprovision.sh
+      run: ./infra/hooks/postdeploy.sh
       interactive: false
       continueOnError: true
     windows:
       shell: pwsh
-      run: ./infra/hooks/postprovision.ps1
+      run: ./infra/hooks/postdeploy.ps1
       interactive: false
       continueOnError: true
