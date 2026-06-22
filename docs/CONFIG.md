@@ -52,7 +52,6 @@ Keep model ids in sync with `CostCalculator`'s price table or cost reports show 
 
 | Key | Default | Notes |
 |---|---|---|
-| `Auth:Mode` | keycloak | Keycloak OIDC is the only shipped mode. |
 | `Auth:Keycloak:Authority` | empty | **Required outside Development.** Dev fallback `http://localhost:8080/realms/agentic` applies in Development only; production boots refuse a missing value. |
 | `Auth:Keycloak:Audience` | `agentic-api` | JWT audience (Api). |
 | `Auth:Keycloak:ClientId` / `ClientSecret` | `agentic-web` / empty | Web OIDC client. Secret required outside Development; the dev default secret is rejected by `DevSecretGuard`. |

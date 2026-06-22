@@ -96,8 +96,10 @@ bash infra/hooks/postprovision.sh
 ### A.3 — Verify login works
 
 1. Open `https://<WEB_FQDN>` in a browser.
-2. Log in with `operator` / `operator` (seed password — `temporary: true`, so KC forces a reset).
-3. Set a new password → you land on the AgentOS desktop.
+2. Log in with `operator` and the rotated password: `azd env get-value OPERATORPASSWORD`
+   (the `postdeploy` hook rotates the seed `operator`/`member` users to the strong generated
+   `OPERATORPASSWORD`/`MEMBERPASSWORD`; `temporary: false`, so there is no forced reset).
+3. You land on the AgentOS desktop. (`operator`/`operator` is the **local Aspire** seed only.)
 
 ### A.4 — Subsequent deploys
 
