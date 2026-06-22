@@ -411,7 +411,9 @@ Issues and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the de
 - Build + test: `dotnet test AgentOs.slnx -c Release`. CI runs the same on every push and PR, then
   a **coverage gate** (fails under a line-rate floor) and a **dev-auth UI E2E** that opens every
   desktop app to catch circuit-crash regressions. The heavy **real-auth full-stack E2E** (real
-  Keycloak + Postgres) runs **nightly** and on-demand (`workflow_dispatch`).
+  Keycloak + Postgres) is a **local/manual** suite — bring up the Aspire stack
+  (`dotnet run --project infra/AgentOs.AppHost`) and run `tests/AgentOs.E2E.Tests` with
+  `RUN_AGENTOS_E2E_REAL=true` (full-stack verification is user-driven, not a CI gate).
 - Style: `Nullable` + `TreatWarningsAsErrors` are on across the solution.
 - Commits: [Conventional Commits](https://www.conventionalcommits.org/).
 - The repo ships project-specific Claude Code skills under [`.claude/skills/`](.claude/skills/)
