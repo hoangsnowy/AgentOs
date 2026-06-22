@@ -69,8 +69,8 @@ jobs:
       # Boots the Web standalone (Auth:DevAutoLogin, no Keycloak/Postgres/Docker) and drives it with
       # Playwright. Fast (~2 min) and reuses the Release build. This is the per-PR regression guard —
       # it opens every desktop app, so circuit-crash regressions (e.g. an eager-DI ctor throwing on
-      # Spine open) fail the build here. The heavy real-auth full-stack suite stays manual-only
-      # (.github/workflows/e2e-realauth.yml).
+      # Spine open) fail the build here. The heavy real-auth full-stack suite is run locally against
+      # the Aspire stack (tests/AgentOs.E2E.Tests, RUN_AGENTOS_E2E_REAL=true) — not a CI gate.
       - name: Install Playwright (chromium + OS deps)
         run: pwsh tests/AgentOs.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
 
