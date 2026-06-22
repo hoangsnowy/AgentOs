@@ -19,7 +19,9 @@ public sealed class RemoteAgentModule : IModule, IEndpointModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<IRemoteAgentBroker, InProcessRemoteAgentBroker>();
-        services.TryAddSingleton<IRemoteExecApprover, AutoApproveRemoteExec>();
+        // Fail-closed: deny remote/runner exec outside Development unless RemoteAgent:AutoApprove=true.
+        // (AutoApproveRemoteExec is retained for tests + explicit dev wiring.)
+        services.TryAddSingleton<IRemoteExecApprover, ConfigGatedRemoteExecApprover>();
 
         // Register the Llm provider as a keyed ILlmClient so Llm.LlmClientFactory can resolve it by name.
         services.AddKeyedTransient<ILlmClient, RemoteAgentLlmClient>("RemoteAgent");
