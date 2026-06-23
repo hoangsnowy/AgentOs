@@ -101,10 +101,9 @@ graph (api, web, postgres, keycloak). Data volumes persist across restarts.
   (bearer-only); realm roles `admin` / `member`; a `tenant` claim from the user attribute
 - Seed user: `operator` / `operator` (tenant `default`, role `admin`)
 
-`Auth__Mode=keycloak` + `Auth__Keycloak__Authority` are injected by the AppHost, so the API runs
+`Auth__Keycloak__Authority` is injected by the AppHost, so the API runs
 as an OIDC resource server out of the box. If you run the API directly (without the AppHost),
-set `Auth:Mode=operator` (the HS256 path) or point `Auth:Keycloak:Authority` at any
-reachable Keycloak realm.
+point `Auth:Keycloak:Authority` at any reachable Keycloak realm.
 
 Production runs Keycloak with an external DB and `start` (not `start-dev`); for that, point the
 API/Web at a managed OIDC IdP and skip the AppHost-hosted Keycloak.

@@ -1,6 +1,6 @@
-// Claims-based ITenantContext for Auth:Mode=keycloak — reads the tenant + user + roles from the
-// validated OIDC token on the current request (HttpContext.User). Registered only in keycloak mode;
-// operator mode keeps DefaultTenantContext.
+// Claims-based ITenantContext for Keycloak OIDC — reads the tenant + user + roles from the
+// validated OIDC token on the current request (HttpContext.User). Registered for authenticated
+// requests; anonymous requests fall back to DefaultTenantContext.
 
 using System.Collections.Generic;
 using System.Linq;

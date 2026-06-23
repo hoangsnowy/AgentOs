@@ -1,6 +1,6 @@
 // EF Core DbContext for the Pipeline module. Owns 3 tables under schema `pipeline`:
-// pipeline_runs (run + artifact jsonb), run_metrics (1 LLM call), orchestrations (Agent Studio
-// state). Every entity carries a TenantId column + a global query filter (reads ITenantContext)
+// pipeline_runs (run + artifact jsonb), run_metrics (1 LLM call), orchestrations (AgentOS
+// orchestration state). Every entity carries a TenantId column + a global query filter (reads ITenantContext)
 // so each request only ever sees rows owned by its own tenant.
 
 using AgentOs.Modules.Pipeline.Persistence.Entities;

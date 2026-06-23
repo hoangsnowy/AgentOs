@@ -198,7 +198,7 @@ runner only executes ("server thinks, runner does").
   Sessions, …) **throw at startup** when the connection string is empty — a missing connection string
   fails to boot rather than losing data.
 - Row-level isolation: tenant-scoped entities carry `TenantId` + an EF global query filter reading
-  `ITenantContext.TenantId`. `Auth:Mode` switches `operator` (HS256, single pseudo-tenant) vs
-  `keycloak` (RS256, `tenant` claim).
+  `ITenantContext.TenantId`. Auth is Keycloak-OIDC-only: a single `HttpTenantContext` reads the
+  `tenant` claim (falling back to the default tenant for anonymous requests).
 - A Blazor interactive-Server component has no `HttpContext` → read the tenant from
   `AuthenticationState`, never from `ITenantContext` inside a circuit.
