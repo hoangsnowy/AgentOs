@@ -322,12 +322,12 @@ app.MapGet("/runner/version", (IHostEnvironment env, string? rid) =>
 // Tenant comes from the OIDC 'tenant' claim; admin-gated; `days` (0/absent = all time) sets the cutoff.
 app.MapGet("/cost/export", async (HttpContext http, AgentOs.Modules.Pipeline.Persistence.IPipelineRunRepository runs, int? days) =>
 {
-    if (!http.User.IsInRole("admin"))
+    if (!http.User.IsAdmin())
     {
         return Results.Forbid();
     }
 
-    var tenant = http.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
+    var tenant = http.User.GetTenantId() ?? "default";
     DateTimeOffset? since = days is > 0 ? DateTimeOffset.UtcNow.AddDays(-days.Value) : null;
     var summary = await runs.GetCostSummaryForTenantAsync(tenant, since);
     var bytes = System.Text.Encoding.UTF8.GetBytes(AgentOs.Modules.Pipeline.Cost.CostCsv.ToCsv(summary));

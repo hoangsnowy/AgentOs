@@ -4,6 +4,7 @@
 // filtered to one tenant and joined across services by trace id.
 
 using System.Diagnostics;
+using AgentOs.SharedKernel.Identity;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,7 +56,7 @@ public static class LoggingExtensions
                 .CreateLogger("AgentOs.RequestContext");
             var scope = new Dictionary<string, object?>
             {
-                ["tenant"] = context.User?.FindFirst("tenant")?.Value ?? string.Empty,
+                ["tenant"] = context.User?.GetTenantId() ?? string.Empty,
                 ["traceId"] = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier,
             };
             using (logger.BeginScope(scope))

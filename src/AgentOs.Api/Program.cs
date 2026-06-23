@@ -17,6 +17,7 @@ using AgentOs.Modules.Tenants;
 using AgentOs.Modules.Tools;
 using AgentOs.Modules.Workspaces;
 using AgentOs.ServiceDefaults;
+using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Modularity;
 using AgentOs.SharedKernel.Plugins;
 using System.Threading.RateLimiting;
@@ -59,7 +60,7 @@ builder.Services.AddRateLimiter(options =>
             return RateLimitPartition.GetNoLimiter("exempt");
         }
 
-        var tenant = httpContext.User.FindFirst("tenant")?.Value
+        var tenant = httpContext.User.GetTenantId()
             ?? httpContext.Connection.RemoteIpAddress?.ToString()
             ?? "anonymous";
 

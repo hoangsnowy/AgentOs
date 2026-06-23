@@ -441,8 +441,8 @@
     {
         if (AuthState is null) { return; }
         var user = (await AuthState).User;
-        _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
-        _userId = user.FindFirst("sub")?.Value;
+        _tenantId = user.GetTenantId() ?? string.Empty;
+        _userId = user.GetUserId();
         _llm = LlmConfig.Resolve(_tenantId, _userId);
         if (string.IsNullOrEmpty(_tenantId)) { return; }
         try

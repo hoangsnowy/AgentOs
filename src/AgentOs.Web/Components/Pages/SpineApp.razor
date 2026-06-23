@@ -855,9 +855,9 @@ else if (_tab == Tab.Sessions)
         {
             var state = await AuthState;
             var user = state.User;
-            _tenantId = user.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : string.Empty;
-            _userId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-            _isAdmin = user.IsInRole("admin");
+            _tenantId = user.GetTenantId() ?? string.Empty;
+            _userId = user.GetUserId() ?? "";
+            _isAdmin = user.IsAdmin();
         }
         _resolved = true;
         // No tenant on the token → nothing tenant-scoped to load (fail closed; never read the `default`

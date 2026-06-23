@@ -249,9 +249,9 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
         if (AuthState is not null)
         {
             var user = (await AuthState).User;
-            _isAdmin = user.IsInRole("admin");
-            _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
-            _userId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            _isAdmin = user.IsAdmin();
+            _tenantId = user.GetTenantId() ?? string.Empty;
+            _userId = user.GetUserId();
         }
         _resolved = true;
         if (!_isAdmin) { return; }

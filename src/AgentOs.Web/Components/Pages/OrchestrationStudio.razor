@@ -259,7 +259,7 @@
     {
         if (AuthState is null) { return string.Empty; }
         var user = (await AuthState).User;
-        return user.FindFirst("tenant")?.Value ?? string.Empty;
+        return user.GetTenantId() ?? string.Empty;
     }
 
     // Theme + wallpaper now live in System -> Appearance; this studio no longer keeps a

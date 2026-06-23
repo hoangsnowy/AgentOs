@@ -33,13 +33,13 @@ public sealed class HttpTenantContext : ITenantContext
         get
         {
             var user = User;
-            if (user?.FindFirst("tenant")?.Value is { Length: > 0 } tenant) { return tenant; }
+            if (user?.GetTenantId() is { } tenant) { return tenant; }
             return user?.Identity?.IsAuthenticated == true ? string.Empty : ITenantContext.DefaultTenantId;
         }
     }
 
     /// <inheritdoc />
-    public string? UserId => User?.FindFirst("sub")?.Value;
+    public string? UserId => User?.GetUserId();
 
     /// <inheritdoc />
     public string? UserName => User?.FindFirst("preferred_username")?.Value ?? User?.Identity?.Name;
