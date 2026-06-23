@@ -8,6 +8,7 @@
 @inject AgentOs.Web.Services.WindowManagerService WM
 @inject AgentOs.Web.Services.WorkspacePrTargetService PrTarget
 @inject AgentOs.Modules.Workspaces.Persistence.IWorkspaceRepository Workspaces
+@inject AgentOs.Modules.Llm.IRuntimeOverrides Overrides
 @implements IDisposable
 
 <PageTitle>Pipeline — AgentOS</PageTitle>
@@ -343,9 +344,18 @@
     private string _description = "As an administrator, I want to manage products in the catalog with a unique SKU to avoid duplicates.";
     private int _nmax = 3;
 
-    private string ActiveProvider => string.IsNullOrWhiteSpace(LlmOpts.Value.ForceProvider)
-        ? LlmOpts.Value.Provider
-        : $"{LlmOpts.Value.ForceProvider} (forced)";
+    // Reflect the EFFECTIVE provider: this tenant's runtime ForceProvider override (resolved once at init,
+    // _forceOverride) beats appsettings — mirrors LlmClientFactory.Create's precedence so the "Live" chip
+    // can't claim a provider the run won't actually use.
+    private string? _forceOverride;
+    private string ActiveProvider
+    {
+        get
+        {
+            var force = !string.IsNullOrWhiteSpace(_forceOverride) ? _forceOverride : LlmOpts.Value.ForceProvider;
+            return string.IsNullOrWhiteSpace(force) ? LlmOpts.Value.Provider : $"{force} (forced)";
+        }
+    }
 
     // ---- Run state ----
     private bool _running;
@@ -441,6 +451,12 @@
         _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
         _userId = user.FindFirst("sub")?.Value;
         if (string.IsNullOrEmpty(_tenantId)) { return; }
+        using (var _ = AgentOs.SharedKernel.Identity.AmbientIdentity.Push(_tenantId, _userId))
+        {
+            // Resolve THIS tenant's ForceProvider override once (sync-over-async store read, 15s-cached) so the
+            // Live chip + provider banner show the effective provider, not appsettings.
+            _forceOverride = Overrides.ForceProvider;
+        }
         try
         {
             _boards = (await Workspaces.ListForTenantAsync(_tenantId)).ToList();

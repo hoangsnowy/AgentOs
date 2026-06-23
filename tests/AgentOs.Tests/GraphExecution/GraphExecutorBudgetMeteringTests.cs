@@ -72,14 +72,17 @@ public sealed class GraphExecutorBudgetMeteringTests
                 new PlanEdge("e4", "qa", "end", ""),
             ]);
 
-    private static GraphExecutor BuildExecutor(IBudgetGuard guard, IPipelineRunRepository repo)
+    private static GraphExecutor BuildExecutor(IBudgetGuard guard, IPipelineRunRepository repo, Action<string?>? onReqAmbientTenant = null)
     {
         var m = new AgentMetrics("Claude", "claude-sonnet-4", 100, 50, 0.30m, TimeSpan.FromMilliseconds(50));
 
+        var reqSpec = new RequirementSpec("T", "S", [], [], [], [new EntityDescriptor("E", [])],
+            [new EndpointDescriptor("GET", "/", "root")], ["a"], m);
         var req = Substitute.For<IRequirementAgent>();
+        // Capture the ambient tenant in force WHILE the node executes — the same value EfAppConfigStore
+        // resolves for the per-tenant LLM-key lookup. The real agent would read its key here.
         req.RunAsync(Arg.Any<UserStory>(), Arg.Any<CancellationToken>())
-           .Returns(new RequirementSpec("T", "S", [], [], [], [new EntityDescriptor("E", [])],
-               [new EndpointDescriptor("GET", "/", "root")], ["a"], m));
+           .Returns(_ => { onReqAmbientTenant?.Invoke(AmbientIdentity.Current?.TenantId); return reqSpec; });
 
         var coding = Substitute.For<ICodingAgent>();
         coding.RunAsync(Arg.Any<RequirementSpec>(), Arg.Any<QaReport?>(), Arg.Any<CancellationToken>())
@@ -154,5 +157,25 @@ public sealed class GraphExecutorBudgetMeteringTests
         // ...and NOT to the blank ambient ITenantContext the circuit's DbContext carries.
         var ambient = await repo.GetCostSummaryForTenantAsync(CircuitBlankTenant);
         ambient.CallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task RunAsync_AgentWork_RunsUnderExplicitRunTenant_SoPerTenantKeyResolves()
+    {
+        var options = NewOptions();
+        await using var db = new PipelineDbContext(options, new FixedTenant(CircuitBlankTenant));
+        var repo = new PipelineRunRepository(db, new FixedTenant(CircuitBlankTenant));
+        var guard = new BudgetGuard(new InMemoryAppConfigStore(), repo, TimeProvider.System); // no cap → never blocks
+
+        string? ambientDuringRun = null;
+        var exec = BuildExecutor(guard, repo, t => ambientDuringRun = t);
+
+        await exec.RunAsync(Sdlc(), "story", nMax: 3, RunTenant, _ => Task.CompletedTask);
+
+        // While a node runs, the ambient identity carries the EXPLICIT run tenant, so the LLM-key lookup
+        // (EfAppConfigStore.ResolveTenant reads AmbientIdentity FIRST) resolves THIS tenant's encrypted key
+        // — not `default`/the platform appsettings key. Before the GraphExecutor push this was null on a
+        // Blazor circuit (no HttpContext → ITenantContext blank), the bug that ran workflows on the wrong key.
+        ambientDuringRun.ShouldBe(RunTenant);
     }
 }

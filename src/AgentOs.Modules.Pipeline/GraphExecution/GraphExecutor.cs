@@ -26,6 +26,7 @@ using AgentOs.Domain.Tools;
 using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.Metrics;
 using AgentOs.Modules.Pipeline.Persistence;
+using AgentOs.SharedKernel.Identity;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -129,6 +130,15 @@ public sealed class GraphExecutor
                     $"Budget exceeded for this workspace — spent ${budget.SpentUsd:0.00} of ${budget.CapUsd:0.00} this month. The run was blocked before any agent ran.");
             }
         }
+
+        // Carry the signed-in tenant into the per-tenant LLM-key lookup for the whole run. Each agent
+        // resolves its API key via EfAppConfigStore.ResolveTenant, which reads AmbientIdentity FIRST; a
+        // Blazor circuit has no HttpContext, so without this push ITenantContext resolves `default` and the
+        // run silently executes on the platform/appsettings key while THIS tenant is still billed (the spend
+        // IS persisted tenant-explicit — see PersistRunAsync — so it was the key, not the bill, that leaked
+        // to the wrong tenant). Mirrors InProcessPipelineClient's push on the 5-agent pipeline path. No-op
+        // under standalone dev-login (blank tenant claim → single pseudo-tenant), which the guard skips.
+        using var _identity = string.IsNullOrWhiteSpace(tenantId) ? null : AmbientIdentity.Push(tenantId, userId: null);
 
         // Baseline: everything Pending.
         foreach (var n in graph.Nodes)
