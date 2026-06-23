@@ -208,6 +208,7 @@ builder.Services.AddScoped<AgentOs.Web.Services.ToastService>();
 builder.Services.AddScoped<AgentOs.Web.Services.WindowManagerService>();
 builder.Services.AddScoped<AgentOs.Web.Orchestrations.GraphRunnerService>();
 builder.Services.AddScoped<AgentOs.Web.Services.WorkspacePrTargetService>();
+builder.Services.AddScoped<AgentOs.Web.Services.LlmConfigView>();
 
 // Per-circuit auth session — surfaces identity + (optional) bearer to the HttpPipelineClient.
 builder.Services.AddScoped<AuthSession>();

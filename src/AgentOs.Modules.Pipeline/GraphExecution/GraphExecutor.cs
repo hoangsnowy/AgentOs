@@ -138,7 +138,7 @@ public sealed class GraphExecutor
         // IS persisted tenant-explicit — see PersistRunAsync — so it was the key, not the bill, that leaked
         // to the wrong tenant). Mirrors InProcessPipelineClient's push on the 5-agent pipeline path. No-op
         // under standalone dev-login (blank tenant claim → single pseudo-tenant), which the guard skips.
-        using var _identity = string.IsNullOrWhiteSpace(tenantId) ? null : AmbientIdentity.Push(tenantId, userId: null);
+        using var _identity = AmbientIdentity.PushOrNull(tenantId, userId: null);
 
         // Baseline: everything Pending.
         foreach (var n in graph.Nodes)

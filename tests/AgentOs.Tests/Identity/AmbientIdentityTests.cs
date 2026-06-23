@@ -61,4 +61,28 @@ public class AmbientIdentityTests
             AmbientIdentity.Current!.TenantId.ShouldBe("tenant-a");
         }
     }
+
+    [Fact]
+    public void PushOrNull_NonBlankTenant_PushesAndReturnsHandle()
+    {
+        using (var handle = AmbientIdentity.PushOrNull("tenant-a", "alice"))
+        {
+            handle.ShouldNotBeNull();
+            AmbientIdentity.Current!.TenantId.ShouldBe("tenant-a");
+        }
+
+        AmbientIdentity.Current.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void PushOrNull_BlankTenant_ReturnsNull_AndDoesNotPush(string? blank)
+    {
+        var handle = AmbientIdentity.PushOrNull(blank, "alice");
+
+        handle.ShouldBeNull();              // safe to `using var _ = …;` — null disposes to a no-op
+        AmbientIdentity.Current.ShouldBeNull();
+    }
 }

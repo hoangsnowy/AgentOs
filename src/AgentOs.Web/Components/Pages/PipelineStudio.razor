@@ -1,5 +1,6 @@
 @using AgentOs.Modules.Pipeline.Pipeline
 @using AgentOs.Domain.Llm
+@using AgentOs.Web.Services
 @inject IPipelineClient Pipeline
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
@@ -8,7 +9,7 @@
 @inject AgentOs.Web.Services.WindowManagerService WM
 @inject AgentOs.Web.Services.WorkspacePrTargetService PrTarget
 @inject AgentOs.Modules.Workspaces.Persistence.IWorkspaceRepository Workspaces
-@inject AgentOs.Modules.Llm.IRuntimeOverrides Overrides
+@inject AgentOs.Web.Services.LlmConfigView LlmConfig
 @implements IDisposable
 
 <PageTitle>Pipeline — AgentOS</PageTitle>
@@ -344,18 +345,10 @@
     private string _description = "As an administrator, I want to manage products in the catalog with a unique SKU to avoid duplicates.";
     private int _nmax = 3;
 
-    // Reflect the EFFECTIVE provider: this tenant's runtime ForceProvider override (resolved once at init,
-    // _forceOverride) beats appsettings — mirrors LlmClientFactory.Create's precedence so the "Live" chip
-    // can't claim a provider the run won't actually use.
-    private string? _forceOverride;
-    private string ActiveProvider
-    {
-        get
-        {
-            var force = !string.IsNullOrWhiteSpace(_forceOverride) ? _forceOverride : LlmOpts.Value.ForceProvider;
-            return string.IsNullOrWhiteSpace(force) ? LlmOpts.Value.Provider : $"{force} (forced)";
-        }
-    }
+    // Effective LLM config (per-tenant override → appsettings), resolved once at init via the shared
+    // LlmConfigView so the "Live" chip + provider banner can't drift from the value a run actually uses.
+    private LlmEffectiveConfig? _llm;
+    private string ActiveProvider => _llm?.ChipLabel ?? LlmOpts.Value.Provider;
 
     // ---- Run state ----
     private bool _running;
@@ -450,13 +443,8 @@
         var user = (await AuthState).User;
         _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
         _userId = user.FindFirst("sub")?.Value;
+        _llm = LlmConfig.Resolve(_tenantId, _userId);
         if (string.IsNullOrEmpty(_tenantId)) { return; }
-        using (var _ = AgentOs.SharedKernel.Identity.AmbientIdentity.Push(_tenantId, _userId))
-        {
-            // Resolve THIS tenant's ForceProvider override once (sync-over-async store read, 15s-cached) so the
-            // Live chip + provider banner show the effective provider, not appsettings.
-            _forceOverride = Overrides.ForceProvider;
-        }
         try
         {
             _boards = (await Workspaces.ListForTenantAsync(_tenantId)).ToList();
@@ -612,9 +600,7 @@
             // run history/cost all commingled under `default`. Seed the circuit's real tenant + member as
             // the ambient identity; it flows into that Task.Run via the captured ExecutionContext. No-op in
             // standalone dev-auto-login (empty tenant claim), where there is only one pseudo-tenant.
-            using IDisposable? _identity = string.IsNullOrEmpty(_tenantId)
-                ? null
-                : AgentOs.SharedKernel.Identity.AmbientIdentity.Push(_tenantId, _userId);
+            using var _identity = AgentOs.SharedKernel.Identity.AmbientIdentity.PushOrNull(_tenantId, _userId);
             await foreach (var evt in Pipeline.StreamAsync(story, cts.Token))
             {
                 switch (evt.Kind)

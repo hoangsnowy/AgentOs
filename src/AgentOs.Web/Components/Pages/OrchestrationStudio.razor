@@ -9,11 +9,12 @@
 @using AgentOs.Domain.Llm
 @using AgentOs.Modules.Llm
 @using AgentOs.Modules.Pipeline.GraphExecution
+@using AgentOs.Web.Services
 @using Microsoft.AspNetCore.Components.Authorization
 @inject OrchestrationStore Store
 @inject GraphRunnerService GraphRunner
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
-@inject AgentOs.Modules.Llm.IRuntimeOverrides Overrides
+@inject AgentOs.Web.Services.LlmConfigView LlmConfig
 @inject Microsoft.JSInterop.IJSRuntime JS
 @implements IDisposable
 
@@ -228,18 +229,10 @@
     private string _humanNote = string.Empty;
     private TaskCompletionSource<GraphHumanReply>? _humanTcs;
 
-    // Reflect the EFFECTIVE provider: this tenant's runtime ForceProvider override (resolved once at init,
-    // _forceOverride) beats appsettings — mirrors LlmClientFactory.Create's precedence so the "Live" chip
-    // can't claim a provider the run won't actually use.
-    private string? _forceOverride;
-    private string ActiveProvider
-    {
-        get
-        {
-            var force = !string.IsNullOrWhiteSpace(_forceOverride) ? _forceOverride : LlmOpts.Value.ForceProvider;
-            return string.IsNullOrWhiteSpace(force) ? LlmOpts.Value.Provider : $"{force} (forced)";
-        }
-    }
+    // Effective LLM config (per-tenant override → appsettings), resolved once at init via the shared
+    // LlmConfigView so the "Live" chip can't drift from the value a run actually uses.
+    private LlmEffectiveConfig? _llm;
+    private string ActiveProvider => _llm?.ChipLabel ?? LlmOpts.Value.Provider;
 
     private static readonly StepType[] PaletteOrder =
     [
@@ -251,13 +244,7 @@
     protected override async Task OnInitializedAsync()
     {
         _tenantId = await ResolveTenantAsync();
-        if (!string.IsNullOrEmpty(_tenantId))
-        {
-            // Resolve THIS tenant's ForceProvider override once (sync-over-async store read, 15s-cached) under
-            // the tenant's ambient identity, so the Live chip shows the effective provider, not appsettings.
-            using var _ = AgentOs.SharedKernel.Identity.AmbientIdentity.Push(_tenantId, null);
-            _forceOverride = Overrides.ForceProvider;
-        }
+        _llm = LlmConfig.Resolve(_tenantId);
         _all = Store.All(_tenantId).ToList();
         _graph = _all.FirstOrDefault() ?? Store.Create(_tenantId, "5-Agent SDLC Pipeline");
         if (_all.Count == 0)

@@ -28,6 +28,16 @@ public static class AmbientIdentity
     public static IDisposable Push(string tenantId, string? userId) => Push(tenantId, userId, null);
 
     /// <summary>
+    /// Push only when <paramref name="tenantId"/> is non-blank; returns <c>null</c> otherwise (standalone
+    /// dev-login carries no tenant claim). Lets every off-circuit run site write a single
+    /// <c>using var _ = AmbientIdentity.PushOrNull(tenantId, userId);</c> instead of hand-rolling the
+    /// <c>IsNullOrEmpty(tenantId) ? null : Push(...)</c> guard — which, when one path forgot it, silently
+    /// resolved that path's work (LLM key, budget, evidence) under the <c>default</c> tenant.
+    /// </summary>
+    public static IDisposable? PushOrNull(string? tenantId, string? userId)
+        => string.IsNullOrWhiteSpace(tenantId) ? null : Push(tenantId, userId, null);
+
+    /// <summary>
     /// Set the ambient identity including the running session, so off-box tools (runner_shell) can tag
     /// their per-command progress events back to the originating session without threading a session id
     /// through the LLM request → tool-gateway hot path.

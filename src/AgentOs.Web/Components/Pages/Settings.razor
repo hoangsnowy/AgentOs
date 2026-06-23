@@ -46,8 +46,8 @@ else
                 <table class="prefs-tbl">
                     <tr><th>Default provider</th><td><code>@LlmOpts.Value.Provider</code></td></tr>
                     <tr><th>Effective force provider</th><td>@EffectiveForceLabel()</td></tr>
-                    <tr><th>Anthropic API key</th><td>@KeyState(_anthropicKey, LlmOpts.Value.Claude.ApiKey)</td></tr>
-                    <tr><th>Azure OpenAI API key</th><td>@KeyState(_azureKey, LlmOpts.Value.AzureOpenAi.ApiKey)</td></tr>
+                    <tr><th>Anthropic API key</th><td>@KeyState(EffectiveCfg().AnthropicKeySet)</td></tr>
+                    <tr><th>Azure OpenAI API key</th><td>@KeyState(EffectiveCfg().AzureKeySet)</td></tr>
                     <tr><th>Azure OpenAI endpoint</th><td>@EffectiveEndpointLabel()</td></tr>
                     <tr><th>Persistence</th><td>@(_dbConnected ? "Postgres connected" : "Stateless (no DB)")</td></tr>
                 </table>
@@ -279,7 +279,7 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     // Ambient identity for the in-process path so every Overrides read/write lands in THIS tenant's
     // encrypted app_config row. No-op (null) in standalone dev-auto-login (empty tenant claim, single tenant).
     private IDisposable? TenantScope()
-        => string.IsNullOrEmpty(_tenantId) ? null : AmbientIdentity.Push(_tenantId, _userId);
+        => AmbientIdentity.PushOrNull(_tenantId, _userId);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -638,25 +638,27 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
 
     private sealed record LlmTestResult(bool Ok, string? Provider, string? Model, string? Sample, string? Error);
 
-    // Read the seeded form fields (this tenant's runtime override, loaded under TenantScope in-process
-    // or from the API in split) before the appsettings/env platform fallback — mirrors the precedence
-    // an actual LLM call uses, so Status reflects the EFFECTIVE config, not just appsettings.
+    // Status reads the EFFECTIVE config via the same shared precedence (per-tenant override → appsettings)
+    // the studios + an actual LLM call use. The override values come from this tab's seeded fields, which
+    // hold the in-process override OR the API-fetched value (split mode) — so Status is correct in both.
+    private LlmEffectiveConfig EffectiveCfg()
+        => LlmConfigView.Combine(LlmOpts.Value, _forceProvider, _anthropicKey, _azureKey, _azureEndpoint);
+
     private string EffectiveForceLabel()
     {
-        if (!string.IsNullOrWhiteSpace(_forceProvider))    return $"{_forceProvider} (runtime override)";
-        if (!string.IsNullOrWhiteSpace(LlmOpts.Value.ForceProvider)) return $"{LlmOpts.Value.ForceProvider} (appsettings)";
-        return "— none (per-agent config) —";
+        var cfg = EffectiveCfg();
+        return cfg.ForceSource switch
+        {
+            ForceSource.RuntimeOverride => $"{cfg.Force} (runtime override)",
+            ForceSource.AppSettings     => $"{cfg.Force} (appsettings)",
+            _                           => "— none (per-agent config) —",
+        };
     }
 
-    private string EffectiveEndpointLabel()
-    {
-        var eff = !string.IsNullOrWhiteSpace(_azureEndpoint) ? _azureEndpoint : LlmOpts.Value.AzureOpenAi.Endpoint;
-        return string.IsNullOrWhiteSpace(eff) ? "— not set —" : eff;
-    }
+    private string EffectiveEndpointLabel() => EffectiveCfg().AzureEndpoint ?? "— not set —";
 
-    // "set" if EITHER the tenant override OR the platform appsettings/env key is present.
-    private MarkupString KeyState(string? tenantOverride, string? appsettingsFallback)
-        => (string.IsNullOrWhiteSpace(tenantOverride) && string.IsNullOrWhiteSpace(appsettingsFallback))
-            ? new MarkupString("<span class=\"chip chip-err\">not set</span>")
-            : new MarkupString("<span class=\"chip chip-ok\">set</span>");
+    private static MarkupString KeyState(bool isSet)
+        => isSet
+            ? new MarkupString("<span class=\"chip chip-ok\">set</span>")
+            : new MarkupString("<span class=\"chip chip-err\">not set</span>");
 }
