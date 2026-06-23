@@ -4,6 +4,7 @@
 @using AgentOs.Modules.Llm
 @using AgentOs.Modules.AppConfig
 @using AgentOs.Domain.Llm
+@using AgentOs.Domain.Configuration
 @using AgentOs.SharedKernel.Identity
 @using AgentOs.Web.Services
 @using AgentOs.Domain.Workspaces
@@ -292,17 +293,17 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
                 var gh = await client.GetFromJsonAsync<Dictionary<string, string?>>("settings/Github");
                 if (llm is not null)
                 {
-                    _forceProvider = llm.GetValueOrDefault("Llm:ForceProvider") ?? "";
-                    _anthropicKey = llm.GetValueOrDefault("Llm:Claude:ApiKey") ?? "";
-                    _azureKey = llm.GetValueOrDefault("Llm:AzureOpenAi:ApiKey") ?? "";
-                    _azureEndpoint = llm.GetValueOrDefault("Llm:AzureOpenAi:Endpoint") ?? "";
+                    _forceProvider = llm.GetValueOrDefault(AppConfigKeys.LlmForceProvider) ?? "";
+                    _anthropicKey = llm.GetValueOrDefault(AppConfigKeys.LlmClaudeApiKey) ?? "";
+                    _azureKey = llm.GetValueOrDefault(AppConfigKeys.LlmAzureApiKey) ?? "";
+                    _azureEndpoint = llm.GetValueOrDefault(AppConfigKeys.LlmAzureEndpoint) ?? "";
                 }
                 if (gh is not null)
                 {
-                    _githubPat = gh.GetValueOrDefault("Github:Pat") ?? "";
-                    _repoOwner = gh.GetValueOrDefault("Github:RepoOwner") ?? "";
-                    _repoName = gh.GetValueOrDefault("Github:RepoName") ?? "";
-                    _baseBranch = gh.GetValueOrDefault("Github:BaseBranch") ?? "";
+                    _githubPat = gh.GetValueOrDefault(AppConfigKeys.GithubPat) ?? "";
+                    _repoOwner = gh.GetValueOrDefault(AppConfigKeys.GithubRepoOwner) ?? "";
+                    _repoName = gh.GetValueOrDefault(AppConfigKeys.GithubRepoName) ?? "";
+                    _baseBranch = gh.GetValueOrDefault(AppConfigKeys.GithubBaseBranch) ?? "";
                 }
                 StateHasChanged();
             }
@@ -415,10 +416,10 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
                 using var client = ApiClient();
                 // _saveError is null here (the validation guard above returned otherwise) — the first
                 // write assigns, the rest short-circuit on the first error.
-                _saveError = await SetRemoteAsync(client, "Llm:ForceProvider", _forceProvider);
-                _saveError ??= await SetRemoteAsync(client, "Llm:Claude:ApiKey", _anthropicKey);
-                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", _azureKey);
-                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", _azureEndpoint);
+                _saveError = await SetRemoteAsync(client, AppConfigKeys.LlmForceProvider, _forceProvider);
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmClaudeApiKey, _anthropicKey);
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureApiKey, _azureKey);
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureEndpoint, _azureEndpoint);
             }
             else
             {
@@ -451,10 +452,10 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             if (Split)
             {
                 using var client = ApiClient();
-                _saveError = await SetRemoteAsync(client, "Llm:ForceProvider", "");
-                _saveError ??= await SetRemoteAsync(client, "Llm:Claude:ApiKey", "");
-                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", "");
-                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", "");
+                _saveError = await SetRemoteAsync(client, AppConfigKeys.LlmForceProvider, "");
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmClaudeApiKey, "");
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureApiKey, "");
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureEndpoint, "");
             }
             else
             {
@@ -491,10 +492,10 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             {
                 using var client = ApiClient();
                 // _saveErrorGithub is null here (guard above returned otherwise) — first write assigns.
-                _saveErrorGithub = await SetRemoteAsync(client, "Github:Pat", _githubPat);
-                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:RepoOwner", _repoOwner);
-                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:RepoName", _repoName);
-                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:BaseBranch", _baseBranch);
+                _saveErrorGithub = await SetRemoteAsync(client, AppConfigKeys.GithubPat, _githubPat);
+                _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubRepoOwner, _repoOwner);
+                _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubRepoName, _repoName);
+                _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubBaseBranch, _baseBranch);
             }
             else
             {

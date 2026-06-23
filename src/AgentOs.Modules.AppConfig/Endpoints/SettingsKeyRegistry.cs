@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using AgentOs.Domain.Configuration;
 
 namespace AgentOs.Modules.AppConfig.Endpoints;
 
@@ -18,14 +19,14 @@ internal static class SettingsKeyRegistry
     /// allowed — they clear the override back to the appsettings/platform fallback.</summary>
     private static readonly Dictionary<string, Func<string, string?>> Keys = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Llm:ForceProvider"] = ValidProvider,
-        ["Llm:Claude:ApiKey"] = _ => null,
-        ["Llm:AzureOpenAi:ApiKey"] = _ => null,
-        ["Llm:AzureOpenAi:Endpoint"] = ValidHttpsUrl,
-        ["Github:Pat"] = ValidGitHubPat,
-        ["Github:RepoOwner"] = ValidGitHubName,
-        ["Github:RepoName"] = ValidGitHubName,
-        ["Github:BaseBranch"] = ValidBranchName,
+        [AppConfigKeys.LlmForceProvider] = ValidProvider,
+        [AppConfigKeys.LlmClaudeApiKey] = _ => null,
+        [AppConfigKeys.LlmAzureApiKey] = _ => null,
+        [AppConfigKeys.LlmAzureEndpoint] = ValidHttpsUrl,
+        [AppConfigKeys.GithubPat] = ValidGitHubPat,
+        [AppConfigKeys.GithubRepoOwner] = ValidGitHubName,
+        [AppConfigKeys.GithubRepoName] = ValidGitHubName,
+        [AppConfigKeys.GithubBaseBranch] = ValidBranchName,
     };
 
     public static bool IsReadablePrefix(string prefix) => ReadablePrefixes.Contains(prefix);

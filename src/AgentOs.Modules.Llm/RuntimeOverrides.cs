@@ -16,6 +16,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AgentOs.Domain.Configuration;
 using AgentOs.Modules.AppConfig;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,17 +25,19 @@ namespace AgentOs.Modules.Llm;
 /// <inheritdoc cref="IRuntimeOverrides"/>
 public sealed class RuntimeOverrides : IRuntimeOverrides
 {
-    internal const string KeyForceProvider = "Llm:ForceProvider";
-    internal const string KeyAnthropicKey = "Llm:Claude:ApiKey";
-    internal const string KeyAnthropicKeys = "Llm:Claude:ApiKeys";
-    internal const string KeyAzureKey = "Llm:AzureOpenAi:ApiKey";
-    internal const string KeyAzureKeys = "Llm:AzureOpenAi:ApiKeys";
-    internal const string KeyAzureEndpoint = "Llm:AzureOpenAi:Endpoint";
-    internal const string KeyGitHubPat = "Github:Pat";
-    internal const string KeyGitHubOwner = "Github:RepoOwner";
-    internal const string KeyGitHubRepo = "Github:RepoName";
-    internal const string KeyGitHubBranch = "Github:BaseBranch";
-    internal const string KeyGitHubBaseUrl = "Github:BaseUrl";
+    // Names live in Domain.Configuration.AppConfigKeys (shared with SettingsKeyRegistry + the Settings UI);
+    // these internal aliases keep the existing call sites terse.
+    internal const string KeyForceProvider = AppConfigKeys.LlmForceProvider;
+    internal const string KeyAnthropicKey = AppConfigKeys.LlmClaudeApiKey;
+    internal const string KeyAnthropicKeys = AppConfigKeys.LlmClaudeApiKeys;
+    internal const string KeyAzureKey = AppConfigKeys.LlmAzureApiKey;
+    internal const string KeyAzureKeys = AppConfigKeys.LlmAzureApiKeys;
+    internal const string KeyAzureEndpoint = AppConfigKeys.LlmAzureEndpoint;
+    internal const string KeyGitHubPat = AppConfigKeys.GithubPat;
+    internal const string KeyGitHubOwner = AppConfigKeys.GithubRepoOwner;
+    internal const string KeyGitHubRepo = AppConfigKeys.GithubRepoName;
+    internal const string KeyGitHubBranch = AppConfigKeys.GithubBaseBranch;
+    internal const string KeyGitHubBaseUrl = AppConfigKeys.GithubBaseUrl;
 
     private static readonly char[] KeyPoolSeparators = ['\n', '\r', ','];
 
