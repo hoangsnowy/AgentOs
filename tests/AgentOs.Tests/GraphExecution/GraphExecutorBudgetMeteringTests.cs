@@ -124,7 +124,7 @@ public sealed class GraphExecutorBudgetMeteringTests
 
         // First run: spend so far is $0 (< $1.00 cap), so the pre-run gate lets it through; the run then
         // persists its own $1.20 of spend.
-        var run1 = await exec.RunAsync(Sdlc(), "story", nMax: 3, RunTenant, _ => Task.CompletedTask);
+        var run1 = await exec.RunAsync(Sdlc(), "story", nMax: 3, RunTenant, null, _ => Task.CompletedTask);
         run1.Completed.ShouldBeTrue();
 
         // That persisted spend now makes the tenant over its enforced cap...
@@ -133,7 +133,7 @@ public sealed class GraphExecutorBudgetMeteringTests
         status.SpentUsd.ShouldBe(1.20m);
 
         // ...so the SECOND run is blocked by the very gate this fix makes effective.
-        var run2 = await exec.RunAsync(Sdlc(), "story", nMax: 3, RunTenant, _ => Task.CompletedTask);
+        var run2 = await exec.RunAsync(Sdlc(), "story", nMax: 3, RunTenant, null, _ => Task.CompletedTask);
         run2.Completed.ShouldBeFalse();
         run2.FailureMessage!.ShouldContain("Budget exceeded");
     }
@@ -147,7 +147,7 @@ public sealed class GraphExecutorBudgetMeteringTests
         var guard = new BudgetGuard(new InMemoryAppConfigStore(), repo, TimeProvider.System); // no cap → never blocks
 
         var exec = BuildExecutor(guard, repo);
-        await exec.RunAsync(Sdlc(), "story", nMax: 3, RunTenant, _ => Task.CompletedTask);
+        await exec.RunAsync(Sdlc(), "story", nMax: 3, RunTenant, null, _ => Task.CompletedTask);
 
         // The run_metrics rows are billed to the explicit run tenant (4 agent calls, $1.20)...
         var billed = await repo.GetCostSummaryForTenantAsync(RunTenant);
@@ -170,7 +170,7 @@ public sealed class GraphExecutorBudgetMeteringTests
         string? ambientDuringRun = null;
         var exec = BuildExecutor(guard, repo, t => ambientDuringRun = t);
 
-        await exec.RunAsync(Sdlc(), "story", nMax: 3, RunTenant, _ => Task.CompletedTask);
+        await exec.RunAsync(Sdlc(), "story", nMax: 3, RunTenant, null, _ => Task.CompletedTask);
 
         // While a node runs, the ambient identity carries the EXPLICIT run tenant, so the LLM-key lookup
         // (EfAppConfigStore.ResolveTenant reads AmbientIdentity FIRST) resolves THIS tenant's encrypted key

@@ -38,6 +38,26 @@ public static class AmbientIdentity
         => string.IsNullOrWhiteSpace(tenantId) ? null : Push(tenantId, userId, null);
 
     /// <summary>
+    /// The ONE tenant/user precedence every off-circuit run path shares: an explicit argument (if non-blank)
+    /// wins, then the <see cref="Current">ambient</see> identity, then the request-scoped
+    /// <paramref name="context"/>, then <see cref="ITenantContext.DefaultTenantId"/>. The context's value is
+    /// used verbatim when present (an authenticated-but-empty tenant stays empty — fail-closed — rather than
+    /// silently becoming <c>default</c>); only a missing context falls through to the default. Pure read — the
+    /// caller pushes the result (e.g. <c>using var _ = AmbientIdentity.Push(id.TenantId, id.UserId);</c>),
+    /// because some callers resolve on the live request thread but push later on a Task.Run branch.
+    /// </summary>
+    public static Identity Resolve(string? explicitTenantId, string? explicitUserId, ITenantContext? context)
+    {
+        var tenant =
+            (string.IsNullOrWhiteSpace(explicitTenantId) ? null : explicitTenantId)
+            ?? Current?.TenantId
+            ?? context?.TenantId
+            ?? ITenantContext.DefaultTenantId;
+        var user = explicitUserId ?? Current?.UserId ?? context?.UserId;
+        return new Identity(tenant, user);
+    }
+
+    /// <summary>
     /// Set the ambient identity including the running session, so off-box tools (runner_shell) can tag
     /// their per-command progress events back to the originating session without threading a session id
     /// through the LLM request → tool-gateway hot path.

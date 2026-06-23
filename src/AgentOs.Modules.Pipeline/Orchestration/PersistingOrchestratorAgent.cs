@@ -42,11 +42,9 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
     public async Task<PipelineResult> RunAsync(UserStory story, CancellationToken cancellationToken = default)
     {
         // Run-level budget gate: protect the whole (expensive) pipeline run with one spend check.
-        // Ambient identity (background Task.Run) wins; the request-scoped ITenantContext is the fallback
-        // — never a hardcoded `default`, which would bill a low-budget tenant's run against `default`.
-        var tenantId = AmbientIdentity.Current?.TenantId is { Length: > 0 } ambient
-            ? ambient
-            : _tenantContext.TenantId;
+        // One shared precedence (ambient → request ITenantContext → default) via AmbientIdentity.Resolve —
+        // never a hardcoded `default`, which would bill a low-budget tenant's run against `default`.
+        var tenantId = AmbientIdentity.Resolve(explicitTenantId: null, explicitUserId: null, _tenantContext).TenantId;
         var budget = await _budgetGuard.EvaluateAsync(tenantId, cancellationToken).ConfigureAwait(false);
         if (budget is { State: BudgetState.Exceeded, EnforceOn: true })
         {

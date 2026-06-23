@@ -207,6 +207,7 @@
     // principal and pass it explicitly to the (singleton) store — never rely on ambient ITenantContext here.
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     private string _tenantId = string.Empty;
+    private string? _userId;
 
     private int _bottomTab = 2;
 
@@ -254,11 +255,12 @@
         BuildDiagram();
     }
 
-    // Tenant from the circuit's authenticated principal (empty when anonymous / standalone dev login).
+    // Tenant + user from the circuit's authenticated principal (empty when anonymous / standalone dev login).
     private async Task<string> ResolveTenantAsync()
     {
         if (AuthState is null) { return string.Empty; }
         var user = (await AuthState).User;
+        _userId = user.GetUserId();
         return user.GetTenantId() ?? string.Empty;
     }
 
@@ -505,7 +507,7 @@
 
         try
         {
-            var result = await GraphRunner.RunAsync(_graph, story, nMax, _tenantId, ev => InvokeAsync(() =>
+            var result = await GraphRunner.RunAsync(_graph, story, nMax, _tenantId, _userId, ev => InvokeAsync(() =>
             {
                 var node = _graph.Nodes.FirstOrDefault(n => n.Id == ev.NodeId);
                 if (node is not null)

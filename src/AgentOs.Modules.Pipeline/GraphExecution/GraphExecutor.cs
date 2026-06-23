@@ -87,13 +87,16 @@ public sealed class GraphExecutor
     }
 
     /// <summary>Validate (LLM-free) then compile + run the graph as a MAF Workflow, pushing per-node status
-    /// to <paramref name="onNode"/>. <paramref name="tenantId"/> partitions tool policy/evidence — the
-    /// caller passes it explicitly because a Blazor circuit has no <c>ITenantContext</c>.</summary>
+    /// to <paramref name="onNode"/>. <paramref name="tenantId"/> + <paramref name="userId"/> are passed
+    /// explicitly because a Blazor circuit has no <c>ITenantContext</c>; they flow through
+    /// <see cref="AmbientIdentity.Resolve"/> (the shared precedence) so the per-tenant LLM key, budget gate,
+    /// tool policy + evidence all resolve the signed-in tenant, not <c>default</c>.</summary>
     public async Task<GraphRunResult> RunAsync(
         PlanGraph graph,
         string userStoryText,
         int nMax,
         string tenantId,
+        string? userId,
         Func<GraphNodeEvent, Task> onNode,
         Func<GraphHumanRequest, Task<GraphHumanReply>>? onHuman = null,
         CancellationToken ct = default)
@@ -131,14 +134,13 @@ public sealed class GraphExecutor
             }
         }
 
-        // Carry the signed-in tenant into the per-tenant LLM-key lookup for the whole run. Each agent
-        // resolves its API key via EfAppConfigStore.ResolveTenant, which reads AmbientIdentity FIRST; a
-        // Blazor circuit has no HttpContext, so without this push ITenantContext resolves `default` and the
-        // run silently executes on the platform/appsettings key while THIS tenant is still billed (the spend
-        // IS persisted tenant-explicit — see PersistRunAsync — so it was the key, not the bill, that leaked
-        // to the wrong tenant). Mirrors InProcessPipelineClient's push on the 5-agent pipeline path. No-op
-        // under standalone dev-login (blank tenant claim → single pseudo-tenant), which the guard skips.
-        using var _identity = AmbientIdentity.PushOrNull(tenantId, userId: null);
+        // Carry the signed-in tenant + user into the run via the shared precedence. Each agent resolves its
+        // API key through EfAppConfigStore.ResolveTenant, which reads AmbientIdentity FIRST; a Blazor circuit
+        // has no HttpContext, so without this push ITenantContext resolves `default` and the run silently
+        // executes on the platform/appsettings key while THIS tenant is still billed (the spend IS persisted
+        // tenant-explicit — see PersistRunAsync). Mirrors InProcessPipelineClient on the 5-agent pipeline path.
+        var runIdentity = AmbientIdentity.Resolve(tenantId, userId, context: null);
+        using var _identity = AmbientIdentity.Push(runIdentity.TenantId, runIdentity.UserId);
 
         // Baseline: everything Pending.
         foreach (var n in graph.Nodes)
