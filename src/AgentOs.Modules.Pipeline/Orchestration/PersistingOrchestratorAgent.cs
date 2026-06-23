@@ -46,7 +46,7 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
         // never a hardcoded `default`, which would bill a low-budget tenant's run against `default`.
         var tenantId = AmbientIdentity.Resolve(explicitTenantId: null, explicitUserId: null, _tenantContext).TenantId;
         var budget = await _budgetGuard.EvaluateAsync(tenantId, cancellationToken).ConfigureAwait(false);
-        if (budget is { State: BudgetState.Exceeded, EnforceOn: true })
+        if (budget.IsBlocking)
         {
             throw new BudgetExceededException(tenantId, budget.CapUsd, budget.SpentUsd);
         }

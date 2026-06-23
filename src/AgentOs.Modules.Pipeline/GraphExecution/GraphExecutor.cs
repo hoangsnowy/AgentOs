@@ -127,7 +127,7 @@ public sealed class GraphExecutor
         if (_budgetGuard is not null)
         {
             var budget = await _budgetGuard.EvaluateAsync(budgetTenant, ct).ConfigureAwait(false);
-            if (budget is { State: BudgetState.Exceeded, EnforceOn: true })
+            if (budget.IsBlocking)
             {
                 return new GraphRunResult(false,
                     $"Budget exceeded for this workspace — spent ${budget.SpentUsd:0.00} of ${budget.CapUsd:0.00} this month. The run was blocked before any agent ran.");

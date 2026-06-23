@@ -220,7 +220,7 @@ internal static class PipelineBudgetGate
         System.ArgumentNullException.ThrowIfNull(tenant);
 
         var status = await budget.EvaluateAsync(tenant.TenantId, ct).ConfigureAwait(false);
-        if (status is not { State: BudgetState.Exceeded, EnforceOn: true })
+        if (!status.IsBlocking)
         {
             return null;
         }
