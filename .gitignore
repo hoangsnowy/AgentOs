@@ -33,6 +33,9 @@ src/AgentOs.Web/plugins/
 # App runtime data (orchestration seed is regenerated at startup)
 **/App_Data/
 
+# Design-iteration scratch shots (Claude Design pulls; README assets live in docs/images/)
+docs/design/claude-design-shots/
+
 # Cache and temp
 **/TestResults/
 **/coverage/

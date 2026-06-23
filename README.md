@@ -128,7 +128,7 @@ src/
 └── AgentOs.ServiceDefaults/    # OpenTelemetry, health checks, HTTP resilience
 infra/
 └── AgentOs.AppHost/            # .NET Aspire orchestration
-tests/                          # xUnit (~460 unit/integration) + Playwright E2E
+tests/                          # xUnit (~800 unit/integration) + Playwright E2E
 ```
 
 Module dependency rule: a module references **Domain + SharedKernel only**. Cross-module
