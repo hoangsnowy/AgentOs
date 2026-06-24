@@ -1,0 +1,32 @@
+@* WindowHost — renders every open app window from WindowManagerService. App-agnostic AND host-agnostic:
+   it resolves a window's component through the IAppRegistry seam (the host implements it from its
+   AppCatalog), so this chrome lives in AgentOs.Web.Shell and names neither a specific app nor the host. *@
+
+@implements IDisposable
+@inject WindowManagerService WM
+@inject IAppRegistry Registry
+
+@foreach (var w in WM.Open.Where(w => !w.Minimized))
+{
+        <AppFrame W="@w" @key="w.Id">
+            @if (Registry.ResolveComponent(w.AppKey) is { } appComponent)
+            {
+                <DynamicComponent Type="appComponent" />
+            }
+            else
+            {
+                <div class="appwin-blank">Unknown app: <code>@w.AppKey</code></div>
+            }
+        </AppFrame>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        WM.Changed += OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => WM.Changed -= OnChanged;
+}

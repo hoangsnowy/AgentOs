@@ -19,6 +19,7 @@ using AgentOs.Domain.Code;
 using AgentOs.Domain.Cost;
 using AgentOs.Domain.Llm;
 using AgentOs.Domain.Pipeline;
+using AgentOs.Domain.Pipeline.Graph;
 using AgentOs.Domain.Qa;
 using AgentOs.Domain.Requirements;
 using AgentOs.Domain.Testing;
@@ -26,6 +27,7 @@ using AgentOs.Domain.Tools;
 using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.Metrics;
 using AgentOs.Modules.Pipeline.Persistence;
+using AgentOs.SharedKernel.Identity;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -35,7 +37,7 @@ namespace AgentOs.Modules.Pipeline.GraphExecution;
 /// <summary>Compiles a <see cref="PlanGraph"/> into a MAF <see cref="Workflow"/> and executes it. Scoped;
 /// ctor is side-effect-free (constructing the agents resolves an LLM client, so it stays out of the Web
 /// component ctor — this executor is resolved lazily at run time, see <c>GraphRunnerService</c>).</summary>
-public sealed class GraphExecutor
+public sealed class GraphExecutor : IGraphExecutor
 {
     // Tenant used when the caller passes none (operator/standalone mode).
     private const string OperatorTenant = "operator";
@@ -86,13 +88,16 @@ public sealed class GraphExecutor
     }
 
     /// <summary>Validate (LLM-free) then compile + run the graph as a MAF Workflow, pushing per-node status
-    /// to <paramref name="onNode"/>. <paramref name="tenantId"/> partitions tool policy/evidence — the
-    /// caller passes it explicitly because a Blazor circuit has no <c>ITenantContext</c>.</summary>
+    /// to <paramref name="onNode"/>. <paramref name="tenantId"/> + <paramref name="userId"/> are passed
+    /// explicitly because a Blazor circuit has no <c>ITenantContext</c>; they flow through
+    /// <see cref="AmbientIdentity.Resolve"/> (the shared precedence) so the per-tenant LLM key, budget gate,
+    /// tool policy + evidence all resolve the signed-in tenant, not <c>default</c>.</summary>
     public async Task<GraphRunResult> RunAsync(
         PlanGraph graph,
         string userStoryText,
         int nMax,
         string tenantId,
+        string? userId,
         Func<GraphNodeEvent, Task> onNode,
         Func<GraphHumanRequest, Task<GraphHumanReply>>? onHuman = null,
         CancellationToken ct = default)
@@ -123,12 +128,20 @@ public sealed class GraphExecutor
         if (_budgetGuard is not null)
         {
             var budget = await _budgetGuard.EvaluateAsync(budgetTenant, ct).ConfigureAwait(false);
-            if (budget is { State: BudgetState.Exceeded, EnforceOn: true })
+            if (budget.IsBlocking)
             {
                 return new GraphRunResult(false,
                     $"Budget exceeded for this workspace — spent ${budget.SpentUsd:0.00} of ${budget.CapUsd:0.00} this month. The run was blocked before any agent ran.");
             }
         }
+
+        // Carry the signed-in tenant + user into the run via the shared precedence. Each agent resolves its
+        // API key through EfAppConfigStore.ResolveTenant, which reads AmbientIdentity FIRST; a Blazor circuit
+        // has no HttpContext, so without this push ITenantContext resolves `default` and the run silently
+        // executes on the platform/appsettings key while THIS tenant is still billed (the spend IS persisted
+        // tenant-explicit — see PersistRunAsync). Mirrors InProcessPipelineClient on the 5-agent pipeline path.
+        var runIdentity = AmbientIdentity.Resolve(tenantId, userId, context: null);
+        using var _identity = AmbientIdentity.Push(runIdentity.TenantId, runIdentity.UserId);
 
         // Baseline: everything Pending.
         foreach (var n in graph.Nodes)

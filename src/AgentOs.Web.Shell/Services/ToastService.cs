@@ -1,10 +1,10 @@
-// AgentOs.Web/Services/ToastService.cs
+// AgentOs.Web.Shell/Services/ToastService.cs
 // In-memory toast notification service. Components subscribe to Changed; pages call Show(...).
 
 using System;
 using System.Collections.Generic;
 
-namespace AgentOs.Web.Services;
+namespace AgentOs.Web.Shell.Services;
 
 /// <summary>Toast notification kinds — drives colour + icon.</summary>
 public enum ToastKind { Info, Ok, Warn, Err }

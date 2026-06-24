@@ -3,8 +3,8 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @inject Microsoft.JSInterop.IJSRuntime JS
 @inject NavigationManager Nav
-@inject AgentOs.Web.Services.WindowManagerService WM
-@inject AgentOs.Web.Services.ToastService Toasts
+@inject AgentOs.Web.Shell.Services.WindowManagerService WM
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
 @inject AgentOs.Web.Services.AuthSession Auth
 
 <TopBar />
@@ -181,7 +181,7 @@
         if (AuthState is not null)
         {
             var state = await AuthState;
-            _isAdmin = state.User.IsInRole("admin");
+            _isAdmin = state.User.IsAdmin();
         }
     }
 

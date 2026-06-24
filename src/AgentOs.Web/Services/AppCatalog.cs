@@ -4,53 +4,30 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using AgentOs.Web.Components.Pages;
+using AgentOs.Web.Shell.Services;
 
 namespace AgentOs.Web.Services;
-
-/// <summary>A launchable desktop application.</summary>
-/// <param name="Key">Stable id used by <see cref="WindowManagerService"/> and recents.</param>
-/// <param name="Title">Window + launcher title.</param>
-/// <param name="Icon">Icon name (see <c>Icon.razor</c> map).</param>
-/// <param name="Caption">One-line description shown in the launcher.</param>
-/// <param name="Category">Grouping bucket in the Start menu.</param>
-/// <param name="W">Default window width.</param>
-/// <param name="H">Default window height.</param>
-/// <param name="Pinned">Whether the app appears in the dock + pinned grid.</param>
-/// <param name="AdminOnly">When true the app is only shown to users holding the tenant <c>admin</c> role.</param>
-/// <param name="ComponentType">For plugin-contributed apps: the Blazor component the WindowHost renders
-/// via <c>DynamicComponent</c>. Null for built-in apps (rendered by the WindowHost switch).</param>
-public sealed record DesktopApp(
-    string Key,
-    string Title,
-    string Icon,
-    string Caption,
-    string Category,
-    int W = 920,
-    int H = 620,
-    bool Pinned = true,
-    bool AdminOnly = false,
-    System.Type? ComponentType = null,
-    string Color = "#3584e4");
 
 /// <summary>The catalog of apps the AgentOS shell can launch — built-ins plus any registered by plugins.</summary>
 public static class AppCatalog
 {
     private static readonly List<DesktopApp> _builtIn = new()
     {
-        new("pipeline", "Pipeline", "play",  "Run the 5-agent pipeline on a sandbox story", "Agents", 920, 620, Color: "#3584e4"),
-        new("workflow", "Workflow", "graph", "Edit the same pipeline as a visual graph",     "Agents", 1080, 660, Color: "#9141ac"),
-        new("spine",    "Spine",    "git-pull-request", "Run the pipeline on a real ticket → PR", "Agents", 940, 640, Color: "#2ec27e"),
-        new("workspaces", "Workspaces", "squares-four", "Connected boards + their repos", "Agents", 940, 620, Pinned: false, Color: "#e66100"),
-        new("sessions",   "Sessions",   "clock-counter", "Runners + AI coding sessions",  "Agents", 940, 620, Pinned: false, Color: "#986a44"),
-        new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: true, AdminOnly: true, Color: "#e5a50a"),
-        new("evidence", "Evidence", "lock",  "Tool-invocation audit trail",   "Admin", 960, 620, Pinned: true, AdminOnly: true, Color: "#c01c28"),
-        new("cost",     "Cost",     "graph", "LLM spend by agent, provider, model", "Admin", 1000, 660, Pinned: true, AdminOnly: true, Color: "#1c9099"),
-        new("policy",   "Policy",   "lock",  "Per-tenant tool allowlist",     "Admin", 900, 620, Pinned: true, AdminOnly: true, Color: "#613583"),
-        new("prompts",  "Prompts",  "lightning", "Tune the agents' prompts",   "Admin", 1000, 680, Pinned: true, AdminOnly: true, Color: "#c061cb"),
-        new("plugins",  "Plugins",  "squares-stack", "Installed extensions",  "System", 860, 600, Color: "#5e5c64"),
-        new("mcp",      "MCP",      "arrow-square-out", "Upstream MCP tool servers", "System", 860, 600, Pinned: false, AdminOnly: true, Color: "#1a5fb4"),
-        new("settings", "Settings", "gear",  "LLM keys, providers, GitHub",   "System", 760, 600, Pinned: true, AdminOnly: true, Color: "#5e5c64"),
-        new("system",   "System",   "wrench","OS appearance, themes, about",  "System", 760, 600, Color: "#3d3846"),
+        new("pipeline", "Pipeline", "play",  "Run the 5-agent pipeline on a sandbox story", "Agents", 920, 620, ComponentType: typeof(PipelineStudio), Color: "#3584e4"),
+        new("workflow", "Workflow", "graph", "Edit the same pipeline as a visual graph",     "Agents", 1080, 660, ComponentType: typeof(OrchestrationStudio), Color: "#9141ac"),
+        new("spine",    "Spine",    "git-pull-request", "Run the pipeline on a real ticket → PR", "Agents", 940, 640, ComponentType: typeof(SpineApp), Color: "#2ec27e"),
+        new("workspaces", "Workspaces", "squares-four", "Connected boards + their repos", "Agents", 940, 620, Pinned: false, ComponentType: typeof(WorkspacesApp), Color: "#e66100"),
+        new("sessions",   "Sessions",   "clock-counter", "Runners + AI coding sessions",  "Agents", 940, 620, Pinned: false, ComponentType: typeof(SessionsApp), Color: "#986a44"),
+        new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: true, AdminOnly: true, ComponentType: typeof(UsersApp), Color: "#e5a50a"),
+        new("evidence", "Evidence", "lock",  "Tool-invocation audit trail",   "Admin", 960, 620, Pinned: true, AdminOnly: true, ComponentType: typeof(EvidenceApp), Color: "#c01c28"),
+        new("cost",     "Cost",     "graph", "LLM spend by agent, provider, model", "Admin", 1000, 660, Pinned: true, AdminOnly: true, ComponentType: typeof(CostApp), Color: "#1c9099"),
+        new("policy",   "Policy",   "lock",  "Per-tenant tool allowlist",     "Admin", 900, 620, Pinned: true, AdminOnly: true, ComponentType: typeof(PolicyApp), Color: "#613583"),
+        new("prompts",  "Prompts",  "lightning", "Tune the agents' prompts",   "Admin", 1000, 680, Pinned: true, AdminOnly: true, ComponentType: typeof(PromptsApp), Color: "#c061cb"),
+        new("plugins",  "Plugins",  "squares-stack", "Installed extensions",  "System", 860, 600, ComponentType: typeof(PluginsApp), Color: "#5e5c64"),
+        new("mcp",      "MCP",      "arrow-square-out", "Upstream MCP tool servers", "System", 860, 600, Pinned: false, AdminOnly: true, ComponentType: typeof(McpApp), Color: "#1a5fb4"),
+        new("settings", "Settings", "gear",  "LLM keys, providers, GitHub",   "System", 760, 600, Pinned: true, AdminOnly: true, ComponentType: typeof(Settings), Color: "#5e5c64"),
+        new("system",   "System",   "wrench","OS appearance, themes, about",  "System", 760, 600, ComponentType: typeof(SystemApp), Color: "#3d3846"),
     };
 
     // Plugin-contributed apps, appended once at host startup (before any request is served).

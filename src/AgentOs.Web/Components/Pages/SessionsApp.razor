@@ -10,7 +10,7 @@
 @inject IRunnerRepository Runners
 @inject ISessionRepository Sessions
 @inject AgentOs.SharedKernel.Persistence.DatabaseAvailability Db
-@inject AgentOs.Web.Services.ToastService Toasts
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
 
 <header class="page-head">
     <div>
@@ -184,9 +184,9 @@ else
             var user = state.User;
             // Fail-closed (C1 rule): no tenant claim → no tenant, never the shared `default`.
             // DevAutoLogin always issues tenant=default, so the standalone dev path is unaffected.
-            _tenantId = user.FindFirst("tenant")?.Value ?? "";
-            _userId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-            _isAdmin = user.IsInRole("admin");
+            _tenantId = user.GetTenantId() ?? "";
+            _userId = user.GetUserId() ?? "";
+            _isAdmin = user.IsAdmin();
         }
         _resolved = true;
         if (!Db.IsConfigured) { return; }   // Degraded mode — the notice replaces all data loads.

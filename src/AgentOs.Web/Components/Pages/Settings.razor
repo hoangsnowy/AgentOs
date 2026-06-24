@@ -4,6 +4,7 @@
 @using AgentOs.Modules.Llm
 @using AgentOs.Modules.AppConfig
 @using AgentOs.Domain.Llm
+@using AgentOs.Domain.Configuration
 @using AgentOs.SharedKernel.Identity
 @using AgentOs.Web.Services
 @using AgentOs.Domain.Workspaces
@@ -46,9 +47,9 @@ else
                 <table class="prefs-tbl">
                     <tr><th>Default provider</th><td><code>@LlmOpts.Value.Provider</code></td></tr>
                     <tr><th>Effective force provider</th><td>@EffectiveForceLabel()</td></tr>
-                    <tr><th>Anthropic API key</th><td>@KeyState(LlmOpts.Value.Claude.ApiKey)</td></tr>
-                    <tr><th>Azure OpenAI API key</th><td>@KeyState(LlmOpts.Value.AzureOpenAi.ApiKey)</td></tr>
-                    <tr><th>Azure OpenAI endpoint</th><td>@(string.IsNullOrEmpty(LlmOpts.Value.AzureOpenAi.Endpoint) ? "— not set —" : LlmOpts.Value.AzureOpenAi.Endpoint)</td></tr>
+                    <tr><th>Anthropic API key</th><td>@KeyState(EffectiveCfg().AnthropicKeySet)</td></tr>
+                    <tr><th>Azure OpenAI API key</th><td>@KeyState(EffectiveCfg().AzureKeySet)</td></tr>
+                    <tr><th>Azure OpenAI endpoint</th><td>@EffectiveEndpointLabel()</td></tr>
                     <tr><th>Persistence</th><td>@(_dbConnected ? "Postgres connected" : "Stateless (no DB)")</td></tr>
                 </table>
                 break;
@@ -249,9 +250,9 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
         if (AuthState is not null)
         {
             var user = (await AuthState).User;
-            _isAdmin = user.IsInRole("admin");
-            _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
-            _userId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            _isAdmin = user.IsAdmin();
+            _tenantId = user.GetTenantId() ?? string.Empty;
+            _userId = user.GetUserId();
         }
         _resolved = true;
         if (!_isAdmin) { return; }
@@ -279,7 +280,7 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     // Ambient identity for the in-process path so every Overrides read/write lands in THIS tenant's
     // encrypted app_config row. No-op (null) in standalone dev-auto-login (empty tenant claim, single tenant).
     private IDisposable? TenantScope()
-        => string.IsNullOrEmpty(_tenantId) ? null : AmbientIdentity.Push(_tenantId, _userId);
+        => AmbientIdentity.PushOrNull(_tenantId, _userId);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -292,17 +293,17 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
                 var gh = await client.GetFromJsonAsync<Dictionary<string, string?>>("settings/Github");
                 if (llm is not null)
                 {
-                    _forceProvider = llm.GetValueOrDefault("Llm:ForceProvider") ?? "";
-                    _anthropicKey = llm.GetValueOrDefault("Llm:Claude:ApiKey") ?? "";
-                    _azureKey = llm.GetValueOrDefault("Llm:AzureOpenAi:ApiKey") ?? "";
-                    _azureEndpoint = llm.GetValueOrDefault("Llm:AzureOpenAi:Endpoint") ?? "";
+                    _forceProvider = llm.GetValueOrDefault(AppConfigKeys.LlmForceProvider) ?? "";
+                    _anthropicKey = llm.GetValueOrDefault(AppConfigKeys.LlmClaudeApiKey) ?? "";
+                    _azureKey = llm.GetValueOrDefault(AppConfigKeys.LlmAzureApiKey) ?? "";
+                    _azureEndpoint = llm.GetValueOrDefault(AppConfigKeys.LlmAzureEndpoint) ?? "";
                 }
                 if (gh is not null)
                 {
-                    _githubPat = gh.GetValueOrDefault("Github:Pat") ?? "";
-                    _repoOwner = gh.GetValueOrDefault("Github:RepoOwner") ?? "";
-                    _repoName = gh.GetValueOrDefault("Github:RepoName") ?? "";
-                    _baseBranch = gh.GetValueOrDefault("Github:BaseBranch") ?? "";
+                    _githubPat = gh.GetValueOrDefault(AppConfigKeys.GithubPat) ?? "";
+                    _repoOwner = gh.GetValueOrDefault(AppConfigKeys.GithubRepoOwner) ?? "";
+                    _repoName = gh.GetValueOrDefault(AppConfigKeys.GithubRepoName) ?? "";
+                    _baseBranch = gh.GetValueOrDefault(AppConfigKeys.GithubBaseBranch) ?? "";
                 }
                 StateHasChanged();
             }
@@ -415,10 +416,10 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
                 using var client = ApiClient();
                 // _saveError is null here (the validation guard above returned otherwise) — the first
                 // write assigns, the rest short-circuit on the first error.
-                _saveError = await SetRemoteAsync(client, "Llm:ForceProvider", _forceProvider);
-                _saveError ??= await SetRemoteAsync(client, "Llm:Claude:ApiKey", _anthropicKey);
-                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", _azureKey);
-                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", _azureEndpoint);
+                _saveError = await SetRemoteAsync(client, AppConfigKeys.LlmForceProvider, _forceProvider);
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmClaudeApiKey, _anthropicKey);
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureApiKey, _azureKey);
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureEndpoint, _azureEndpoint);
             }
             else
             {
@@ -451,10 +452,10 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             if (Split)
             {
                 using var client = ApiClient();
-                _saveError = await SetRemoteAsync(client, "Llm:ForceProvider", "");
-                _saveError ??= await SetRemoteAsync(client, "Llm:Claude:ApiKey", "");
-                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:ApiKey", "");
-                _saveError ??= await SetRemoteAsync(client, "Llm:AzureOpenAi:Endpoint", "");
+                _saveError = await SetRemoteAsync(client, AppConfigKeys.LlmForceProvider, "");
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmClaudeApiKey, "");
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureApiKey, "");
+                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureEndpoint, "");
             }
             else
             {
@@ -491,10 +492,10 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             {
                 using var client = ApiClient();
                 // _saveErrorGithub is null here (guard above returned otherwise) — first write assigns.
-                _saveErrorGithub = await SetRemoteAsync(client, "Github:Pat", _githubPat);
-                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:RepoOwner", _repoOwner);
-                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:RepoName", _repoName);
-                _saveErrorGithub ??= await SetRemoteAsync(client, "Github:BaseBranch", _baseBranch);
+                _saveErrorGithub = await SetRemoteAsync(client, AppConfigKeys.GithubPat, _githubPat);
+                _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubRepoOwner, _repoOwner);
+                _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubRepoName, _repoName);
+                _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubBaseBranch, _baseBranch);
             }
             else
             {
@@ -638,17 +639,27 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
 
     private sealed record LlmTestResult(bool Ok, string? Provider, string? Model, string? Sample, string? Error);
 
+    // Status reads the EFFECTIVE config via the same shared precedence (per-tenant override → appsettings)
+    // the studios + an actual LLM call use. The override values come from this tab's seeded fields, which
+    // hold the in-process override OR the API-fetched value (split mode) — so Status is correct in both.
+    private LlmEffectiveConfig EffectiveCfg()
+        => LlmConfigView.Combine(LlmOpts.Value, _forceProvider, _anthropicKey, _azureKey, _azureEndpoint);
+
     private string EffectiveForceLabel()
     {
-        var runtime = Overrides.ForceProvider;
-        var appset = LlmOpts.Value.ForceProvider;
-        if (!string.IsNullOrWhiteSpace(runtime)) return $"{runtime} (runtime override)";
-        if (!string.IsNullOrWhiteSpace(appset))  return $"{appset} (appsettings)";
-        return "— none (per-agent config) —";
+        var cfg = EffectiveCfg();
+        return cfg.ForceSource switch
+        {
+            ForceSource.RuntimeOverride => $"{cfg.Force} (runtime override)",
+            ForceSource.AppSettings     => $"{cfg.Force} (appsettings)",
+            _                           => "— none (per-agent config) —",
+        };
     }
 
-    private MarkupString KeyState(string key)
-        => string.IsNullOrWhiteSpace(key)
-            ? new MarkupString("<span class=\"chip chip-err\">not set</span>")
-            : new MarkupString("<span class=\"chip chip-ok\">set</span>");
+    private string EffectiveEndpointLabel() => EffectiveCfg().AzureEndpoint ?? "— not set —";
+
+    private static MarkupString KeyState(bool isSet)
+        => isSet
+            ? new MarkupString("<span class=\"chip chip-ok\">set</span>")
+            : new MarkupString("<span class=\"chip chip-err\">not set</span>");
 }

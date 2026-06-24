@@ -1,7 +1,7 @@
 @page "/"
 @using Microsoft.AspNetCore.Components.Authorization
-@inject AgentOs.Web.Services.WindowManagerService WM
-@inject AgentOs.Web.Services.ToastService Toasts
+@inject AgentOs.Web.Shell.Services.WindowManagerService WM
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
 
 <PageTitle>Desktop — AgentOS</PageTitle>
 
@@ -47,7 +47,7 @@
     private void Refresh()
     {
         _ctxShow = false;
-        Toasts.Show("Desktop", "Refreshed.", AgentOs.Web.Services.ToastKind.Ok);
+        Toasts.Show("Desktop", "Refreshed.", AgentOs.Web.Shell.Services.ToastKind.Ok);
     }
 
     private void Launch(string key, string title, string icon, int w, int h)
@@ -58,7 +58,7 @@
 
     private void DemoToast()
     {
-        Toasts.Show("Demo", "Triggered from right-click context menu.", AgentOs.Web.Services.ToastKind.Info);
+        Toasts.Show("Demo", "Triggered from right-click context menu.", AgentOs.Web.Shell.Services.ToastKind.Info);
         _ctxShow = false;
     }
 }

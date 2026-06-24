@@ -8,11 +8,13 @@
 @using Blazor.Diagrams.Options
 @using AgentOs.Domain.Llm
 @using AgentOs.Modules.Llm
-@using AgentOs.Modules.Pipeline.GraphExecution
+@using AgentOs.Domain.Pipeline.Graph
+@using AgentOs.Web.Services
 @using Microsoft.AspNetCore.Components.Authorization
 @inject OrchestrationStore Store
 @inject GraphRunnerService GraphRunner
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
+@inject AgentOs.Web.Services.LlmConfigView LlmConfig
 @inject Microsoft.JSInterop.IJSRuntime JS
 @implements IDisposable
 
@@ -205,6 +207,7 @@
     // principal and pass it explicitly to the (singleton) store — never rely on ambient ITenantContext here.
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     private string _tenantId = string.Empty;
+    private string? _userId;
 
     private int _bottomTab = 2;
 
@@ -227,9 +230,10 @@
     private string _humanNote = string.Empty;
     private TaskCompletionSource<GraphHumanReply>? _humanTcs;
 
-    private string ActiveProvider => string.IsNullOrWhiteSpace(LlmOpts.Value.ForceProvider)
-        ? LlmOpts.Value.Provider
-        : $"{LlmOpts.Value.ForceProvider} (forced)";
+    // Effective LLM config (per-tenant override → appsettings), resolved once at init via the shared
+    // LlmConfigView so the "Live" chip can't drift from the value a run actually uses.
+    private LlmEffectiveConfig? _llm;
+    private string ActiveProvider => _llm?.ChipLabel ?? LlmOpts.Value.Provider;
 
     private static readonly StepType[] PaletteOrder =
     [
@@ -241,6 +245,7 @@
     protected override async Task OnInitializedAsync()
     {
         _tenantId = await ResolveTenantAsync();
+        _llm = LlmConfig.Resolve(_tenantId);
         _all = Store.All(_tenantId).ToList();
         _graph = _all.FirstOrDefault() ?? Store.Create(_tenantId, "5-Agent SDLC Pipeline");
         if (_all.Count == 0)
@@ -250,12 +255,13 @@
         BuildDiagram();
     }
 
-    // Tenant from the circuit's authenticated principal (empty when anonymous / standalone dev login).
+    // Tenant + user from the circuit's authenticated principal (empty when anonymous / standalone dev login).
     private async Task<string> ResolveTenantAsync()
     {
         if (AuthState is null) { return string.Empty; }
         var user = (await AuthState).User;
-        return user.FindFirst("tenant")?.Value ?? string.Empty;
+        _userId = user.GetUserId();
+        return user.GetTenantId() ?? string.Empty;
     }
 
     // Theme + wallpaper now live in System -> Appearance; this studio no longer keeps a
@@ -501,7 +507,7 @@
 
         try
         {
-            var result = await GraphRunner.RunAsync(_graph, story, nMax, _tenantId, ev => InvokeAsync(() =>
+            var result = await GraphRunner.RunAsync(_graph, story, nMax, _tenantId, _userId, ev => InvokeAsync(() =>
             {
                 var node = _graph.Nodes.FirstOrDefault(n => n.Id == ev.NodeId);
                 if (node is not null)

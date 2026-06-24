@@ -13,7 +13,7 @@
 @inject AgentOs.Modules.Tenants.ITenantSignupService Signup
 @inject AgentOs.Modules.Tenants.Email.IEmailSender Email
 @inject NavigationManager Nav
-@inject AgentOs.Web.Services.ToastService Toasts
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
 
 @if (!_resolved)
 {
@@ -180,11 +180,11 @@ else
         {
             var state = await AuthState;
             var user = state.User;
-            _isAdmin = user.IsInRole("admin");
+            _isAdmin = user.IsAdmin();
             // No silent `default`: a signed-in principal with no tenant claim is a malformed token, not a
             // licence to manage the default tenant's members. Empty → the admin gate below blocks the UI.
-            _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
-            _myUserId = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            _tenantId = user.GetTenantId() ?? string.Empty;
+            _myUserId = user.GetUserId();
         }
         _resolved = true;
 

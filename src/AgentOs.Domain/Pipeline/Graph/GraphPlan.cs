@@ -4,7 +4,7 @@
 
 using System.Collections.Generic;
 
-namespace AgentOs.Modules.Pipeline.GraphExecution;
+namespace AgentOs.Domain.Pipeline.Graph;
 
 /// <summary>Minimal mirror of a canvas node — only what the executor needs. The free-form fields
 /// (<paramref name="Description"/>/<paramref name="Input"/>/<paramref name="Output"/>) drive the

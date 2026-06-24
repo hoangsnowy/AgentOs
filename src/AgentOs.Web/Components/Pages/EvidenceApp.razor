@@ -7,7 +7,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using AgentOs.Domain.Tools
 @inject IToolInvocationLog Evidence
-@inject AgentOs.Web.Services.ToastService Toasts
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
 
 @if (!_resolved)
 {
@@ -75,8 +75,8 @@ else
         if (AuthState is not null)
         {
             var state = await AuthState;
-            _isAdmin = state.User.IsInRole("admin");
-            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : string.Empty;
+            _isAdmin = state.User.IsAdmin();
+            _tenantId = state.User.GetTenantId() ?? string.Empty;
         }
         _resolved = true;
         if (_isAdmin && _tenantId.Length > 0) { await LoadAsync(); }

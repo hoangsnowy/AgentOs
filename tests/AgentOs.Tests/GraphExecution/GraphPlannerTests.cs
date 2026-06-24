@@ -1,7 +1,7 @@
 // The pure, LLM-free graph planner: validation rules + forward execution order. No agents, no Web.
 
 using System.Linq;
-using AgentOs.Modules.Pipeline.GraphExecution;
+using AgentOs.Domain.Pipeline.Graph;
 using Shouldly;
 using Xunit;
 

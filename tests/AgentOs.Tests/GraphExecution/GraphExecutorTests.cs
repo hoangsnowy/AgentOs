@@ -12,6 +12,7 @@ using AgentOs.Domain.Llm;
 using AgentOs.Domain.Pipeline;
 using AgentOs.Domain.Qa;
 using AgentOs.Domain.Requirements;
+using AgentOs.Domain.Pipeline.Graph;
 using AgentOs.Domain.Testing;
 using AgentOs.Domain.Tools;
 using AgentOs.Modules.Pipeline.Agents;
@@ -43,7 +44,7 @@ public sealed class GraphExecutorTests
             [E("req", "end")]);
 
         var events = new List<GraphNodeEvent>();
-        var result = await exec.RunAsync(graph, "build a thing", nMax: 3, "tenant-1", e => { events.Add(e); return Task.CompletedTask; });
+        var result = await exec.RunAsync(graph, "build a thing", nMax: 3, "tenant-1", null, e => { events.Add(e); return Task.CompletedTask; });
 
         result.Completed.ShouldBeTrue();
         result.FailureMessage.ShouldBeNull();
@@ -66,7 +67,7 @@ public sealed class GraphExecutorTests
             [N("req", "Agent", "Requirement", start: true), N("end", "End")],
             [E("req", "end")]);
 
-        var result = await exec.RunAsync(graph, "build a thing", nMax: 3, "tenant-over-cap", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(graph, "build a thing", nMax: 3, "tenant-over-cap", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeFalse();
         result.FailureMessage!.ShouldContain("Budget exceeded");
@@ -87,7 +88,7 @@ public sealed class GraphExecutorTests
             [N("req", "Agent", "Requirement", start: true), N("end", "End")],
             [E("req", "end")]);
 
-        var result = await exec.RunAsync(graph, "build a thing", nMax: 3, "tenant-ok", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(graph, "build a thing", nMax: 3, "tenant-ok", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeTrue();
         await agents.Requirement.Received(1).RunAsync(Arg.Any<UserStory>(), Arg.Any<CancellationToken>());
@@ -98,7 +99,7 @@ public sealed class GraphExecutorTests
     {
         var (exec, agents) = Build(qaConsistent: true);
 
-        var result = await exec.RunAsync(Sdlc(), "story", nMax: 3, "t", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(Sdlc(), "story", nMax: 3, "t", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeTrue();
         await agents.Coding.Received(1).RunAsync(Arg.Any<RequirementSpec>(), Arg.Any<QaReport?>(), Arg.Any<CancellationToken>());
@@ -111,7 +112,7 @@ public sealed class GraphExecutorTests
 
         // qa cap = 2 (the Evaluator node's MaxIterations) → coding runs on iterations 1 and 2, then the
         // forward edge fires because the cap is exhausted, and the workflow terminates at End.
-        var result = await exec.RunAsync(Sdlc(qaMaxIter: 2), "story", nMax: 5, "t", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(Sdlc(qaMaxIter: 2), "story", nMax: 5, "t", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeTrue();
         await agents.Coding.Received(2).RunAsync(Arg.Any<RequirementSpec>(), Arg.Any<QaReport?>(), Arg.Any<CancellationToken>());
@@ -126,7 +127,7 @@ public sealed class GraphExecutorTests
             [E("req", "hook"), E("hook", "end")]);
 
         var events = new List<GraphNodeEvent>();
-        var result = await exec.RunAsync(graph, "s", 3, "t", e => { events.Add(e); return Task.CompletedTask; });
+        var result = await exec.RunAsync(graph, "s", 3, "t", null, e => { events.Add(e); return Task.CompletedTask; });
 
         result.Completed.ShouldBeFalse();
         result.FailureMessage!.ShouldContain("not runnable");
@@ -148,7 +149,7 @@ public sealed class GraphExecutorTests
 
         var done = new List<string>();
         var running = new List<string>();
-        var result = await exec.RunAsync(graph, "story", 3, "t", e =>
+        var result = await exec.RunAsync(graph, "story", 3, "t", null, e =>
         {
             if (e.Phase == GraphNodePhase.Done) { done.Add(e.NodeId); }
             if (e.Phase == GraphNodePhase.Running) { running.Add(e.NodeId); }
@@ -175,7 +176,7 @@ public sealed class GraphExecutorTests
             [E("gate", "na", "a"), E("gate", "nb", "b")]);
 
         var running = new List<string>();
-        var result = await exec.RunAsync(graph, "pick", 3, "t",
+        var result = await exec.RunAsync(graph, "pick", 3, "t", null,
             e => { if (e.Phase == GraphNodePhase.Running) { running.Add(e.NodeId); } return Task.CompletedTask; });
 
         result.Completed.ShouldBeTrue();
@@ -195,7 +196,7 @@ public sealed class GraphExecutorTests
             [E("gate", "na", "a"), E("gate", "nb", " b ")]);
 
         var running = new List<string>();
-        var result = await exec.RunAsync(graph, "pick", 3, "t",
+        var result = await exec.RunAsync(graph, "pick", 3, "t", null,
             e => { if (e.Phase == GraphNodePhase.Running) { running.Add(e.NodeId); } return Task.CompletedTask; });
 
         result.Completed.ShouldBeTrue();
@@ -213,7 +214,7 @@ public sealed class GraphExecutorTests
             [E("s", "l"), E("l", "b", "loop"), E("b", "l"), E("l", "end")]);
 
         var bRuns = 0;
-        var result = await exec.RunAsync(graph, "go", 5, "t",
+        var result = await exec.RunAsync(graph, "go", 5, "t", null,
             e => { if (e.NodeId == "b" && e.Phase == GraphNodePhase.Running) { bRuns++; } return Task.CompletedTask; });
 
         result.Completed.ShouldBeTrue();
@@ -229,7 +230,7 @@ public sealed class GraphExecutorTests
             [E("s", "h"), E("h", "end")]);
 
         var done = new List<string>();
-        var result = await exec.RunAsync(graph, "go", 3, "t",
+        var result = await exec.RunAsync(graph, "go", 3, "t", null,
             e => { if (e.Phase == GraphNodePhase.Done) { done.Add(e.NodeId); } return Task.CompletedTask; });
 
         result.Completed.ShouldBeTrue();
@@ -247,7 +248,7 @@ public sealed class GraphExecutorTests
             [E("gate", "na", "no"), E("gate", "nb", "now")]);
 
         var running = new List<string>();
-        var result = await exec.RunAsync(graph, "pick", 3, "t",
+        var result = await exec.RunAsync(graph, "pick", 3, "t", null,
             e => { if (e.Phase == GraphNodePhase.Running) { running.Add(e.NodeId); } return Task.CompletedTask; });
 
         result.Completed.ShouldBeTrue();
@@ -269,7 +270,7 @@ public sealed class GraphExecutorTests
             ],
             [E("req", "cod"), E("cod", "tst"), E("tst", "qa"), E("qa", "tst", "fail"), E("qa", "end", "pass")]);
 
-        var result = await exec.RunAsync(graph, "s", nMax: 5, "t", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(graph, "s", nMax: 5, "t", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeTrue();
         await agents.Coding.Received(1).RunAsync(Arg.Any<RequirementSpec>(), Arg.Any<QaReport?>(), Arg.Any<CancellationToken>());
@@ -285,7 +286,7 @@ public sealed class GraphExecutorTests
             [N("req", "Agent", "Requirement", start: true), N("qa", "Evaluator"), N("end", "End")],
             [E("req", "qa"), E("qa", "end")]);
 
-        var result = await exec.RunAsync(graph, "s", 3, "t", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(graph, "s", 3, "t", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeFalse();
         result.FailureMessage!.ShouldContain("Coding");
@@ -304,7 +305,7 @@ public sealed class GraphExecutorTests
             ],
             [E("gate", "na", "a"), E("gate", "nb", "b"), E("na", "m"), E("nb", "m"), E("m", "end")]);
 
-        var result = await exec.RunAsync(graph, "s", 3, "t", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(graph, "s", 3, "t", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeFalse();
         result.FailureMessage!.ShouldContain("End");
@@ -319,7 +320,7 @@ public sealed class GraphExecutorTests
             [E("s", "h"), E("h", "end")]);
 
         var events = new List<GraphNodeEvent>();
-        var result = await exec.RunAsync(graph, "go", 3, "t",
+        var result = await exec.RunAsync(graph, "go", 3, "t", null,
             e => { events.Add(e); return Task.CompletedTask; },
             onHuman: _ => Task.FromResult(new GraphHumanReply(false, "not now")));
 
@@ -340,7 +341,7 @@ public sealed class GraphExecutorTests
             .Do(ci => { saved = ci.Arg<PipelineRunRecord>(); savedTenant = ci.Arg<string>(); });
         var (exec, _) = Build(qaConsistent: true, repo: repo);
 
-        var result = await exec.RunAsync(Sdlc(), "story", nMax: 3, "acme", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(Sdlc(), "story", nMax: 3, "acme", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeTrue();
         // The crux: spend is persisted stamping the EXPLICIT tenant passed to RunAsync, not the (blank)
@@ -367,7 +368,7 @@ public sealed class GraphExecutorTests
             [N("s", "Llm", start: true), N("end", "End")],
             [E("s", "end")]);
 
-        var result = await exec.RunAsync(graph, "go", 3, "acme", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(graph, "go", 3, "acme", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeTrue();
         saved.ShouldNotBeNull();
@@ -390,7 +391,7 @@ public sealed class GraphExecutorTests
         var repo = Substitute.For<IPipelineRunRepository>();
         var (exec, _) = Build(qaConsistent: true, budget: guard, repo: repo);
 
-        var result = await exec.RunAsync(Sdlc(), "story", 3, "over-cap", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(Sdlc(), "story", 3, "over-cap", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeFalse();
         // Blocked before any node ran → no spend incurred → nothing to persist.
@@ -408,7 +409,7 @@ public sealed class GraphExecutorTests
             [N("p", "Print", start: true), N("end", "End")],
             [E("p", "end")]);
 
-        var result = await exec.RunAsync(graph, "hello", 3, "acme", _ => Task.CompletedTask);
+        var result = await exec.RunAsync(graph, "hello", 3, "acme", null, _ => Task.CompletedTask);
 
         result.Completed.ShouldBeTrue();
         await repo.DidNotReceive().SaveAsync(

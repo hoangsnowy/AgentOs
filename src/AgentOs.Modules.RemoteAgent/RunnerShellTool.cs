@@ -10,12 +10,12 @@
 
 using System;
 using System.Collections.Concurrent;
-using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Sessions;
 using AgentOs.Domain.Tools;
+using AgentOs.SharedKernel.Identity;
 using Microsoft.AspNetCore.Http;
 
 namespace AgentOs.Modules.RemoteAgent;
@@ -189,10 +189,8 @@ public sealed class RunnerShellTool : ITool
             return new RunnerTarget(tenantIdFallback, string.Empty);
         }
 
-        var tenantId = ctx.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : tenantIdFallback;
-        var userId = ctx.User.FindFirst("sub")?.Value
-            ?? ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? string.Empty;
+        var tenantId = ctx.User.GetTenantId() ?? tenantIdFallback;
+        var userId = ctx.User.GetUserId() ?? string.Empty;
 
         return new RunnerTarget(tenantId, userId);
     }

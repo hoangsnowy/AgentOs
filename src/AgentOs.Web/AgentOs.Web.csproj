@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\AgentOs.Web.Shell\AgentOs.Web.Shell.csproj" />
     <ProjectReference Include="..\AgentOs.Domain\AgentOs.Domain.csproj" />
     <ProjectReference Include="..\AgentOs.SharedKernel\AgentOs.SharedKernel.csproj" />
     <ProjectReference Include="..\AgentOs.Modules.AppConfig\AgentOs.Modules.AppConfig.csproj" />

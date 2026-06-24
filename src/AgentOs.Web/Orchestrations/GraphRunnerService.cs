@@ -7,12 +7,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AgentOs.Modules.Pipeline.GraphExecution;
+using AgentOs.Domain.Pipeline.Graph;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentOs.Web.Orchestrations;
 
-/// <summary>Validates + runs an <see cref="OrchestrationGraph"/> via the typed-agent <see cref="GraphExecutor"/>.</summary>
+/// <summary>Validates + runs an <see cref="OrchestrationGraph"/> via the typed-agent <see cref="IGraphExecutor"/>.</summary>
 public sealed class GraphRunnerService
 {
     // Resolve the executor (which constructs the agents -> an LLM client) LAZILY, inside RunAsync. The
@@ -44,10 +44,10 @@ public sealed class GraphRunnerService
     /// <paramref name="tenantId"/> is passed explicitly (a Blazor circuit has no <c>ITenantContext</c>) so a
     /// Tool node's policy + evidence are partitioned to the signed-in tenant.</summary>
     public Task<GraphRunResult> RunAsync(
-        OrchestrationGraph graph, string userStoryText, int nMax, string tenantId,
+        OrchestrationGraph graph, string userStoryText, int nMax, string tenantId, string? userId,
         Func<GraphNodeEvent, Task> onNode, Func<GraphHumanRequest, Task<GraphHumanReply>>? onHuman, CancellationToken ct)
     {
-        var executor = _services.GetRequiredService<GraphExecutor>(); // lazy: constructs the agents only at run time
-        return executor.RunAsync(ToPlan(graph), userStoryText, nMax, tenantId, onNode, onHuman, ct);
+        var executor = _services.GetRequiredService<IGraphExecutor>(); // lazy: constructs the agents only at run time
+        return executor.RunAsync(ToPlan(graph), userStoryText, nMax, tenantId, userId, onNode, onHuman, ct);
     }
 }

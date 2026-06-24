@@ -62,16 +62,13 @@ public sealed class InProcessPipelineClient : IPipelineClient
         // ambient identity already pushed by the caller (the Web circuit's PipelineStudio); fall back to
         // the request-scoped ITenantContext (the API /pipeline path, which has a live HttpContext here).
         var tenantCtx = scope.ServiceProvider.GetService<ITenantContext>();
-        var tenantId = AmbientIdentity.Current?.TenantId is { Length: > 0 } ambient
-            ? ambient
-            : tenantCtx?.TenantId ?? ITenantContext.DefaultTenantId;
-        var userId = AmbientIdentity.Current?.UserId ?? tenantCtx?.UserId;
+        var identity = AmbientIdentity.Resolve(explicitTenantId: null, explicitUserId: null, tenantCtx);
 
         var runTask = Task.Run<(PipelineResult? Result, Exception? Error)>(async () =>
         {
             // Re-assert the tenant on this threadpool branch so EfAppConfigStore / RuntimeOverrides /
             // PersistingOrchestratorAgent resolve the calling tenant, not `default`.
-            using var _identity = AmbientIdentity.Push(tenantId, userId);
+            using var _identity = AmbientIdentity.Push(identity.TenantId, identity.UserId);
             try
             {
                 var result = await orchestrator.RunAsync(story, cancellationToken).ConfigureAwait(false);

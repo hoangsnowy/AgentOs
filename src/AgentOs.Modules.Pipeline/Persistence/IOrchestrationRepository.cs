@@ -1,8 +1,8 @@
-// Repository for the Agent Studio orchestration graph. Stored as a JSON string (the Web layer
+// Repository for the AgentOS orchestration graph. Stored as a JSON string (the Web layer
 // (de)serializes it to its own OrchestrationGraph) → Application/Infrastructure do not depend on Web.
 namespace AgentOs.Modules.Pipeline.Persistence;
 
-/// <summary>CRUD for the orchestration definition (Agent Studio editor state).</summary>
+/// <summary>CRUD for the orchestration definition (AgentOS orchestration editor state).</summary>
 public interface IOrchestrationRepository
 {
     Task<IReadOnlyList<OrchestrationRecord>> ListAsync(CancellationToken ct = default);

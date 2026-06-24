@@ -22,6 +22,7 @@ using AgentOs.SharedKernel.Modularity;
 using AgentOs.SharedKernel.Plugins;
 using AgentOs.Web.Components;
 using AgentOs.Web.Services;
+using AgentOs.Web.Shell.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -204,10 +205,14 @@ builder.Services.AddPlugins(builder.Configuration,
 builder.Services.AddSingleton<AgentOs.Web.Orchestrations.OrchestrationStore>();
 // Per-circuit UI state: each user's desktop has its own open windows. Singleton would bleed windows
 // (and their Z-order) across every connected circuit/user on the server.
-builder.Services.AddScoped<AgentOs.Web.Services.ToastService>();
-builder.Services.AddScoped<AgentOs.Web.Services.WindowManagerService>();
+builder.Services.AddScoped<AgentOs.Web.Shell.Services.ToastService>();
+builder.Services.AddScoped<AgentOs.Web.Shell.Services.WindowManagerService>();
+// Shell seam: the RCL's WindowHost resolves an app's component through this; the host implements it from
+// its AppCatalog. Singleton — the app catalog is global (same for every circuit), filtered per call.
+builder.Services.AddSingleton<AgentOs.Web.Shell.Services.IAppRegistry, AgentOs.Web.Services.AppCatalogRegistry>();
 builder.Services.AddScoped<AgentOs.Web.Orchestrations.GraphRunnerService>();
 builder.Services.AddScoped<AgentOs.Web.Services.WorkspacePrTargetService>();
+builder.Services.AddScoped<AgentOs.Web.Services.LlmConfigView>();
 
 // Per-circuit auth session — surfaces identity + (optional) bearer to the HttpPipelineClient.
 builder.Services.AddScoped<AuthSession>();
@@ -321,12 +326,12 @@ app.MapGet("/runner/version", (IHostEnvironment env, string? rid) =>
 // Tenant comes from the OIDC 'tenant' claim; admin-gated; `days` (0/absent = all time) sets the cutoff.
 app.MapGet("/cost/export", async (HttpContext http, AgentOs.Modules.Pipeline.Persistence.IPipelineRunRepository runs, int? days) =>
 {
-    if (!http.User.IsInRole("admin"))
+    if (!http.User.IsAdmin())
     {
         return Results.Forbid();
     }
 
-    var tenant = http.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : "default";
+    var tenant = http.User.GetTenantId() ?? "default";
     DateTimeOffset? since = days is > 0 ? DateTimeOffset.UtcNow.AddDays(-days.Value) : null;
     var summary = await runs.GetCostSummaryForTenantAsync(tenant, since);
     var bytes = System.Text.Encoding.UTF8.GetBytes(AgentOs.Modules.Pipeline.Cost.CostCsv.ToCsv(summary));

@@ -109,7 +109,7 @@ internal static class SessionEndpoints
         {
             return Results.NotFound();
         }
-        if (!user.IsInRole("admin") && !OwnedByCaller(session.MemberUserId, tenant.UserId))
+        if (!user.IsAdmin() && !OwnedByCaller(session.MemberUserId, tenant.UserId))
         {
             return Results.Forbid();
         }
@@ -159,7 +159,7 @@ internal static class SessionEndpoints
         {
             return Results.NotFound();
         }
-        if (!user.IsInRole("admin") && !OwnedByCaller(runner.OwnerUserId, tenant.UserId))
+        if (!user.IsAdmin() && !OwnedByCaller(runner.OwnerUserId, tenant.UserId))
         {
             return Results.Forbid();
         }

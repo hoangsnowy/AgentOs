@@ -1,13 +1,15 @@
 @using AgentOs.Modules.Pipeline.Pipeline
 @using AgentOs.Domain.Llm
+@using AgentOs.Web.Services
 @inject IPipelineClient Pipeline
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
 @inject AgentOs.Modules.Integration.IGitHubPrService GitHubPr
 @inject AgentOs.Modules.Integration.IBuildVerifier BuildVerifier
-@inject AgentOs.Web.Services.WindowManagerService WM
+@inject AgentOs.Web.Shell.Services.WindowManagerService WM
 @inject AgentOs.Web.Services.WorkspacePrTargetService PrTarget
 @inject AgentOs.Modules.Workspaces.Persistence.IWorkspaceRepository Workspaces
+@inject AgentOs.Web.Services.LlmConfigView LlmConfig
 @implements IDisposable
 
 <PageTitle>Pipeline — AgentOS</PageTitle>
@@ -343,9 +345,10 @@
     private string _description = "As an administrator, I want to manage products in the catalog with a unique SKU to avoid duplicates.";
     private int _nmax = 3;
 
-    private string ActiveProvider => string.IsNullOrWhiteSpace(LlmOpts.Value.ForceProvider)
-        ? LlmOpts.Value.Provider
-        : $"{LlmOpts.Value.ForceProvider} (forced)";
+    // Effective LLM config (per-tenant override → appsettings), resolved once at init via the shared
+    // LlmConfigView so the "Live" chip + provider banner can't drift from the value a run actually uses.
+    private LlmEffectiveConfig? _llm;
+    private string ActiveProvider => _llm?.ChipLabel ?? LlmOpts.Value.Provider;
 
     // ---- Run state ----
     private bool _running;
@@ -438,8 +441,9 @@
     {
         if (AuthState is null) { return; }
         var user = (await AuthState).User;
-        _tenantId = user.FindFirst("tenant")?.Value ?? string.Empty;
-        _userId = user.FindFirst("sub")?.Value;
+        _tenantId = user.GetTenantId() ?? string.Empty;
+        _userId = user.GetUserId();
+        _llm = LlmConfig.Resolve(_tenantId, _userId);
         if (string.IsNullOrEmpty(_tenantId)) { return; }
         try
         {
@@ -596,9 +600,7 @@
             // run history/cost all commingled under `default`. Seed the circuit's real tenant + member as
             // the ambient identity; it flows into that Task.Run via the captured ExecutionContext. No-op in
             // standalone dev-auto-login (empty tenant claim), where there is only one pseudo-tenant.
-            using IDisposable? _identity = string.IsNullOrEmpty(_tenantId)
-                ? null
-                : AgentOs.SharedKernel.Identity.AmbientIdentity.Push(_tenantId, _userId);
+            using var _identity = AgentOs.SharedKernel.Identity.AmbientIdentity.PushOrNull(_tenantId, _userId);
             await foreach (var evt in Pipeline.StreamAsync(story, cts.Token))
             {
                 switch (evt.Kind)

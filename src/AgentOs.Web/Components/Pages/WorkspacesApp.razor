@@ -12,8 +12,8 @@
 @using AgentOs.Modules.Workspaces.Persistence.Entities
 @inject IWorkspaceRepository Workspaces
 @inject IAppConfigStore ConfigStore
-@inject AgentOs.Web.Services.ToastService Toasts
-@inject AgentOs.Web.Services.WindowManagerService WM
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
+@inject AgentOs.Web.Shell.Services.WindowManagerService WM
 @inject AgentOs.SharedKernel.Persistence.DatabaseAvailability Db
 
 <header class="page-head">
@@ -189,7 +189,7 @@ else
         if (AuthState is not null)
         {
             var state = await AuthState;
-            _tenantId = state.User.FindFirst("tenant")?.Value is { Length: > 0 } t ? t : string.Empty;
+            _tenantId = state.User.GetTenantId() ?? string.Empty;
         }
         _resolved = true;
         // No DB → degraded notice; no tenant claim → fail closed (never read the `default` tenant).
