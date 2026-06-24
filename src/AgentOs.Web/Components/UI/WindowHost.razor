@@ -1,39 +1,21 @@
-@* WindowHost — renders every open app window from WindowManagerService. *@
+@* WindowHost — renders every open app window from WindowManagerService. App-agnostic: it resolves the
+   component from the AppCatalog registry (built-ins + plugins alike) via DynamicComponent, so the shell
+   never names a specific app. Adding/removing an app is a registry edit, not a shell change. *@
 
 @using AgentOs.Web.Services
-@using AgentOs.Web.Components.Pages
 @implements IDisposable
 @inject WindowManagerService WM
 
 @foreach (var w in WM.Open.Where(w => !w.Minimized))
 {
         <AppFrame W="@w" @key="w.Id">
-            @switch (w.AppKey)
+            @if (AppCatalog.Find(w.AppKey)?.ComponentType is { } appComponent)
             {
-                case "pipeline":     <PipelineStudio />      break;
-                case "workflow":     <OrchestrationStudio /> break;
-                case "spine":        <SpineApp />            break;
-                case "workspaces":   <WorkspacesApp />       break;
-                case "sessions":     <SessionsApp />         break;
-                case "mcp":          <McpApp />              break;
-                case "evidence":     <EvidenceApp />         break;
-                case "cost":         <CostApp />             break;
-                case "policy":       <PolicyApp />           break;
-                case "prompts":      <PromptsApp />          break;
-                case "plugins":      <PluginsApp />          break;
-                case "users":        <UsersApp />            break;
-                case "settings":     <Settings />            break;
-                case "system":       <SystemApp />           break;
-                default:
-                    @if (AppCatalog.Find(w.AppKey)?.ComponentType is { } pluginComponent)
-                    {
-                        <DynamicComponent Type="pluginComponent" />
-                    }
-                    else
-                    {
-                        <div class="appwin-blank">Unknown app: <code>@w.AppKey</code></div>
-                    }
-                    break;
+                <DynamicComponent Type="appComponent" />
+            }
+            else
+            {
+                <div class="appwin-blank">Unknown app: <code>@w.AppKey</code></div>
             }
         </AppFrame>
 }
