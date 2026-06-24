@@ -207,6 +207,9 @@ builder.Services.AddSingleton<AgentOs.Web.Orchestrations.OrchestrationStore>();
 // (and their Z-order) across every connected circuit/user on the server.
 builder.Services.AddScoped<AgentOs.Web.Shell.Services.ToastService>();
 builder.Services.AddScoped<AgentOs.Web.Shell.Services.WindowManagerService>();
+// Shell seam: the RCL's WindowHost resolves an app's component through this; the host implements it from
+// its AppCatalog. Singleton — the app catalog is global (same for every circuit), filtered per call.
+builder.Services.AddSingleton<AgentOs.Web.Shell.Services.IAppRegistry, AgentOs.Web.Services.AppCatalogRegistry>();
 builder.Services.AddScoped<AgentOs.Web.Orchestrations.GraphRunnerService>();
 builder.Services.AddScoped<AgentOs.Web.Services.WorkspacePrTargetService>();
 builder.Services.AddScoped<AgentOs.Web.Services.LlmConfigView>();

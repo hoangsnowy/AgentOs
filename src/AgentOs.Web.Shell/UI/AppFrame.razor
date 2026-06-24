@@ -3,7 +3,6 @@
    Action bar on the right (min / max-restore / close).
    8 resize handles (4 edges + 4 corners). ARIA dialog with labelled title. *@
 
-@using AgentOs.Web.Services
 @inject WindowManagerService WM
 
 <div class="appwin @(IsFocused ? "focused" : "") @(W.Minimized ? "minimized" : "") @(_maximized ? "maximized" : "") @(_dragging ? "dragging" : "") @(_resizing ? "resizing" : "")"

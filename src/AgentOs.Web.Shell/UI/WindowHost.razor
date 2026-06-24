@@ -1,15 +1,15 @@
-@* WindowHost — renders every open app window from WindowManagerService. App-agnostic: it resolves the
-   component from the AppCatalog registry (built-ins + plugins alike) via DynamicComponent, so the shell
-   never names a specific app. Adding/removing an app is a registry edit, not a shell change. *@
+@* WindowHost — renders every open app window from WindowManagerService. App-agnostic AND host-agnostic:
+   it resolves a window's component through the IAppRegistry seam (the host implements it from its
+   AppCatalog), so this chrome lives in AgentOs.Web.Shell and names neither a specific app nor the host. *@
 
-@using AgentOs.Web.Services
 @implements IDisposable
 @inject WindowManagerService WM
+@inject IAppRegistry Registry
 
 @foreach (var w in WM.Open.Where(w => !w.Minimized))
 {
         <AppFrame W="@w" @key="w.Id">
-            @if (AppCatalog.Find(w.AppKey)?.ComponentType is { } appComponent)
+            @if (Registry.ResolveComponent(w.AppKey) is { } appComponent)
             {
                 <DynamicComponent Type="appComponent" />
             }
