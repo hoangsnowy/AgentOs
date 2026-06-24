@@ -14,6 +14,7 @@ public static class AppCatalog
 {
     private static readonly List<DesktopApp> _builtIn = new()
     {
+        new("home", "Home", "house", "Start here: idea -> spec -> code -> test -> PR", "Agents", 940, 640, Pinned: true, ComponentType: typeof(HomeApp), Color: "#3584e4"),
         new("pipeline", "Pipeline", "play",  "Run the 5-agent pipeline on a sandbox story", "Agents", 920, 620, ComponentType: typeof(PipelineStudio), Color: "#3584e4"),
         new("workflow", "Workflow", "graph", "Edit the same pipeline as a visual graph",     "Agents", 1080, 660, ComponentType: typeof(OrchestrationStudio), Color: "#9141ac"),
         new("spine",    "Spine",    "git-pull-request", "Run the pipeline on a real ticket → PR", "Agents", 940, 640, ComponentType: typeof(SpineApp), Color: "#2ec27e"),
