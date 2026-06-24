@@ -249,6 +249,19 @@ app.MapPost("/llm/test", async (ILlmClientFactory factory, IConfiguration cfg, C
     {
         return Results.Ok(new { ok = false, provider, model, error = ex.Message });
     }
+    catch (LlmException ex)
+    {
+        // The gateway's own type for "no key configured" / "all keys exhausted" — the exact state this probe
+        // exists to diagnose. Without this it would escape as a 500 and the Web's split-mode probe would only
+        // see a JsonException fallback instead of the friendly error.
+        return Results.Ok(new { ok = false, provider, model, error = ex.Message });
+    }
+#pragma warning disable CA1031 // Probe endpoint: surface ANY provider/SDK failure (e.g. Azure RequestFailedException) as {ok:false}, never a 500.
+    catch (Exception ex)
+    {
+        return Results.Ok(new { ok = false, provider, model, error = ex.Message });
+    }
+#pragma warning restore CA1031
 })
    .WithName("LlmTest")
    .WithSummary("Probe the configured LLM provider with a minimal call")

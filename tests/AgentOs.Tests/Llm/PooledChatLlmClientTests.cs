@@ -138,6 +138,31 @@ public class PooledChatLlmClientTests
     }
 
     [Fact]
+    public async Task SendAsync_SameKeyDifferentDiscriminator_UsesDistinctCachedClients()
+    {
+        // Regression: two tenants sharing ONE key but DIFFERENT Azure endpoints must NOT share a cached
+        // client bound to the wrong endpoint. The discriminator (the resolved endpoint) is folded into the
+        // cache key, so a changed discriminator routes to a freshly-built client.
+        var router = new ApiKeyRouter(TimeProvider.System);
+        var endpointA = OkClient("A");
+        var endpointB = OkClient("B");
+        var disc = "https://a";
+
+        var client = new PooledChatLlmClient(
+            "AzureOpenAI",
+            (_, _) => string.Equals(disc, "https://a", StringComparison.Ordinal) ? endpointA : endpointB,
+            _ => ValueTask.FromResult<IReadOnlyList<string>>(new List<string> { "shared-key" }),
+            router, _ => false, _ => null, NullLogger.Instance,
+            cacheKeyDiscriminator: () => disc);
+
+        (await client.SendAsync(new LlmRequest("s", "u", "m"))).Content.ShouldBe("A");
+
+        disc = "https://b";   // tenant B: same key, different endpoint
+        // Without the endpoint in the cache key this would return the cached endpoint-A client ("A").
+        (await client.SendAsync(new LlmRequest("s", "u", "m"))).Content.ShouldBe("B");
+    }
+
+    [Fact]
     public async Task SendAsync_NoKeys_ThrowsLlmException()
     {
         var router = new ApiKeyRouter(TimeProvider.System);

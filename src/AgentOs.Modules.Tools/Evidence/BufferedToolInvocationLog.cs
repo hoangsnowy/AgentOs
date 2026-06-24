@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using AgentOs.Domain.Tools;
+using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Modules.Tools.Evidence;
 
@@ -19,14 +20,16 @@ namespace AgentOs.Modules.Tools.Evidence;
 internal sealed class BufferedToolInvocationLog : IToolInvocationLog, IAsyncDisposable
 {
     private readonly IToolInvocationLog _inner;
+    private readonly ILogger? _logger;
     private readonly Channel<ToolInvocationEvidence> _channel;
     private CancellationTokenSource? _cts;
     private Task? _drainLoop;
 
-    public BufferedToolInvocationLog(IToolInvocationLog inner)
+    public BufferedToolInvocationLog(IToolInvocationLog inner, ILogger<BufferedToolInvocationLog>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
         _inner = inner;
+        _logger = logger;
         // Bounded + DropOldest: TryWrite never blocks the publisher and never grows memory unbounded.
         // Evidence is best-effort, so shedding the oldest queued row under a flood is acceptable.
         _channel = Channel.CreateBounded<ToolInvocationEvidence>(new BoundedChannelOptions(4096)
@@ -68,8 +71,18 @@ internal sealed class BufferedToolInvocationLog : IToolInvocationLog, IAsyncDisp
         {
             await foreach (var entry in _channel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
             {
-                // Don't cancel a write that's already started — let queued evidence finish persisting.
-                await _inner.AppendAsync(entry, CancellationToken.None).ConfigureAwait(false);
+                // A single failed write (e.g. a transient DB fault in the inner sink) must NOT kill the only
+                // drain loop — that would silently lose ALL subsequent evidence for the process lifetime.
+                // Drop the offending entry, log, and keep draining. (Don't cancel a write already started —
+                // pass CancellationToken.None so queued evidence finishes persisting.)
+                try
+                {
+                    await _inner.AppendAsync(entry, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger?.LogWarning(ex, "Failed to drain a tool-invocation evidence row; dropping it and continuing.");
+                }
             }
         }
         catch (OperationCanceledException) { /* shutting down */ }

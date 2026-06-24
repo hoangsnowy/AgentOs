@@ -30,6 +30,28 @@ public sealed class BufferedToolInvocationLogTests
             Task.FromResult<IReadOnlyList<ToolInvocationEvidence>>(Appended.ToArray());
     }
 
+    // Inner sink that throws on one specific entry, succeeds otherwise — models a transient DB fault.
+    private sealed class FlakyInnerLog : IToolInvocationLog
+    {
+        private readonly string _failCallId;
+        public ConcurrentQueue<ToolInvocationEvidence> Appended { get; } = new();
+        public FlakyInnerLog(string failCallId) => _failCallId = failCallId;
+
+        public Task AppendAsync(ToolInvocationEvidence entry, CancellationToken cancellationToken = default)
+        {
+            if (string.Equals(entry.CallId, _failCallId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("sink boom");
+            }
+            Appended.Enqueue(entry);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<ToolInvocationEvidence>> ListRecentAsync(
+            string tenantId, int limit = 50, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ToolInvocationEvidence>>(Appended.ToArray());
+    }
+
     private static ToolInvocationEvidence Evt(string callId)
     {
         var now = DateTimeOffset.UtcNow;
@@ -95,5 +117,31 @@ public sealed class BufferedToolInvocationLogTests
         }
 
         inner.Appended.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task DrainLoop_SurvivesInnerSinkThrow_AndKeepsPersistingLaterEntries()
+    {
+        // Regression: a single failed inner write must NOT kill the only drain loop — otherwise ALL
+        // subsequent evidence is silently lost for the process lifetime (governance audit-trail hole).
+        var inner = new FlakyInnerLog(failCallId: "bad");
+        await using var buffered = new BufferedToolInvocationLog(inner);
+        buffered.StartDraining();
+
+        await buffered.AppendAsync(Evt("bad"));    // throws inside the loop
+        await buffered.AppendAsync(Evt("good"));   // must still persist — the loop must have survived
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        var goodPersisted = false;
+        while (!goodPersisted && DateTime.UtcNow < deadline)
+        {
+            foreach (var e in inner.Appended)
+            {
+                if (string.Equals(e.CallId, "good", StringComparison.Ordinal)) { goodPersisted = true; break; }
+            }
+            if (!goodPersisted) { await Task.Delay(20); }
+        }
+
+        goodPersisted.ShouldBeTrue();
     }
 }

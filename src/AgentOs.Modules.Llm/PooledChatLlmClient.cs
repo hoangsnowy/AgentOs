@@ -41,6 +41,10 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
     private readonly IServiceProvider? _tenantProvider;
     private readonly IToolPolicy? _toolPolicy;
     private readonly IToolInvocationLog? _toolInvocationLog;
+    // Optional extra cache-key dimension resolved per call (e.g. the tenant's Azure endpoint). Without it, two
+    // tenants that resolve the SAME key but DIFFERENT endpoints would share one cached IChatClient bound to
+    // whichever endpoint won the GetOrAdd race — sending tenant B's request to tenant A's resource.
+    private readonly Func<string>? _cacheKeyDiscriminator;
     private readonly ConcurrentDictionary<string, IChatClient> _clients = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, IChatClient> _wrappedClients = new(StringComparer.Ordinal);
 
@@ -61,7 +65,8 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
         IToolPolicy? toolPolicy = null,
         IToolInvocationLog? toolInvocationLog = null,
         IServiceProvider? tenantProvider = null,
-        Func<Exception, LlmErrorKind>? classifyError = null)
+        Func<Exception, LlmErrorKind>? classifyError = null,
+        Func<string>? cacheKeyDiscriminator = null)
     {
         Provider = string.IsNullOrWhiteSpace(provider) ? throw new ArgumentException("provider required", nameof(provider)) : provider;
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
@@ -80,6 +85,7 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
         _tenantProvider = tenantProvider;
         _toolPolicy = toolPolicy;
         _toolInvocationLog = toolInvocationLog;
+        _cacheKeyDiscriminator = cacheKeyDiscriminator;
     }
 
     // The tenant for tool tagging / telemetry when there is no AmbientIdentity on the call. Prefer a
@@ -129,12 +135,15 @@ public sealed class PooledChatLlmClient : ILlmClient, IDisposable
 
         var tenantId = AmbientIdentity.Current?.TenantId ?? ResolveFallbackTenant();
         var genAiSystem = LlmTelemetry.SystemFor(Provider);
+        // Resolve the extra cache dimension (e.g. the tenant's Azure endpoint) ONCE per call — the same value
+        // feeds the cache key AND the client factory, so a cached client can never be bound to a stale endpoint.
+        var cacheDiscriminator = _cacheKeyDiscriminator?.Invoke() ?? string.Empty;
 
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var key = _router.Acquire(Provider, keys)!;
-            var clientCacheKey = $"{key} {request.Model}";
+            var clientCacheKey = $"{key}|{cacheDiscriminator}|{request.Model}";
             var chat = _clients.GetOrAdd(clientCacheKey, _ => _clientFactory(key, request.Model));
             if (resolvedTools.Count > 0)
             {

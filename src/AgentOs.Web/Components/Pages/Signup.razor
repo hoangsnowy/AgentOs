@@ -100,11 +100,15 @@
                     TenantName: string.IsNullOrWhiteSpace(_tenantName) ? null : _tenantName,
                     InviteToken: InviteToken));
             }
-            catch (InvalidOperationException ex)
+#pragma warning disable CA1031 // Public signup page: Keycloak transport + DB faults (incl. Polly timeout/circuit-breaker, which derive from System.Exception) must surface as a message, never crash the circuit.
+            catch (System.Exception ex)
             {
-                _error = ex.Message;
+                _error = ex is System.Net.Http.HttpRequestException or OperationCanceledException
+                    ? "Could not reach the identity service. Please try again."
+                    : ex.Message;
                 return;
             }
+#pragma warning restore CA1031
 
             Nav.NavigateTo("/signup/verify-email", forceLoad: false);
         }

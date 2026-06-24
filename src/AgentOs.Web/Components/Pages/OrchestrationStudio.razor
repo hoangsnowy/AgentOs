@@ -245,7 +245,12 @@
     protected override async Task OnInitializedAsync()
     {
         _tenantId = await ResolveTenantAsync();
-        _llm = LlmConfig.Resolve(_tenantId);
+        // Resolve reads the tenant-scoped (DB-backed, DataProtection-decrypted) override store; a transient
+        // fault must not crash the circuit on window open — fall back to appsettings (ActiveProvider handles null).
+#pragma warning disable CA1031
+        try { _llm = LlmConfig.Resolve(_tenantId); }
+        catch (System.Exception) { _llm = null; }
+#pragma warning restore CA1031
         _all = Store.All(_tenantId).ToList();
         _graph = _all.FirstOrDefault() ?? Store.Create(_tenantId, "5-Agent SDLC Pipeline");
         if (_all.Count == 0)
@@ -534,22 +539,12 @@
         {
             Log("⏹ Run cancelled.");
         }
-        catch (System.InvalidOperationException ex)
+#pragma warning disable CA1031 // The budget gate (DB read) + run persistence run outside the MAF per-node failure capture; any throw (DbException/DbUpdateException/…) must log + reset state, never tear down the circuit.
+        catch (System.Exception ex)
         {
             Log($"✖ Run failed: {ex.Message}");
         }
-        catch (System.Net.Http.HttpRequestException ex)
-        {
-            Log($"✖ Run failed: {ex.Message}");
-        }
-        catch (System.Text.Json.JsonException ex)
-        {
-            Log($"✖ Run failed: {ex.Message}");
-        }
-        catch (System.TimeoutException ex)
-        {
-            Log($"✖ Run failed: {ex.Message}");
-        }
+#pragma warning restore CA1031
         finally
         {
             _running = false;

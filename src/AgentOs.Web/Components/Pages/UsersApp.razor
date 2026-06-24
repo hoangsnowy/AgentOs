@@ -205,10 +205,12 @@ else
         {
             _members = await Kc.ListUsersByTenantAsync(_tenantId);
         }
-        catch (InvalidOperationException ex)
+#pragma warning disable CA1031 // Keycloak typed-HttpClient raises transport (HttpRequestException) + Polly (TimeoutRejected/BrokenCircuit : System.Exception) faults — surface ANY, never tear down the admin circuit.
+        catch (System.Exception ex)
         {
             _loadError = ex.Message;
         }
+#pragma warning restore CA1031
         finally
         {
             _loading = false;
@@ -228,10 +230,12 @@ else
             Toasts.Show("Users", $"{m.Username} is now {role}.", ToastKind.Ok);
             await LoadMembersAsync();
         }
-        catch (InvalidOperationException ex)
+#pragma warning disable CA1031 // Keycloak transport/Polly faults must surface as a toast, never tear down the circuit.
+        catch (System.Exception ex)
         {
             Toasts.Show("Users", $"Role change failed: {ex.Message}", ToastKind.Err);
         }
+#pragma warning restore CA1031
         finally
         {
             _busyId = null;
@@ -246,10 +250,12 @@ else
             await Kc.SendPasswordResetEmailAsync(m.Id);
             Toasts.Show("Users", $"Password-reset email sent to {m.Username}.", ToastKind.Ok);
         }
-        catch (InvalidOperationException ex)
+#pragma warning disable CA1031 // Keycloak transport/Polly faults must surface as a toast, never tear down the circuit.
+        catch (System.Exception ex)
         {
             Toasts.Show("Users", $"Reset failed: {ex.Message}", ToastKind.Err);
         }
+#pragma warning restore CA1031
         finally
         {
             _busyId = null;
@@ -270,10 +276,12 @@ else
             Toasts.Show("Users", $"Removed {m.Username}.", ToastKind.Ok);
             await LoadMembersAsync();
         }
-        catch (InvalidOperationException ex)
+#pragma warning disable CA1031 // Keycloak transport/Polly faults must surface as a toast, never tear down the circuit.
+        catch (System.Exception ex)
         {
             Toasts.Show("Users", $"Remove failed: {ex.Message}", ToastKind.Err);
         }
+#pragma warning restore CA1031
         finally
         {
             _removing = false;

@@ -47,7 +47,22 @@ public sealed class DefaultToolGateway : IToolGateway
             }
         }
 
-        var result = await tool.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
+        ToolInvocationResult result;
+        try
+        {
+            result = await tool.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A tool that THROWS (instead of returning IsError) would otherwise bypass evidence entirely and
+            // fault the agent's chat loop — a hole in the audit trail exactly when something went wrong. The
+            // ITool contract says a failure should become a tool_result error: record it and surface it as one.
+            // Genuine cancellation is filtered out and propagates.
+            var thrownMsg = $"Tool '{request.ToolName}' threw: {ex.Message}";
+            await TryAppendAsync(request, thrownMsg, isError: true, started).ConfigureAwait(false);
+            return new ToolGatewayResult(thrownMsg, IsError: true);
+        }
+
         var output = result.IsError
             ? (string.IsNullOrEmpty(result.ErrorMessage)
                 ? $"Tool '{request.ToolName}' returned an error."

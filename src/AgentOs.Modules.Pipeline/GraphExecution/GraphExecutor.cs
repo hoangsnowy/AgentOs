@@ -127,7 +127,26 @@ public sealed class GraphExecutor : IGraphExecutor
         var budgetTenant = Coalesce(tenantId, OperatorTenant);
         if (_budgetGuard is not null)
         {
-            var budget = await _budgetGuard.EvaluateAsync(budgetTenant, ct).ConfigureAwait(false);
+            // Fail-open on a transient budget-store fault: this runs on a Blazor circuit, and the gate already
+            // returns a clean failed result (not throw) to avoid crashing the circuit — but an unguarded store
+            // exception would still throw straight through it. Mirror IssueWorkAgent/PersistingOrchestratorAgent.
+            BudgetStatus budget;
+            try
+            {
+                budget = await _budgetGuard.EvaluateAsync(budgetTenant, ct).ConfigureAwait(false);
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) { budget = BudgetEvalFailed(ex); }
+            catch (System.Data.Common.DbException ex) { budget = BudgetEvalFailed(ex); }
+            catch (TimeoutException ex) { budget = BudgetEvalFailed(ex); }
+            catch (System.IO.IOException ex) { budget = BudgetEvalFailed(ex); }
+            catch (InvalidOperationException ex) { budget = BudgetEvalFailed(ex); }
+
+            BudgetStatus BudgetEvalFailed(Exception ex)
+            {
+                _logger.LogWarning(ex, "Workflow budget evaluation failed for tenant {Tenant}; proceeding.", budgetTenant);
+                return BudgetStatus.Unset;
+            }
+
             if (budget.IsBlocking)
             {
                 return new GraphRunResult(false,

@@ -206,7 +206,7 @@
                         </p>
                         @foreach (var issue in q.Issues)
                         {
-                            <div class="issue @issue.Severity">
+                            <div class="issue @SevClass(issue.Severity)">
                                 <span class="sev">@issue.Severity · @issue.Category</span><br />
                                 @issue.Description
                                 @if (!string.IsNullOrEmpty(issue.Location)){<span class="muted"> (@issue.Location)</span>}
@@ -443,7 +443,12 @@
         var user = (await AuthState).User;
         _tenantId = user.GetTenantId() ?? string.Empty;
         _userId = user.GetUserId();
-        _llm = LlmConfig.Resolve(_tenantId, _userId);
+        // Resolve reads the tenant-scoped (DB-backed, DataProtection-decrypted) override store; a transient
+        // fault must not crash the circuit on window open — fall back to appsettings (ActiveProvider handles null).
+#pragma warning disable CA1031
+        try { _llm = LlmConfig.Resolve(_tenantId, _userId); }
+        catch (System.Exception) { _llm = null; }
+#pragma warning restore CA1031
         if (string.IsNullOrEmpty(_tenantId)) { return; }
         try
         {
@@ -463,6 +468,15 @@
             _boards = [];
         }
     }
+
+    // QaIssue.Severity is free-form LLM-produced text; only .issue.Critical/.Major/.Minor are styled. Normalize
+    // any casing/unknown value to a defined class so the severity colour never silently falls back to neutral.
+    private static string SevClass(string? severity) => severity?.Trim().ToLowerInvariant() switch
+    {
+        "critical" => "Critical",
+        "major" => "Major",
+        _ => "Minor",
+    };
 
     private async Task OnSelectBoard(ChangeEventArgs e)
     {

@@ -89,7 +89,11 @@ public sealed class LlmModule : IModule
                 tenantProvider: sp,
                 // Classify SDK errors so the key pool fails over on transient (5xx/timeout) + auth errors,
                 // not only 429.
-                classifyError: SdkChatClients.Classify);
+                classifyError: SdkChatClients.Classify,
+                // Fold the tenant's resolved endpoint into the client cache key (read per call from the same
+                // override source the factory uses) so two tenants sharing a key but not an endpoint never
+                // share a client bound to the wrong Azure resource.
+                cacheKeyDiscriminator: () => !string.IsNullOrWhiteSpace(ov.AzureEndpoint) ? ov.AzureEndpoint! : opts.Value.AzureOpenAi.Endpoint);
         });
 
         services.AddSingleton<ILlmClientFactory, LlmClientFactory>();
