@@ -8,4 +8,7 @@
     <SupportedPlatform Include="browser" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AgentOs.SharedKernel\AgentOs.SharedKernel.csproj" />
+  </ItemGroup>
 </Project>
