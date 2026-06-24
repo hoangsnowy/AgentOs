@@ -1,6 +1,7 @@
 // Approval gate for the remote dev-IDE agent runtime. Because a remote agent executes work on a
 // developer machine, every dispatched request passes through an approver before it is pushed down
-// the wire. Default auto-approves; a UI-driven human-in-the-loop approver replaces it later.
+// the wire. The registered default is ConfigGatedRemoteExecApprover (deny outside Development unless
+// RemoteAgent:AutoApprove=true); a UI-driven human-in-the-loop approver replaces it later.
 
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,7 +19,8 @@ public interface IRemoteExecApprover
     Task<bool> ApproveToolCallAsync(RunnerToolCall toolCall, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Default approver — allows everything.</summary>
+/// <summary>Permissive approver — allows everything. No longer the registered default (see
+/// <see cref="ConfigGatedRemoteExecApprover"/>); retained for tests and explicit dev wiring.</summary>
 public sealed class AutoApproveRemoteExec : IRemoteExecApprover
 {
     public Task<bool> ApproveAsync(RemoteExecRequest request, CancellationToken cancellationToken = default)

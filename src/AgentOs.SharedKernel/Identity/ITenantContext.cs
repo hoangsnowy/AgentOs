@@ -1,7 +1,7 @@
 // Cross-cutting tenant + user identity for the current scope. Lives in SharedKernel because every
 // module's persistence layer + key pool filter by it. Repositories and the LLM key pool read TenantId
-// so one tenant never sees another's data or secrets. For anonymous requests (no Keycloak OIDC
-// token), a DefaultTenantContext returns the singleton "default" tenant so the app keeps working.
+// so one tenant never sees another's data or secrets. For anonymous or no-HttpContext scopes, a
+// DefaultTenantContext returns the singleton "default" tenant so the app keeps working.
 
 using System.Collections.Generic;
 

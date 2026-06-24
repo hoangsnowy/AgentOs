@@ -1,5 +1,12 @@
 # AgentOS — Deploy-Readiness Audit (2026-06-07)
 
+> **STATUS (2026-06-21): LIVE ON AZURE.** First `azd up` to Azure Container Apps (`rg-agentos-prod`,
+> `southeastasia`) succeeded and is healthy: Web OIDC redirects to the `agentic` realm with PAR,
+> `GET /health` reports Postgres + Keycloak reachable, the realm and `/alive` return 200. All 12
+> deploy blockers below are **CLOSED** (fixed across the batches on `main`; the live deploy confirms
+> them end-to-end). This document is retained as the **historical blocker record** — see the updated
+> Verdict at the bottom for current state.
+
 Multi-agent review: 10 dimensions → 80 raw findings → 42 adversarially confirmed, 1 refuted,
 37 backlog. Build green (0 warn / 0 err), tests 470 pass / 5 skipped (live-LLM).
 
@@ -38,7 +45,8 @@ keying (#72). Member-revokes-another's-runner/session is CLOSED (`SessionEndpoin
 appsettings + `DevSecretGuard` fail-fast + azd Key-Vault-backed secret parameters (`AddParameter(secret:true)`).
 Added this pass: workspace-connect **host allowlist** (`Workspaces:AllowedHosts`, `WorkspaceHostPolicy`) as
 defense-in-depth atop the connect-time `SsrfGuard`, gating connect + add-repo + the find-boards/repos probes.
-**Remaining Q1 = the build_verifier sandbox (#10) + the real `azd up` round-trip + two-tenant verify.**
+**Remaining Q1 = two-tenant verify on the live deploy.** (The `azd up` round-trip is DONE — live &
+healthy since 2026-06-21; the build_verifier sandbox #10 shipped via ADR-0005 in #96.)
 
 **Re-verified on main (2026-06-12, enterprise-grade review):** the following are confirmed CLOSED by
 #72 — SSRF on workspace connect/repos/boards (`SsrfGuard.CreateHardenedHandler` on every outbound
@@ -67,7 +75,7 @@ mis-parse, `/runs` pagination, RFC 7807 error contract + boundary validation on 
   manifest; added `KC_PROXY=edge`. Run-mode stack byte-identical.
 - ✅ **Web `appsettings.Production.json`** — `RequireDatabase=true` (fail-loud, no silent no-op repos).
 
-**Still needs an `azd up` round-trip to verify (NOT shipped — can't validate without your Azure env):**
+**Verified by the live `azd up` round-trip (2026-06-21 — all confirmed healthy in cloud):**
 - #1 Keycloak durable storage (`KC_DB=postgres` + JDBC URL) + stable `KC_HOSTNAME` + theme-baked image.
 - #6 realm `redirectUris`/`webOrigins` → real ACA Web FQDN (post-provision admin-API config).
 - #2 rotate seed creds (`admin/admin`, `operator/operator`, client secret) via `azd env set` + strip seed users.
@@ -78,14 +86,26 @@ in pipeline) are **other batches** — not touched here.
 
 ## Verdict — deployable today?
 
-**No.** A default `azd up` of `infra/AgentOs.AppHost` to Azure Container Apps comes up but is
-functionally broken for any authenticated flow. Biggest blocker = **identity**: Keycloak ships as an
-ephemeral ACA container (H2 storage, bind-mount to a non-existent path, realm `redirectUris` hardcoded
-to `https://localhost:5180`), and no host calls `UseForwardedHeaders()` behind ACA's TLS-terminating
-ingress → OIDC login impossible in cloud. Compounding: cloud Web pinned to `Development`, DataProtection
-key ring ephemeral (encrypted tenant secrets + cookies break on every restart/scale), and default deploy
-stands up `admin/admin` + committed seed users `operator/operator`, `member/member`. Even if it deployed
-clean, the pipeline 404s on every Claude call — model id `claude-sonnet-4` is invalid.
+**Yes — live on Azure since 2026-06-21.** The original "No" verdict below documents the state at the
+time of the audit (2026-06-07); every blocker it named has since been fixed on `main` and confirmed by
+a healthy `azd up` to Azure Container Apps. Kept verbatim for the record:
+
+> **(Historical, 2026-06-07 — NO LONGER TRUE.)** A default `azd up` of `infra/AgentOs.AppHost` to
+> Azure Container Apps comes up but is functionally broken for any authenticated flow. Biggest blocker
+> = **identity**: Keycloak ships as an ephemeral ACA container (H2 storage, bind-mount to a
+> non-existent path, realm `redirectUris` hardcoded to `https://localhost:5180`), and no host calls
+> `UseForwardedHeaders()` behind ACA's TLS-terminating ingress → OIDC login impossible in cloud.
+> Compounding: cloud Web pinned to `Development`, DataProtection key ring ephemeral (encrypted tenant
+> secrets + cookies break on every restart/scale), and default deploy stands up `admin/admin` +
+> committed seed users `operator/operator`, `member/member`. Even if it deployed clean, the pipeline
+> 404s on every Claude call — model id `claude-sonnet-4` is invalid.
+
+**What resolved each:** durable Postgres-backed Keycloak with a baked theme + stable `KC_HOSTNAME` +
+`KC_PROXY=edge` (#1); `UseAgentOsForwardedHeaders()` first in both hosts (#3); Postgres-backed
+DataProtection key ring (#4); `claude-sonnet-4-6` everywhere (#5); realm redirect URIs/web origins +
+seed-cred rotation driven by the `postdeploy` hook from azd secrets (#2, #6); `/mcp` auth, admin-gated
+`/settings`, tenant-match guards, fail-closed tool policy (#8, #11, #12). The live `azd up` exercised
+the full OIDC + Postgres + health chain.
 
 ## Deploy blockers (must-fix before prod)
 
