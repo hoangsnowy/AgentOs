@@ -22,6 +22,7 @@
     <Project Path="src/AgentOs.ServiceDefaults/AgentOs.ServiceDefaults.csproj" />
     <Project Path="src/AgentOs.SharedKernel/AgentOs.SharedKernel.csproj" />
     <Project Path="src/AgentOs.Web/AgentOs.Web.csproj" />
+    <Project Path="src/AgentOs.Web.Shell/AgentOs.Web.Shell.csproj" />
   </Folder>
   <Folder Name="/infra/">
     <Project Path="infra/AgentOs.AppHost/AgentOs.AppHost.csproj" />
