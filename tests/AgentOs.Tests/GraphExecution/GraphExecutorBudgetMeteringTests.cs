@@ -13,6 +13,7 @@ using AgentOs.Domain.Code;
 using AgentOs.Domain.Cost;
 using AgentOs.Domain.Llm;
 using AgentOs.Domain.Pipeline;
+using AgentOs.Domain.Pipeline.Graph;
 using AgentOs.Domain.Qa;
 using AgentOs.Domain.Requirements;
 using AgentOs.Domain.Testing;

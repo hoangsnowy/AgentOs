@@ -12,6 +12,7 @@ using AgentOs.Domain.Llm;
 using AgentOs.Domain.Pipeline;
 using AgentOs.Domain.Qa;
 using AgentOs.Domain.Requirements;
+using AgentOs.Domain.Pipeline.Graph;
 using AgentOs.Domain.Testing;
 using AgentOs.Domain.Tools;
 using AgentOs.Modules.Pipeline.Agents;

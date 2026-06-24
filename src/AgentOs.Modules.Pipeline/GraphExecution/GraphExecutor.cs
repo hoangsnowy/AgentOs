@@ -19,6 +19,7 @@ using AgentOs.Domain.Code;
 using AgentOs.Domain.Cost;
 using AgentOs.Domain.Llm;
 using AgentOs.Domain.Pipeline;
+using AgentOs.Domain.Pipeline.Graph;
 using AgentOs.Domain.Qa;
 using AgentOs.Domain.Requirements;
 using AgentOs.Domain.Testing;
@@ -36,7 +37,7 @@ namespace AgentOs.Modules.Pipeline.GraphExecution;
 /// <summary>Compiles a <see cref="PlanGraph"/> into a MAF <see cref="Workflow"/> and executes it. Scoped;
 /// ctor is side-effect-free (constructing the agents resolves an LLM client, so it stays out of the Web
 /// component ctor — this executor is resolved lazily at run time, see <c>GraphRunnerService</c>).</summary>
-public sealed class GraphExecutor
+public sealed class GraphExecutor : IGraphExecutor
 {
     // Tenant used when the caller passes none (operator/standalone mode).
     private const string OperatorTenant = "operator";

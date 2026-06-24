@@ -9,7 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace AgentOs.Modules.Pipeline.GraphExecution;
+namespace AgentOs.Domain.Pipeline.Graph;
 
 /// <summary>Validates a graph and plans its linear execution order — no LLM, no DI, no async.</summary>
 public static class GraphPlanner

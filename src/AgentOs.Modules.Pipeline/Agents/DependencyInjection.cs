@@ -57,8 +57,10 @@ public static class AgentsServiceCollectionExtensions
         services.AddTransient<ITestingAgent, TestingAgent>();
         services.AddTransient<IQaAgent, QaAgent>();
 
-        // Workflow graph executor: runs an OrchestrationStudio graph against these typed agents.
+        // Workflow graph executor: runs an OrchestrationStudio graph against these typed agents. Hosts depend
+        // on the Domain facade (AgentOs.Domain.Pipeline.Graph.IGraphExecutor), not the concrete type.
         services.AddScoped<GraphExecution.GraphExecutor>();
+        services.AddScoped<AgentOs.Domain.Pipeline.Graph.IGraphExecutor>(sp => sp.GetRequiredService<GraphExecution.GraphExecutor>());
 
         // Bootstrap (idea → board tickets): the decomposer agent + the idea→preview service.
         services.AddTransient<Decomposition.ITicketDecomposerAgent, Decomposition.TicketDecomposerAgent>();
