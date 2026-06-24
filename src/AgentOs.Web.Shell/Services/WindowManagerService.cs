@@ -1,4 +1,4 @@
-// AgentOs.Web/Services/WindowManagerService.cs
+// AgentOs.Web.Shell/Services/WindowManagerService.cs
 // Multi-window state. Each "app click" opens an entry here; WindowHost renders them.
 // Z-order is bumped on focus so the most-recently-clicked window paints on top.
 
@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace AgentOs.Web.Services;
+namespace AgentOs.Web.Shell.Services;
 
 /// <summary>An open application window.</summary>
 public sealed record AppWindowState(

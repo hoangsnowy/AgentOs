@@ -1,5 +1,5 @@
 @page "/_/components"
-@inject AgentOs.Web.Services.ToastService Toasts
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
 
 @* Components catalog — visual QA surface for every UI primitive × variant.
    Standalone route, not in a window. Reach via http://localhost:5180/_/components *@
@@ -201,10 +201,10 @@
         <h2 class="catalog-section-h">Dialog + Toast</h2>
         <div class="catalog-row">
             <Btn Variant="Btn.ButtonVariant.Primary" OnClick="@(() => _dlg = true)">Open dialog</Btn>
-            <Btn OnClick="@(() => Toasts.Show("Catalog", "Info toast.",     AgentOs.Web.Services.ToastKind.Info))">Toast: info</Btn>
-            <Btn OnClick="@(() => Toasts.Show("Catalog", "Success toast.",  AgentOs.Web.Services.ToastKind.Ok))">Toast: ok</Btn>
-            <Btn OnClick="@(() => Toasts.Show("Catalog", "Warning toast.",  AgentOs.Web.Services.ToastKind.Warn))">Toast: warn</Btn>
-            <Btn OnClick="@(() => Toasts.Show("Catalog", "Error toast.",    AgentOs.Web.Services.ToastKind.Err))">Toast: err</Btn>
+            <Btn OnClick="@(() => Toasts.Show("Catalog", "Info toast.",     AgentOs.Web.Shell.Services.ToastKind.Info))">Toast: info</Btn>
+            <Btn OnClick="@(() => Toasts.Show("Catalog", "Success toast.",  AgentOs.Web.Shell.Services.ToastKind.Ok))">Toast: ok</Btn>
+            <Btn OnClick="@(() => Toasts.Show("Catalog", "Warning toast.",  AgentOs.Web.Shell.Services.ToastKind.Warn))">Toast: warn</Btn>
+            <Btn OnClick="@(() => Toasts.Show("Catalog", "Error toast.",    AgentOs.Web.Shell.Services.ToastKind.Err))">Toast: err</Btn>
         </div>
     </section>
 </div>

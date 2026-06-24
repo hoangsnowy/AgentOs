@@ -22,6 +22,7 @@ using AgentOs.SharedKernel.Modularity;
 using AgentOs.SharedKernel.Plugins;
 using AgentOs.Web.Components;
 using AgentOs.Web.Services;
+using AgentOs.Web.Shell.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -204,8 +205,8 @@ builder.Services.AddPlugins(builder.Configuration,
 builder.Services.AddSingleton<AgentOs.Web.Orchestrations.OrchestrationStore>();
 // Per-circuit UI state: each user's desktop has its own open windows. Singleton would bleed windows
 // (and their Z-order) across every connected circuit/user on the server.
-builder.Services.AddScoped<AgentOs.Web.Services.ToastService>();
-builder.Services.AddScoped<AgentOs.Web.Services.WindowManagerService>();
+builder.Services.AddScoped<AgentOs.Web.Shell.Services.ToastService>();
+builder.Services.AddScoped<AgentOs.Web.Shell.Services.WindowManagerService>();
 builder.Services.AddScoped<AgentOs.Web.Orchestrations.GraphRunnerService>();
 builder.Services.AddScoped<AgentOs.Web.Services.WorkspacePrTargetService>();
 builder.Services.AddScoped<AgentOs.Web.Services.LlmConfigView>();

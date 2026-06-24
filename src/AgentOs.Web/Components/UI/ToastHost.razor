@@ -1,7 +1,7 @@
 @* ToastHost — renders the active toast queue, bottom-right slide-in. Subscribes to ToastService. *@
 
 @implements IDisposable
-@inject AgentOs.Web.Services.ToastService Toasts
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
 
 @if (Toasts.Items.Count > 0)
 {
@@ -32,11 +32,11 @@
     private void OnChanged() => InvokeAsync(StateHasChanged);
 
     // Icon names (Icon.razor map) — emoji are invisible to screen readers and ignore currentColor.
-    private static string KindIcon(AgentOs.Web.Services.ToastKind k) => k switch
+    private static string KindIcon(AgentOs.Web.Shell.Services.ToastKind k) => k switch
     {
-        AgentOs.Web.Services.ToastKind.Ok => "check",
-        AgentOs.Web.Services.ToastKind.Warn => "warning",
-        AgentOs.Web.Services.ToastKind.Err => "x",
+        AgentOs.Web.Shell.Services.ToastKind.Ok => "check",
+        AgentOs.Web.Shell.Services.ToastKind.Warn => "warning",
+        AgentOs.Web.Shell.Services.ToastKind.Err => "x",
         _ => "info",
     };
 
