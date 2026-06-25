@@ -29,15 +29,17 @@ public sealed class MafChatClient : ILlmClient
     private static readonly ConcurrentDictionary<string, AzureOpenAIClient> ClientCache = new(StringComparer.Ordinal);
 
     private readonly AzureOpenAiOptions _options;
+    private readonly IRuntimeOverrides _overrides;
     private readonly ILogger<MafChatClient> _logger;
 
     /// <inheritdoc />
     public string Provider => "MAF";
 
-    public MafChatClient(IOptions<LlmOptions> options, ILogger<MafChatClient> logger)
+    public MafChatClient(IOptions<LlmOptions> options, IRuntimeOverrides overrides, ILogger<MafChatClient> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value?.AzureOpenAi ?? new AzureOpenAiOptions();
+        _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -47,16 +49,24 @@ public sealed class MafChatClient : ILlmClient
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
 
-        if (string.IsNullOrWhiteSpace(_options.ApiKey) || string.IsNullOrWhiteSpace(_options.Endpoint))
+        // Resolve credentials with the SAME tenant-override-first precedence as the AzureOpenAI pool — a tenant
+        // who set only their Settings key (no platform Llm:AzureOpenAi:ApiKey) must still be able to force MAF,
+        // and per-tenant isolation requires using THEIR key/endpoint, not the shared platform one. Resolved
+        // per-call (this is keyed-transient): IRuntimeOverrides reads the ambient tenant, never at ctor time.
+        var tenantKeys = await _overrides.GetAzureApiKeysAsync(cancellationToken).ConfigureAwait(false);
+        var apiKey = tenantKeys.Count > 0 ? tenantKeys[0] : _options.ApiKey;
+        var endpoint = !string.IsNullOrWhiteSpace(_overrides.AzureEndpoint) ? _overrides.AzureEndpoint! : _options.Endpoint;
+
+        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(endpoint))
         {
             throw new LlmException(
-                "Azure OpenAI not configured for the MAF client. Set 'Llm:AzureOpenAi:ApiKey' and "
-                + "'Llm:AzureOpenAi:Endpoint' (user-secrets or env).",
+                "Azure OpenAI not configured for the MAF client. Set your Azure key + endpoint in Settings "
+                + "(per-tenant) or 'Llm:AzureOpenAi:ApiKey' + 'Llm:AzureOpenAi:Endpoint' (user-secrets or env).",
                 Provider);
         }
 
         var deployment = string.IsNullOrWhiteSpace(_options.Model) ? request.Model : _options.Model;
-        var azure = GetOrCreateClient(_options.Endpoint, _options.ApiKey);
+        var azure = GetOrCreateClient(endpoint, apiKey);
         IChatClient chat = azure.GetChatClient(deployment).AsIChatClient();
 
         var messages = new List<ChatMessage>(2);

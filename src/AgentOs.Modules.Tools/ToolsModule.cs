@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Modules.Tools;
 
@@ -53,13 +54,17 @@ public sealed class ToolsModule : IModule, IInitializableModule
             services.AddNpgsqlConnectionFactory(connectionString);
             services.TryAddSingleton<EfToolInvocationLog>();
             services.TryAddSingleton<IToolInvocationLog>(sp =>
-                new BufferedToolInvocationLog(sp.GetRequiredService<EfToolInvocationLog>()));
+                new BufferedToolInvocationLog(
+                    sp.GetRequiredService<EfToolInvocationLog>(),
+                    sp.GetService<ILogger<BufferedToolInvocationLog>>()));
         }
         else
         {
             services.TryAddSingleton<InMemoryToolInvocationLog>();
             services.TryAddSingleton<IToolInvocationLog>(sp =>
-                new BufferedToolInvocationLog(sp.GetRequiredService<InMemoryToolInvocationLog>()));
+                new BufferedToolInvocationLog(
+                    sp.GetRequiredService<InMemoryToolInvocationLog>(),
+                    sp.GetService<ILogger<BufferedToolInvocationLog>>()));
         }
 
         // M1 — the shared policy-gate + invoke + evidence seam. Every governed execution path

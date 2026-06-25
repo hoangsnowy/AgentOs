@@ -113,6 +113,41 @@ public sealed class ToolGatewayTests
         result.Output.ShouldBe("ok");
     }
 
+    [Fact]
+    public async Task ToolThrows_RecordedAsErrorEvidence_AndSurfacedNotPropagated()
+    {
+        var tool = Substitute.For<ITool>();
+        tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
+        tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsyncForAnyArgs(new InvalidOperationException("kaboom"));
+        var log = new InMemoryToolInvocationLog();
+        var gateway = new DefaultToolGateway(new AlwaysAllow(), log);
+
+        // A tool that THROWS (vs returning IsError) must not escape into the agent's chat loop — it becomes
+        // a tool_result error, AND the audit trail still records exactly one error row for the failed call.
+        var result = await gateway.InvokeAsync(tool, Request("tenant-1"), CancellationToken.None);
+
+        result.IsError.ShouldBeTrue();
+        result.Output.ShouldContain("kaboom");
+        var evidence = await log.ListRecentAsync("tenant-1");
+        evidence.Count.ShouldBe(1);
+        evidence[0].IsError.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ToolThrowsOperationCanceled_Propagates_NotSwallowedAsToolError()
+    {
+        var tool = Substitute.For<ITool>();
+        tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
+        tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsyncForAnyArgs(new OperationCanceledException());
+        var gateway = new DefaultToolGateway(new AlwaysAllow(), new InMemoryToolInvocationLog());
+
+        // Genuine cancellation must propagate, not be recorded as a tool error.
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => gateway.InvokeAsync(tool, Request("tenant-1"), CancellationToken.None));
+    }
+
     private static ToolInvocationRequest Request(string tenantId)
         => new("echo", Guid.NewGuid().ToString("N"), "{}", tenantId);
 

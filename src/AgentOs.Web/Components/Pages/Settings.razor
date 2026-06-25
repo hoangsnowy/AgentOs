@@ -431,10 +431,12 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             }
             _saved = _saveError is null;
         }
-        catch (System.Net.Http.HttpRequestException ex)
+#pragma warning disable CA1031 // User action: surface ANY save failure (HTTP timeout, DataProtection, raw provider errors) as an error string — never tear down the circuit.
+        catch (System.Exception ex)
         {
             _saveError = ex.Message;
         }
+#pragma warning restore CA1031
         finally
         {
             _saving = false;
@@ -467,10 +469,12 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             }
             _saved = _saveError is null;
         }
-        catch (System.Net.Http.HttpRequestException ex)
+#pragma warning disable CA1031 // User action: surface ANY save failure (HTTP timeout, DataProtection, raw provider errors) as an error string — never tear down the circuit.
+        catch (System.Exception ex)
         {
             _saveError = ex.Message;
         }
+#pragma warning restore CA1031
         finally
         {
             _saving = false;
@@ -507,10 +511,12 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             }
             _savedGithub = _saveErrorGithub is null;
         }
-        catch (System.Net.Http.HttpRequestException ex)
+#pragma warning disable CA1031 // User action: surface ANY save failure (HTTP timeout, DataProtection, raw provider errors) as an error string — never tear down the circuit.
+        catch (System.Exception ex)
         {
             _saveErrorGithub = ex.Message;
         }
+#pragma warning restore CA1031
         finally
         {
             _savingGithub = false;
@@ -563,16 +569,13 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
                     : result.Error ?? "Validation failed.";
             }
         }
-        catch (System.Net.Http.HttpRequestException ex)
+#pragma warning disable CA1031 // UI probe: surface ANY failure (HttpRequestException, Octokit ApiException/AuthorizationException, timeouts) as a message — never tear down the circuit.
+        catch (System.Exception ex)
         {
             _ghTestOk = false;
             _ghTestResult = ex.Message;
         }
-        catch (System.InvalidOperationException ex)
-        {
-            _ghTestOk = false;
-            _ghTestResult = ex.Message;
-        }
+#pragma warning restore CA1031
         finally
         {
             _ghTesting = false;
@@ -598,34 +601,27 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             else
             {
                 using var _scope = TenantScope();
-                var provider = Config["Agents:Orchestrator:Provider"] ?? "Anthropic";
+                // Honor the just-selected (possibly unsaved) Force provider from the form, not just the
+                // Orchestrator's per-agent provider — the Providers tab exists to set Force.
+                var force = EffectiveCfg().Force;
+                var provider = string.IsNullOrWhiteSpace(force)
+                    ? (Config["Agents:Orchestrator:Provider"] ?? "Anthropic")
+                    : force;
                 var model = Config["Agents:Orchestrator:Model"] ?? "claude-haiku-4-5";
                 var probe = new LlmRequest("You are a connectivity probe.", "Reply with the single word: OK", model, 0.0, 5);
-                _ = await LlmFactory.Create(provider).SendAsync(probe);
+                var resp = await LlmFactory.Create(provider).SendAsync(probe);
                 _testOk = true;
-                _testResult = $"{provider} · {model}";
+                // Label with the provider that actually answered (correct even under 429 failover), not the request value.
+                _testResult = $"{resp.Provider} · {model}";
             }
         }
-        catch (System.InvalidOperationException ex)
+#pragma warning disable CA1031 // UI probe: surface ANY failure (LlmException, raw provider/Azure SDK errors, timeouts) as a message — never let it escape and tear down the Blazor circuit.
+        catch (System.Exception ex)
         {
             _testOk = false;
             _testResult = ex.Message;
         }
-        catch (System.Net.Http.HttpRequestException ex)
-        {
-            _testOk = false;
-            _testResult = ex.Message;
-        }
-        catch (System.Text.Json.JsonException ex)
-        {
-            _testOk = false;
-            _testResult = ex.Message;
-        }
-        catch (System.TimeoutException ex)
-        {
-            _testOk = false;
-            _testResult = ex.Message;
-        }
+#pragma warning restore CA1031
         finally
         {
             _testing = false;

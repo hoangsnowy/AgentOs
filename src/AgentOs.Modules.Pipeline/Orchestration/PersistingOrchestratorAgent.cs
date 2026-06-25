@@ -45,7 +45,26 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
         // One shared precedence (ambient → request ITenantContext → default) via AmbientIdentity.Resolve —
         // never a hardcoded `default`, which would bill a low-budget tenant's run against `default`.
         var tenantId = AmbientIdentity.Resolve(explicitTenantId: null, explicitUserId: null, _tenantContext).TenantId;
-        var budget = await _budgetGuard.EvaluateAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        // Fail-open on a transient budget-store error: a store hiccup must NOT crash the whole (expensive)
+        // pipeline run — the cap re-applies on the next run once the store recovers. Mirrors IssueWorkAgent so
+        // the two server-token entrypoints behave identically on the same fault.
+        BudgetStatus budget;
+        try
+        {
+            budget = await _budgetGuard.EvaluateAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) { budget = BudgetEvalFailed(ex); }
+        catch (System.Data.Common.DbException ex) { budget = BudgetEvalFailed(ex); }
+        catch (TimeoutException ex) { budget = BudgetEvalFailed(ex); }
+        catch (System.IO.IOException ex) { budget = BudgetEvalFailed(ex); }
+        catch (InvalidOperationException ex) { budget = BudgetEvalFailed(ex); }
+
+        BudgetStatus BudgetEvalFailed(Exception ex)
+        {
+            _logger.LogWarning(ex, "Pipeline budget evaluation failed for tenant {Tenant}; proceeding.", tenantId);
+            return BudgetStatus.Unset;
+        }
+
         if (budget.IsBlocking)
         {
             throw new BudgetExceededException(tenantId, budget.CapUsd, budget.SpentUsd);

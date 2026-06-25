@@ -1241,11 +1241,9 @@ else if (_tab == Tab.Sessions)
             }
             _ideaStep = IdeaStep.Review;
         }
-        catch (System.Net.Http.HttpRequestException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
-        catch (System.Text.Json.JsonException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
-        catch (InvalidOperationException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
-        catch (System.IO.IOException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
-        catch (TimeoutException ex) { _ideaError = $"Generation failed: {ex.Message}"; }
+#pragma warning disable CA1031 // The LLM-backed bootstrap agents throw LlmException (: System.Exception) on a missing key or parse failure — surface ANY failure, never tear down the circuit.
+        catch (System.Exception ex) { _ideaError = $"Generation failed: {ex.Message}"; }
+#pragma warning restore CA1031
         finally
         {
             _ideaBusy = false;
