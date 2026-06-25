@@ -2,6 +2,7 @@
 // Sprint 4 — AsyncLocal ambient context for KcId + RunId + Iteration. KC tests set the context before RunAsync.
 
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 
 namespace AgentOs.Modules.Pipeline.Metrics;
@@ -23,11 +24,17 @@ public sealed class MetricsContext
     /// <summary>QA loop iteration counter. 0 for calls outside the loop.</summary>
     public int Iteration { get; init; }
 
+    /// <summary>Optional run-owned sink. When set, each agent writes its <see cref="RunMetric"/> here in
+    /// addition to the shared <see cref="IMetricsCollector"/> — a lossless, per-run copy the orchestrator
+    /// persists directly, immune to the shared bounded singleton's drop-oldest eviction under concurrency.
+    /// Null for calls with no owning run (the shared collector is then the only sink).</summary>
+    public ConcurrentBag<RunMetric>? RunSink { get; init; }
+
     /// <summary>Sets the context for the current scope. Disposing restores the previous context.</summary>
-    public static IDisposable BeginScope(string runId, string kcId, int iteration = 0)
+    public static IDisposable BeginScope(string runId, string kcId, int iteration = 0, ConcurrentBag<RunMetric>? sink = null)
     {
         var prev = _current.Value;
-        _current.Value = new MetricsContext { RunId = runId, KcId = kcId, Iteration = iteration };
+        _current.Value = new MetricsContext { RunId = runId, KcId = kcId, Iteration = iteration, RunSink = sink };
         return new Scope(prev);
     }
 
@@ -37,7 +44,7 @@ public sealed class MetricsContext
         var cur = _current.Value
             ?? throw new InvalidOperationException("BeginIteration requires a prior BeginScope.");
         var prev = _current.Value;
-        _current.Value = new MetricsContext { RunId = cur.RunId, KcId = cur.KcId, Iteration = iteration };
+        _current.Value = new MetricsContext { RunId = cur.RunId, KcId = cur.KcId, Iteration = iteration, RunSink = cur.RunSink };
         return new Scope(prev);
     }
 

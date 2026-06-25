@@ -11,7 +11,6 @@ using AgentOs.Domain.Pipeline;
 using AgentOs.Modules.AppConfig;
 using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.Cost;
-using AgentOs.Modules.Pipeline.Metrics;
 using AgentOs.Modules.Pipeline.Orchestration;
 using AgentOs.Modules.Pipeline.Persistence;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -92,7 +91,7 @@ public sealed class BudgetGuardTests
         var tenant = Substitute.For<AgentOs.SharedKernel.Identity.ITenantContext>();
         tenant.TenantId.Returns("default");
         var orchestrator = new PersistingOrchestratorAgent(
-            inner, Substitute.For<IPipelineRunRepository>(), Substitute.For<IMetricsCollector>(),
+            inner, Substitute.For<IPipelineRunRepository>(),
             guard, TimeProvider.System, tenant, NullLogger<PersistingOrchestratorAgent>.Instance);
 
         await Should.ThrowAsync<BudgetExceededException>(() => orchestrator.RunAsync(new UserStory("story")));
@@ -106,12 +105,10 @@ public sealed class BudgetGuardTests
         guard.EvaluateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new BudgetStatus(100m, 85m, 15m, 0.85, BudgetState.Warn, EnforceOn: true));
         var inner = Substitute.For<IOrchestratorAgent>();
-        var metrics = Substitute.For<IMetricsCollector>();
-        metrics.Snapshot().Returns(Array.Empty<RunMetric>());
         var tenant = Substitute.For<AgentOs.SharedKernel.Identity.ITenantContext>();
         tenant.TenantId.Returns("default");
         var orchestrator = new PersistingOrchestratorAgent(
-            inner, Substitute.For<IPipelineRunRepository>(), metrics,
+            inner, Substitute.For<IPipelineRunRepository>(),
             guard, TimeProvider.System, tenant, NullLogger<PersistingOrchestratorAgent>.Instance);
 
         await orchestrator.RunAsync(new UserStory("story"));
