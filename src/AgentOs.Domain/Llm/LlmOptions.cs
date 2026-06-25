@@ -96,6 +96,16 @@ public sealed class AzureOpenAiOptions
     /// <summary>Deployment name / model alias.</summary>
     public string Model { get; set; } = "gpt-4.1";
 
+    /// <summary>
+    /// Optional. Maps the deployment alias (<see cref="Model"/>) to a canonical model id in the cost
+    /// price table (e.g. deployment <c>"gpt41-prod"</c> → PricingModel <c>"gpt-4.1"</c>). Real Azure
+    /// deployment names are arbitrary aliases that are NOT priced prefixes, so cost would silently
+    /// compute to $0 and the budget gate + Cost app would undercount. The cost calculator is fed THIS
+    /// id; leave empty to price directly off the deployment id. Telemetry/logs/<see cref="LlmResponse.Model"/>
+    /// always report the deployment id (the alias), not this.
+    /// </summary>
+    public string PricingModel { get; set; } = string.Empty;
+
     /// <summary>API version (for example <c>2024-10-21</c>).</summary>
     public string ApiVersion { get; set; } = "2024-10-21";
 

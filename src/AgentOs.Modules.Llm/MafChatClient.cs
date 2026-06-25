@@ -101,13 +101,20 @@ public sealed class MafChatClient : ILlmClient
 
         var inputTokens = (int)(response.Usage?.InputTokenCount ?? 0);
         var outputTokens = (int)(response.Usage?.OutputTokenCount ?? 0);
-        var cost = CostCalculator.Calculate(request.Model, inputTokens, outputTokens);
-        if (!CostCalculator.IsKnown(request.Model))
+
+        // ONE authoritative model id for telemetry/log/LlmResponse: `deployment` (the alias actually called).
+        // Pricing is a SEPARATE id: deployment names are arbitrary aliases (e.g. "gpt41-prod") that aren't
+        // priced prefixes, so PricingModel maps the alias to a canonical price-table prefix; fall back to the
+        // deployment when unset. Cost AND the UNPRICED warning both read this same id — no four-way disagreement.
+        var pricingModel = ResolvePricingModel(_options.PricingModel, deployment);
+        var cost = CostCalculator.Calculate(pricingModel, inputTokens, outputTokens);
+        if (!CostCalculator.IsKnown(pricingModel))
         {
             // Unpriced model = the budget gate and the Cost app are blind to this spend.
             _logger.LogWarning(
-                "Cost: model {Model} is not in the price table — call recorded UNPRICED ($0). Update CostCalculator.",
-                LogSafe.Scrub(request.Model));
+                "Cost: model {Model} is not in the price table — call recorded UNPRICED ($0). "
+                + "Update CostCalculator or set 'Llm:AzureOpenAi:PricingModel' to a canonical price-table id.",
+                LogSafe.Scrub(pricingModel));
         }
         LlmTelemetry.RecordSuccess(activity, genAiSystem, deployment, response.ModelId ?? deployment,
             inputTokens, outputTokens, cost, stopwatch.Elapsed.TotalSeconds);
@@ -124,6 +131,13 @@ public sealed class MafChatClient : ILlmClient
             Model: deployment,
             Provider: Provider);
     }
+
+    // Maps a deployment alias to the canonical id fed to CostCalculator. Deployment names are arbitrary
+    // aliases (e.g. "gpt41-prod") that aren't priced prefixes; PricingModel pins the alias to a price-table
+    // prefix. Falls back to the deployment id when unset. Internal for the pricing test (InternalsVisibleTo
+    // "AgentOs.Tests").
+    internal static string ResolvePricingModel(string? pricingModel, string deployment) =>
+        string.IsNullOrWhiteSpace(pricingModel) ? deployment : pricingModel;
 
     // Returns a cached AzureOpenAIClient for the (endpoint, key) pair, building one on first use. Internal
     // for the reuse test (InternalsVisibleTo "AgentOs.Tests"); callers must validate endpoint/key first.
