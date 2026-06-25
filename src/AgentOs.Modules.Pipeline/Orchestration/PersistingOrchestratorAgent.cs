@@ -1,6 +1,7 @@
 // Decorator around IOrchestratorAgent: generates a RunId, sets the MetricsContext (so each per-call
 // RunMetric carries the RunId), runs the pipeline, then saves the PipelineResult + metrics to the DB.
 // Persistence is best-effort — a DB error must not corrupt the result of a successful run.
+using System.Collections.Concurrent;
 using AgentOs.Modules.Pipeline.Agents;
 using AgentOs.Modules.Pipeline.Metrics;
 using AgentOs.Modules.Pipeline.Persistence;
@@ -15,7 +16,6 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
 {
     private readonly IOrchestratorAgent _inner;
     private readonly IPipelineRunRepository _repository;
-    private readonly IMetricsCollector _metrics;
     private readonly IBudgetGuard _budgetGuard;
     private readonly TimeProvider _clock;
     private readonly ITenantContext _tenantContext;
@@ -24,7 +24,6 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
     public PersistingOrchestratorAgent(
         IOrchestratorAgent inner,
         IPipelineRunRepository repository,
-        IMetricsCollector metrics,
         IBudgetGuard budgetGuard,
         TimeProvider clock,
         ITenantContext tenantContext,
@@ -32,7 +31,6 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
-        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _budgetGuard = budgetGuard ?? throw new ArgumentNullException(nameof(budgetGuard));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
@@ -79,30 +77,35 @@ internal sealed class PersistingOrchestratorAgent : IOrchestratorAgent
         var runId = Guid.NewGuid();
         var createdAtUtc = _clock.GetUtcNow();
 
+        // Per-run sink: each agent (LlmAgentBase) writes its RunMetric here as well as to the shared
+        // bounded singleton. We persist from THIS sink — not from IMetricsCollector.Snapshot() — so a run's
+        // own rows can't be evicted by other tenants' concurrent traffic before we read them back (which
+        // would undercount run_metrics and let the BudgetGuard under-meter month-to-date spend). Mirrors
+        // GraphExecutor's per-run GraphState.Spend bag.
+        var runSink = new ConcurrentBag<RunMetric>();
+
         PipelineResult result;
-        using (MetricsContext.BeginScope(runId.ToString(), "ad-hoc"))
+        using (MetricsContext.BeginScope(runId.ToString(), "ad-hoc", sink: runSink))
         {
             result = await _inner.RunAsync(story, cancellationToken).ConfigureAwait(false);
         }
 
         var completedAtUtc = _clock.GetUtcNow();
-        await PersistAsync(runId, result, createdAtUtc, completedAtUtc, cancellationToken).ConfigureAwait(false);
+        await PersistAsync(runId, result, runSink, createdAtUtc, completedAtUtc, cancellationToken).ConfigureAwait(false);
         return result;
     }
 
     private async Task PersistAsync(
         Guid runId,
         PipelineResult result,
+        ConcurrentBag<RunMetric> runSink,
         DateTimeOffset createdAtUtc,
         DateTimeOffset completedAtUtc,
         CancellationToken cancellationToken)
     {
         try
         {
-            var runKey = runId.ToString();
-            var runMetrics = _metrics.Snapshot()
-                .Where(m => string.Equals(m.RunId, runKey, StringComparison.Ordinal))
-                .ToList();
+            var runMetrics = runSink.ToList();
 
             await _repository.SaveAsync(
                 new PipelineRunRecord(runId, result, runMetrics, createdAtUtc, completedAtUtc),

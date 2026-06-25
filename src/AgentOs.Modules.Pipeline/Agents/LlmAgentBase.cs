@@ -93,7 +93,9 @@ public abstract class LlmAgentBase
         var response = await _llm.SendAsync(request, ct).ConfigureAwait(false);
 
         var parsed = Parse(response, validateDto);
-        _collector.Add(RunMetricFactory.From(response, AgentName, parsed.IsSuccess, parsed.IsSuccess ? null : parsed.Error));
+        var metric = RunMetricFactory.From(response, AgentName, parsed.IsSuccess, parsed.IsSuccess ? null : parsed.Error);
+        _collector.Add(metric);                        // shared live cost-dashboard working set (bounded, drop-oldest — lossy is fine)
+        MetricsContext.Current?.RunSink?.Add(metric);  // run-owned durable copy the orchestrator persists — never evicted
         if (parsed.IsFailure)
         {
             throw new LlmException(parsed.Error!, AgentName);

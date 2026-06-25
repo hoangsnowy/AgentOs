@@ -2,7 +2,6 @@
 // Phase 4 — Registers the 5 agents + PipelineOrchestrator + AgentsOptions + PipelineOptions into DI.
 
 using AgentOs.Modules.Pipeline.Agents;
-using AgentOs.Modules.Pipeline.Metrics;
 using AgentOs.Modules.Pipeline.Persistence;
 using AgentOs.Modules.Pipeline.Pipeline;
 using AgentOs.Modules.Pipeline.Orchestration;
@@ -80,7 +79,6 @@ public static class AgentsServiceCollectionExtensions
             return new PersistingOrchestratorAgent(
                 inner,
                 sp.GetRequiredService<IPipelineRunRepository>(),
-                sp.GetRequiredService<IMetricsCollector>(),
                 sp.GetRequiredService<AgentOs.Domain.Cost.IBudgetGuard>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<AgentOs.SharedKernel.Identity.ITenantContext>(),

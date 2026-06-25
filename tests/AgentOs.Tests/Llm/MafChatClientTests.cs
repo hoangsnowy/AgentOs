@@ -26,4 +26,28 @@ public sealed class MafChatClientTests
 
         a.ShouldNotBeSameAs(b);
     }
+
+    [Fact]
+    public void ResolvePricingModel_AliasedDeploymentWithPricingModel_PricesViaCanonicalPrefix()
+    {
+        // A real Azure deployment alias ("gpt41-prod") is not a priced prefix; PricingModel pins it to "gpt-4.1".
+        var pricingModel = MafChatClient.ResolvePricingModel("gpt-4.1", "gpt41-prod");
+
+        pricingModel.ShouldBe("gpt-4.1");
+        CostCalculator.IsKnown(pricingModel).ShouldBeTrue();
+        // 1M in @ $2.50 + 1M out @ $10.00 = $12.50 — proves the aliased deployment prices correctly.
+        CostCalculator.Calculate(pricingModel, 1_000_000, 1_000_000).ShouldBe(12.50m);
+    }
+
+    [Fact]
+    public void ResolvePricingModel_AliasedDeploymentWithoutPricingModel_FallsBackAndWarnsUnpriced()
+    {
+        // No PricingModel set → falls back to the deployment alias, which is not in the price table.
+        var pricingModel = MafChatClient.ResolvePricingModel(null, "gpt41-prod");
+
+        pricingModel.ShouldBe("gpt41-prod");
+        // IsKnown == false is exactly the condition that drives the UNPRICED warning in SendAsync.
+        CostCalculator.IsKnown(pricingModel).ShouldBeFalse();
+        CostCalculator.Calculate(pricingModel, 1_000_000, 1_000_000).ShouldBe(0m);
+    }
 }

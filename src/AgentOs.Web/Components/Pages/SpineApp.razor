@@ -860,6 +860,14 @@ else if (_tab == Tab.Sessions)
             _isAdmin = user.IsAdmin();
         }
         _resolved = true;
+        // Deep-link from the Home app's "Start from idea": prefill the wizard's idea + open the Idea tab.
+        var ideaPayload = WM.ConsumeLaunchPayload("spine");
+        if (!string.IsNullOrWhiteSpace(ideaPayload))
+        {
+            _ideaText = ideaPayload;
+            _tab = Tab.Idea;
+            _ideaStep = IdeaStep.Input;
+        }
         // No tenant on the token → nothing tenant-scoped to load (fail closed; never read the `default`
         // workspace for a malformed sign-in). The empty-state UI handles _tenantId == "".
         if (_tenantId.Length == 0) { return; }
