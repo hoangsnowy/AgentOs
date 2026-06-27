@@ -399,8 +399,9 @@ button.ghost:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-s
     box-shadow: var(--shadow-1);
 }
 .metric .v {
+    font-family: var(--mono);
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: -.01em;
     color: var(--txt);
     line-height: 1.15;
@@ -880,7 +881,10 @@ select {
     align-content: start;
     max-width: 880px;
     pointer-events: none;          /* empty gaps pass clicks (right-click menu) through to the desktop */
+    animation: dash-in var(--duration-slow) var(--ease-standard) both;
 }
+/* Calm entrance — fade + 8px rise. Collapses to instant under prefers-reduced-motion (token = 0ms). */
+@keyframes dash-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .widget {
     pointer-events: auto;
     background: var(--bg-2);
@@ -906,17 +910,19 @@ select {
     padding: 2px 5px; border-radius: var(--r-2);
 }
 .w-open:hover { background: var(--accent-soft); }
+.w-open:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .w-hello-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .w-greet { font-size: var(--fs-lg); font-weight: var(--fw-semibold); color: var(--txt); }
 .w-date { color: var(--txt-soft); font-size: var(--fs-sm); margin-top: 2px; }
 .w-time {
-    font-size: clamp(34px, 5vw, 52px); font-weight: 200; line-height: 1;
+    font-family: var(--mono);
+    font-size: clamp(34px, 5vw, 52px); font-weight: 300; line-height: 1;
     letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--txt);
 }
 .w-start { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
 .w-start .prefs-input { flex: 1; min-width: 0; }
 .w-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-2) var(--space-4); }
-.w-kpi .v { font-size: 22px; font-weight: 700; letter-spacing: -.01em; color: var(--txt); line-height: 1.1; }
+.w-kpi .v { font-family: var(--mono); font-size: 22px; font-weight: 600; letter-spacing: -.01em; color: var(--txt); line-height: 1.1; }
 .w-kpi .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--txt-dim); font-weight: 600; margin-top: 1px; }
 .w-flow { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
 .w-node {
@@ -929,10 +935,11 @@ select {
 .w-arr { display: inline-flex; color: var(--txt-dim); }
 .w-runlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .w-runlist li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); }
-.w-run-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; background: var(--idle); }
-.w-run-dot.ok { background: var(--ok); }
-.w-run-dot.warn { background: var(--warn); }
-.w-run-dot.err { background: var(--err); }
+/* Status as text + colour (design rule: never a bare coloured dot). Mono, fixed gutter. */
+.w-run-st { flex: none; min-width: 40px; font-family: var(--mono); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--txt-dim); }
+.w-run-st.ok { color: var(--ok-text); }
+.w-run-st.warn { color: var(--warn-text); }
+.w-run-st.err { color: var(--err); }
 .w-run-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--txt-soft); }
 .w-run-when { color: var(--txt-dim); font-size: var(--fs-xs); flex: none; }
 .w-empty { display: flex; align-items: center; gap: var(--space-2); color: var(--txt-soft); font-size: var(--fs-sm); padding: var(--space-2) 0; }

@@ -85,7 +85,7 @@
                 @foreach (var r in _runs.Take(4))
                 {
                     <li>
-                        <span class="w-run-dot @StatusClass(r.Status)" title="@StatusLabel(r.Status)" aria-label="@StatusLabel(r.Status)"></span>
+                        <span class="w-run-st @StatusClass(r.Status)">@ShortStatus(r.Status)</span>
                         <span class="w-run-title">@(string.IsNullOrWhiteSpace(r.UserStoryPreview) ? "—" : r.UserStoryPreview)</span>
                         <span class="w-run-when">@r.CreatedAtUtc.ToLocalTime().ToString("d MMM", CultureInfo.CurrentCulture)</span>
                     </li>
@@ -198,13 +198,14 @@
         _ => "",
     };
 
-    // Accessible name for the status dot — status must not be conveyed by colour alone (WCAG 1.4.1).
-    private static string StatusLabel(string status) => status switch
+    // Status as TEXT + colour, never colour alone (design rule + WCAG 1.4.1). Short form for the
+    // compact widget row; the colour comes from the .w-run-st state class.
+    private static string ShortStatus(string status) => status switch
     {
-        "Done" => "Complete",
-        "MaxIterationReached" => "Iteration limit",
+        "Done" => "Done",
+        "MaxIterationReached" => "Limit",
         "Failed" => "Failed",
-        _ => status,
+        _ => "—",
     };
 
     private static string Money(decimal v) => "$" + v.ToString("0.00", CultureInfo.InvariantCulture);
