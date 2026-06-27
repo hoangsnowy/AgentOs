@@ -55,13 +55,13 @@ cloud (finance, gov, healthcare), and (3) want to *govern and measure* agent out
 AgentOS is a working platform, not a sketch. Already shipped:
 
 - **One engine, three surfaces** — Pipeline (sandbox story), Workflow (visual graph of the same 5
-  agents, [#52](https://github.com/hoangsnowy/AgentOs/pull/52)), and Spine (real ticket →
-  PR) all run the same engine. The Workflow surface is re-platformed onto **Microsoft Agent
+  agents, [#52](https://github.com/hoangsnowy/AgentOs/pull/52)), and Board (real ticket →
+  PR, formerly "Spine") all run the same engine. The Workflow surface is re-platformed onto **Microsoft Agent
   Framework Workflows** — `GraphExecutor` compiles the drawn `PlanGraph` into a MAF `Workflow` run on
   the MAF in-process runtime (QA pass/fail become conditional edges), node work delegating to the
   real typed agents + the governed tool gateway
   ([#87](https://github.com/hoangsnowy/AgentOs/pull/87),
-  [#100](https://github.com/hoangsnowy/AgentOs/pull/100)). Spine tickets run either the **Quality** brain (full 5-agent pipeline
+  [#100](https://github.com/hoangsnowy/AgentOs/pull/100)). Board tickets run either the **Quality** brain (full 5-agent pipeline
   with a greenfield router) or the **Quick** brain, with a user-facing toggle, cost label, and
   bidirectional cross-links between all three apps
   ([#54](https://github.com/hoangsnowy/AgentOs/pull/54),
@@ -247,7 +247,7 @@ where marked) by its deadline; until then the roadmap assumes the default.
 
 Long-term architecture commitments — where we are → where we go.
 
-- **Orchestration** — *Now:* 5 agents in `AgentOs.Modules.Pipeline`, executed as a sandbox story (Pipeline), a visual graph (Workflow `GraphExecutor`), or a real ticket (Spine) with two brains — Quality (5-agent) and Quick — behind one toggle. *Next:* user-defined agents via plugins; richer graph routing (conditional, parallel fan-out); no lock-in in the orchestration layer (our contracts, MAF/SK as one engine, not the only one).
+- **Orchestration** — *Now:* 5 agents in `AgentOs.Modules.Pipeline`, executed as a sandbox story (Pipeline), a visual graph (Workflow `GraphExecutor`), or a real ticket (Board, formerly "Spine") with two brains — Quality (5-agent) and Quick — behind one toggle. *Next:* user-defined agents via plugins; richer graph routing (conditional, parallel fan-out); no lock-in in the orchestration layer (our contracts, MAF/SK as one engine, not the only one).
 - **LLM abstraction** — *Now:* Claude + Azure OpenAI + MAF + RemoteAgent behind `ILlmClient`/`ILlmClientFactory`, per-tenant BYO keys. *Next:* token streaming + response cache (Q2); **local models** (Ollama, vLLM) for fully air-gapped on-prem; capability negotiation (tool-calling/vision/context window) so the router picks per task. Rule: **always ≥2 providers wired.**
 - **State** — *Now:* per-module Postgres contexts (modular monolith). *Next:* event-sourced agent runs → replay + time-travel debugging; snapshot a run, branch it, re-run with a different prompt/model (doubles as the prompt-drift regression harness).
 - **Observability** — *Now:* OTel wired (spans + metrics) but no backend; structured logs drive `cost-report`. *Next:* exporter to App Insights / OTLP (Q2); OpenTelemetry GenAI semantic conventions; cost telemetry as a first-class signal, not a log scrape.

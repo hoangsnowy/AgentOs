@@ -11,9 +11,9 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 <p align="center">
-  <img src="docs/images/hero-light.png" alt="The AgentOS desktop — the Pipeline, Workflow editor, and Cost windows over a GNOME/Adwaita shell" width="100%">
+  <img src="docs/images/hero-light.png" alt="The AgentOS desktop — an authentic GNOME/Adwaita shell: empty wallpaper, top panel, and the Dash of six pinned apps" width="100%">
   <br>
-  <sub><em>The <strong>AgentOS</strong> desktop — a Blazor Server window manager driving the realtime agent pipeline, the visual workflow editor, and per-tenant cost/budget governance.</em></sub>
+  <sub><em>The <strong>AgentOS</strong> desktop — a Blazor Server window manager rendering an authentic GNOME shell (empty wallpaper, Activities overview, virtual workspaces, Dash) that launches the agent pipeline, the visual workflow editor, Board, and per-tenant governance as windows.</em></sub>
 </p>
 
 AgentOS turns a plain-English user story into reviewed, test-backed C# scaffolding. Five agents
@@ -62,9 +62,10 @@ Postgres schema, so any one of them can later ship as a standalone NuGet package
   backoff on transient failures.
 - **Cloud-ready out of the box.** A .NET Aspire AppHost wires Postgres + Keycloak + Api + Web; an
   `azd up` deploys to Azure Container Apps.
-- **Operator-friendly desktop.** A Blazor Server AgentOS desktop — windowed UI with a Start menu,
-  dock, light/dark themes, live pipeline runner, drag-and-drop workflow editor, and runtime
-  settings to rotate LLM keys without a redeploy.
+- **Operator-friendly desktop.** A Blazor Server AgentOS desktop — authentic GNOME: an empty
+  wallpaper, a Dash, a GNOME Activities overview, virtual workspaces, light/dark themes, a live
+  pipeline runner, a drag-and-drop workflow editor, and runtime settings to rotate LLM keys without
+  a redeploy.
 
 ## Screenshots
 
@@ -78,7 +79,7 @@ config. All shots are the standalone Web (`dotnet run --project src/AgentOs.Web`
 
 | Boards → Tickets → Sessions | Tool-call evidence |
 |:---:|:---:|
-| [![Spine — connect a GitHub Projects board and drive remote repo execution](docs/images/app-spine.png)](docs/images/app-spine.png) | [![Evidence — every governed tool invocation recorded](docs/images/app-evidence.png)](docs/images/app-evidence.png) |
+| [![Board — connect a GitHub/ADO board and drive remote repo execution](docs/images/app-board.png)](docs/images/app-board.png) | [![Evidence — every governed tool invocation recorded](docs/images/app-evidence.png)](docs/images/app-evidence.png) |
 | Connect a GitHub/ADO board, decompose an idea into tickets, drive remote repo-execution sessions. | Every tool an agent calls passes the policy gate and is recorded as auditable evidence. |
 
 | Cost & budget gate | Runtime settings |
@@ -193,7 +194,7 @@ dotnet run --project infra/AgentOs.AppHost
 
 Drive the end-to-end pipeline from the **AgentOS desktop**: on the Aspire stack the Web is at
 `https://localhost:5180`; sign in with the seeded `operator` / `operator` credentials (a
-cookie session via `/account/login`), open the Pipeline app, and run a user story. The API
+cookie session via `/account/login`), open the Agents app, and run a user story. The API
 endpoints below are bearer-protected — the Web obtains the token for you; for a scripted call
 against the API, attach a Keycloak-issued bearer token from the realm.
 

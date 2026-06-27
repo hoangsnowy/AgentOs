@@ -30,8 +30,8 @@ ambient tenant + `PipelineStudio` pushes the circuit's tenant/member around the 
 #72 — tenant-filter freeze (C1), fail-closed tool policy in Production, #10 build_verifier gated OFF
 by default in Production (interim), connect-time `SsrfGuard` on GitHub/ADO clients, DevSecretGuard,
 `OrchestrationStore` per-tenant cache keying (full-stack E2E pending), async `IRuntimeOverrides` key
-getters; Coherence Phase 2 — Spine runs the Quality engine, Quick/Quality toggle, cross-links +
-pooled-client per-call tenant fix (#73).
+getters; Coherence Phase 2 — Spine (the desktop app since renamed "Board") runs the Quality engine,
+Quick/Quality toggle, cross-links + pooled-client per-call tenant fix (#73).
 
 **Still NOT done (other open items):** #10 build_verifier RCE *sandbox* (prod-gate is interim only);
 backlog: LLM-gateway edge bugs, observability backend.
