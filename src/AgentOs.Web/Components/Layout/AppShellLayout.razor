@@ -219,8 +219,9 @@
         if (firstRender)
         {
             await RestorePreferencesAsync();
-            // No auto-opened window: the desktop itself shows live widgets (DesktopWidgets) as the
-            // landing. The Overview app stays one click away in the dock for the detailed view.
+            // Authentic GNOME: nothing auto-opens — the desktop boots to a clean empty wallpaper.
+            // The glanceable control plane is the Overview app, pinned first in the Dash (one click)
+            // and reachable from the Activities overview.
         }
 
         if (_focusOnRender)

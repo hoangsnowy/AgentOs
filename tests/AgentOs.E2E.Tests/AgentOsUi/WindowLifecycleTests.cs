@@ -160,13 +160,17 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
 
         await _fx.GotoDesktopAsync();
 
-        // Trigger a toast via the desktop right-click "Test notification" item.
+        // Trigger a toast via the System app's notification test (the GNOME wallpaper menu no longer
+        // carries a debug item). Right-click → "Display settings…" opens the System app.
         await _fx.Page.Locator(".desktop").ClickAsync(new LocatorClickOptions
         {
             Button = MouseButton.Right,
             Position = new Position { X = 240, Y = 240 },
         });
-        await _fx.Page.Locator(".ctxmenu .ctx-item:has-text(\"Test notification\")").ClickAsync();
+        await _fx.Page.Locator(".ctxmenu .ctx-item:has-text(\"Display settings\")").ClickAsync();
+        var sys = _fx.Page.Locator(".appwin.focused");
+        await sys.Locator(".prefs-cat", new() { HasTextString = "Notifications" }).ClickAsync();
+        await sys.GetByRole(AriaRole.Button, new() { Name = "Send test" }).ClickAsync();
 
         var toast = _fx.Page.Locator(".toast-container .toast").First;
         await Assertions.Expect(toast).ToBeVisibleAsync();
