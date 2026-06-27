@@ -311,7 +311,7 @@ body::after {
     border-radius: var(--r-4) var(--r-4) 0 0;
     color: var(--txt);
     font-size: 11.5px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: .06em;
     text-transform: uppercase;
 }
@@ -359,7 +359,7 @@ button.ghost:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-s
 .stage:last-child { border-bottom: 0; }
 .dot {
     width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
-    font-size: 13px; font-weight: 700; background: var(--idle); color: #0b0e12;
+    font-size: 13px; font-weight: 600; background: var(--idle); color: #0b0e12;
     border: 2px solid transparent;
 }
 .stage.idle .dot { background: var(--bg-3); color: var(--txt-dim); border-color: var(--line); }
@@ -384,7 +384,7 @@ button.ghost:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-s
     display: flex; align-items: center; gap: 12px; padding: 9px 12px;
     background: var(--bg-3); border: 1px solid var(--line); border-radius: 8px; font-size: 13px;
 }
-.qa-round .score { font-family: var(--mono); font-weight: 700; }
+.qa-round .score { font-family: var(--mono); font-weight: 600; }
 .score-bar { flex: 1; height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; }
 .score-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--warn), var(--ok)); }
 
@@ -520,7 +520,7 @@ ul.clean li { margin: 3px 0; }
 .issue.Critical { border-left-color: var(--err); }
 .issue.Major { border-left-color: var(--warn); }
 .issue.Minor { border-left-color: var(--accent); }
-.issue .sev { font-weight: 700; font-size: 11px; text-transform: uppercase; }
+.issue .sev { font-weight: 600; font-size: 11px; text-transform: uppercase; }
 .empty-state { color: var(--txt-dim); text-align: center; padding: 50px 20px; }
 .empty-state .big { font-size: 40px; opacity: .4; }
 
@@ -572,10 +572,10 @@ select {
     border: 1px solid var(--accent-active);
     border-radius: 4px;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
     box-shadow: var(--shadow-inset);
 }
-.shell-brand .brand-title { font-weight: 700; font-size: 13px; color: var(--txt); letter-spacing: -.01em; }
+.shell-brand .brand-title { font-weight: 600; font-size: 13px; color: var(--txt); letter-spacing: -.01em; }
 .shell-brand .brand-sub { font-size: 10.5px; color: var(--txt-dim); margin-top: 1px; }
 
 /* --- Topbar --- */
@@ -618,7 +618,7 @@ select {
 .drag-overlay { position: fixed; inset: 0; z-index: 9999; cursor: move; background: transparent; }
 
 /* About dialog content */
-.about-h { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--txt); }
+.about-h { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--txt); }
 .about-tag { margin: 0 0 12px; color: var(--txt-dim); }
 .about-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .about-tbl th { text-align: left; padding: 4px 8px 4px 0; color: var(--txt-dim); font-weight: 600; width: 90px; }
@@ -652,7 +652,7 @@ select {
 .panel-title {
     margin: 0;
     font-size: 11.5px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: .06em;
     text-transform: uppercase;
     color: var(--txt);
@@ -899,7 +899,7 @@ select {
 .widget-h {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: var(--space-3);
-    font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
     color: var(--txt-dim);
 }
 .w-open {
@@ -1061,9 +1061,9 @@ select {
     border-radius: var(--radius-sm);
     box-shadow: 0 6px 16px -4px rgba(53,132,228,.55), inset 0 1px 0 rgba(255,255,255,.25);
     font-size: 18px;
-    font-weight: 700;
+    font-weight: 600;
 }
-.login-brand .brand-title { font-size: 15px; font-weight: 700; color: var(--txt); }
+.login-brand .brand-title { font-size: 15px; font-weight: 600; color: var(--txt); }
 .login-brand .brand-sub { font-size: 11px; color: var(--txt-dim); margin-top: 1px; }
 .login-form .btn.login-btn { width: 100%; justify-content: center; margin-top: 4px; }
 .login-hint { font-size: 11px; color: var(--txt-dim); margin-top: 10px; text-align: center; }
@@ -1423,7 +1423,7 @@ select {
     color: #fff;
     background: var(--accent);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     flex: none;
 }
 .toast.toast-ok   { border-left-color: var(--ok); }
@@ -1435,7 +1435,7 @@ select {
 .toast.toast-info { border-left-color: var(--state-info); }
 .toast.toast-info .toast-ic { background: var(--state-info); }
 .toast-body { flex: 1; min-width: 0; }
-.toast-title { font-size: 12.5px; font-weight: 700; color: var(--txt); }
+.toast-title { font-size: 12.5px; font-weight: 600; color: var(--txt); }
 .toast-msg { font-size: 11.5px; color: var(--txt-dim); margin-top: 2px; line-height: 1.35; }
 .toast-close {
     background: transparent; border: 0; color: var(--txt-dim);
@@ -1611,7 +1611,7 @@ select {
     background: var(--accent);
     color: #fff;
     display: grid; place-items: center;
-    font-size: 10px; font-weight: 700;
+    font-size: 10px; font-weight: 600;
     border: 1px solid rgba(255,255,255,.35);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.30);
 }
@@ -1801,7 +1801,7 @@ select {
     background: var(--bg-3);
     color: var(--txt);
     border: 1px solid var(--line-strong);
-    font-size: 10.5px; font-weight: 700;
+    font-size: 10.5px; font-weight: 600;
     min-width: 18px; justify-content: center;
 }
 .badgepill.badge-ok    { background: rgba(22,163,74,.12); color: var(--ok-text); border-color: rgba(22,163,74,.40); }
@@ -1896,11 +1896,11 @@ select {
     background: var(--accent);
     color: #fff;
     display: grid; place-items: center;
-    font-size: 16px; font-weight: 700;
+    font-size: 16px; font-weight: 600;
     border: 1px solid rgba(255,255,255,.30);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.30);
 }
-.dd-user-name { font-weight: 700; font-size: 13px; color: var(--txt); }
+.dd-user-name { font-weight: 600; font-size: 13px; color: var(--txt); }
 .dd-user-role { font-size: 11px; color: var(--txt-dim); margin-top: 1px; }
 
 .dd-clock-big  { font-size: 26px; font-weight: 200; letter-spacing: -.02em; color: var(--txt); padding: 12px 12px 0; font-variant-numeric: tabular-nums; }
@@ -1942,7 +1942,7 @@ select {
 }
 .prefs-side-head {
     font-size: 10.5px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: .08em;
     color: var(--txt-faint);
     padding: 8px 10px 6px;
@@ -2130,7 +2130,7 @@ input[type=range] { accent-color: var(--accent); }
     flex: none;
 }
 .asb-item { display: inline-flex; align-items: center; gap: 4px; }
-.asb-item strong { color: var(--txt); font-variant-numeric: tabular-nums; }
+.asb-item strong { color: var(--txt); font-family: var(--mono); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
 .asb-sub { color: var(--txt-dim); }
 .asb-sep { width: 1px; height: 14px; background: var(--line-strong); }
 .asb-spacer { flex: 1; }
@@ -2168,7 +2168,7 @@ input[type=range] { accent-color: var(--accent); }
 .page-head > :first-child { min-width: 0; }
 .page-title {
     font-size: 17px;
-    font-weight: 700;
+    font-weight: 600;
     margin: 0 0 2px;
     color: var(--txt);
     letter-spacing: -.01em;
@@ -2281,7 +2281,7 @@ input[type=range] { accent-color: var(--accent); }
 .issues-panel h3 {
     margin: 0 0 10px;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: .04em;
     text-transform: uppercase;
     color: var(--err);
@@ -2300,7 +2300,7 @@ input[type=range] { accent-color: var(--accent); }
     display: inline-grid; place-items: center;
     width: 24px; height: 24px;
     border-radius: 6px;
-    font-size: 12px; font-weight: 700;
+    font-size: 12px; font-weight: 600;
     background: var(--bg-3);
     color: var(--txt);
     border: 1px solid var(--line);
@@ -2391,7 +2391,7 @@ input[type=range] { accent-color: var(--accent); }
 
 /* Board — per-repo breakdown inside a session row */
 .board-session-repo { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); margin: 2px 0; }
-.board-session-repo-err { color: var(--err); font-weight: 700; cursor: help; }
+.board-session-repo-err { color: var(--err); font-weight: 600; cursor: help; }
 
 /* Live run activity feed (M6) — a session's streamed progress, under its row. */
 .board-activity-tr td { padding-top: 0; }
