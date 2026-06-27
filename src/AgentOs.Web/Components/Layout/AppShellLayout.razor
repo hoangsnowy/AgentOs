@@ -44,14 +44,35 @@
         <div class="ko-body">
             @if (string.IsNullOrWhiteSpace(_query))
             {
-                @if (WM.Open.Count > 0)
+                @* GNOME workspace thumbnail strip — click to switch; dots preview the windows on each. *@
+                <div class="ko-section-row"><span class="ko-section">Workspaces</span></div>
+                <div class="ko-workspaces">
+                    @for (var i = 0; i < AgentOs.Web.Shell.Services.WindowManagerService.WorkspaceCount; i++)
+                    {
+                        var ws = i;
+                        var wsWins = WM.WindowsOn(ws).ToList();
+                        var wsClass = WM.ActiveWorkspace == ws ? "ko-ws active" : "ko-ws";
+                        <button class="@wsClass"
+                                @onclick="@(() => WM.SwitchWorkspace(ws))" title="@($"Workspace {ws + 1}")">
+                            <span class="ko-ws-num">@(ws + 1)</span>
+                            <span class="ko-ws-dots">
+                                @foreach (var ww in wsWins.Take(5))
+                                {
+                                    <span class="ko-ws-dot" style="background:@(AppCatalog.Find(ww.AppKey)?.Color ?? "#3584e4")"></span>
+                                }
+                            </span>
+                        </button>
+                    }
+                </div>
+
+                @if (WM.Open.Any(x => x.Workspace == WM.ActiveWorkspace))
                 {
                     <div class="ko-section-row">
                         <span class="ko-section">Open windows</span>
-                        <span class="ko-section-count">@WM.Open.Count</span>
+                        <span class="ko-section-count">@WM.Open.Count(x => x.Workspace == WM.ActiveWorkspace)</span>
                     </div>
                     <div class="ko-expose">
-                        @foreach (var w in WM.Open.OrderByDescending(x => x.Z))
+                        @foreach (var w in WM.Open.Where(x => x.Workspace == WM.ActiveWorkspace).OrderByDescending(x => x.Z))
                         {
                             var winColor = AppCatalog.Find(w.AppKey)?.Color ?? "#3584e4";
                             <button class="ko-win @(w.Minimized ? "min" : "")" @onclick="@(() => FocusWindow(w))" title="@w.Title">

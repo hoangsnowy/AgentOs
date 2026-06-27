@@ -8,7 +8,8 @@ using System.Linq;
 
 namespace AgentOs.Web.Shell.Services;
 
-/// <summary>An open application window.</summary>
+/// <summary>An open application window. <see cref="Workspace"/> is the GNOME virtual workspace it
+/// lives on; only windows on the active workspace render.</summary>
 public sealed record AppWindowState(
     Guid Id,
     string AppKey,
@@ -16,7 +17,8 @@ public sealed record AppWindowState(
     string Icon,
     int X, int Y, int W, int H,
     int Z,
-    bool Minimized);
+    bool Minimized,
+    int Workspace = 0);
 
 /// <summary>Singleton state for the desktop window manager. Components subscribe to Changed.</summary>
 public sealed class WindowManagerService
@@ -26,6 +28,24 @@ public sealed class WindowManagerService
     private const int RecentCapacity = 6;
     private int _nextZ = 100;
     private int _cascadeIndex;
+
+    /// <summary>Number of GNOME virtual workspaces.</summary>
+    public const int WorkspaceCount = 4;
+
+    /// <summary>The workspace currently shown. New windows open here; only its windows render.</summary>
+    public int ActiveWorkspace { get; private set; }
+
+    /// <summary>Switch the active workspace (GNOME workspace switcher / Activities thumbnail strip).</summary>
+    public void SwitchWorkspace(int index)
+    {
+        var clamped = Math.Clamp(index, 0, WorkspaceCount - 1);
+        if (clamped == ActiveWorkspace) { return; }
+        ActiveWorkspace = clamped;
+        Changed?.Invoke();
+    }
+
+    /// <summary>Windows on a given workspace (for the Activities thumbnail strip).</summary>
+    public IEnumerable<AppWindowState> WindowsOn(int workspace) => _open.Where(w => w.Workspace == workspace);
 
     /// <summary>Read-only snapshot of currently open windows.</summary>
     public IReadOnlyList<AppWindowState> Open => _open;
@@ -111,6 +131,8 @@ public sealed class WindowManagerService
         var existing = _open.FirstOrDefault(x => x.AppKey == appKey);
         if (existing is not null)
         {
+            // Follow the window to its workspace so launching an already-open app always shows it.
+            SwitchWorkspace(existing.Workspace);
             Restore(existing.Id);
             Focus(existing.Id);
             return existing;
@@ -127,7 +149,8 @@ public sealed class WindowManagerService
             Y: 60 + offset,
             W: w, H: h,
             Z: ++_nextZ,
-            Minimized: false);
+            Minimized: false,
+            Workspace: ActiveWorkspace);
         _open.Add(window);
         Changed?.Invoke();
         return window;

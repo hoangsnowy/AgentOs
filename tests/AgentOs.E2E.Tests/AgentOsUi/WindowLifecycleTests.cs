@@ -114,8 +114,8 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
 
         await _fx.GotoDesktopAsync();
 
-        // 5 pinned apps in the Dash (GNOME Dash — no Start button).
-        foreach (var t in new[] { "Overview", "Agents", "Workflow", "Board", "Settings" })
+        // 6 pinned apps in the Dash (GNOME Dash — no Start button).
+        foreach (var t in new[] { "Overview", "Agents", "Workflow", "Board", "Settings", "Terminal" })
         {
             await Assertions.Expect(_fx.Page.Locator($".dock-item[title=\"{t}\"]")).ToBeVisibleAsync();
         }

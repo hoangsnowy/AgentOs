@@ -1,0 +1,113 @@
+@* TerminalApp — a read-only live tail of the paired runner's session-run feed (ISessionRunFeed).
+   GNOME terminal look: dark surface, mono, one line per event, newest at the bottom. This is NOT an
+   interactive shell — server-side command execution would bypass the IToolGateway governance moat, so
+   it only streams the events the runner already publishes (dispatch → per-repo lifecycle → done/failed).
+   A circuit has no HttpContext, so the tenant is read from AuthenticationState. *@
+
+@using System.Collections.Concurrent
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Domain.Sessions
+@inject ISessionRunFeed Feed
+@implements IDisposable
+
+<div class="term">
+    <div class="term-head">
+        <span class="term-dot @(_live ? "live" : "")"></span>
+        <span class="term-title">runner — session feed</span>
+        <span class="term-status">@(_live ? "streaming" : "idle")</span>
+    </div>
+    <div class="term-body">
+        @if (_lines.Count == 0)
+        {
+            <div class="term-line muted">$ waiting for runner activity — start a session from Board → Run, then watch it stream here.</div>
+        }
+        else
+        {
+            @for (var i = 0; i < _lines.Count; i++)
+            {
+                var ev = _lines[i];
+                <div class="term-line @KindClass(ev.Kind)">
+                    <span class="term-n">@((i + 1).ToString("000", System.Globalization.CultureInfo.InvariantCulture))</span>
+                    <span class="term-t">@ev.At.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture)</span>
+                    <span class="term-k">@ev.Kind.ToString().ToLowerInvariant()</span>
+                    <span class="term-m">@ev.Message@(ev.Repo is null ? "" : $"  ({ev.Repo})")@(string.IsNullOrEmpty(ev.PrUrl) ? "" : $"  → {ev.PrUrl}")</span>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string _tenantId = "";
+    private bool _live;
+    private readonly List<SessionRunEvent> _lines = new();
+    private readonly ConcurrentQueue<SessionRunEvent> _incoming = new();
+    private CancellationTokenSource? _cts;
+    private System.Threading.Timer? _render;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _tenantId = state.User.GetTenantId() ?? string.Empty;
+        }
+        if (_tenantId.Length == 0) { return; }
+
+        // Subscribe to the live feed (background loop tied to the circuit) + coalesce renders at ~150ms
+        // so an event burst during a run can't thrash the circuit.
+        _cts = new CancellationTokenSource();
+        _ = ListenAsync(_cts.Token);
+        _render = new System.Threading.Timer(
+            _ => InvokeAsync(Flush), null,
+            TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(150));
+    }
+
+    private async Task ListenAsync(CancellationToken ct)
+    {
+        try
+        {
+            _live = true;
+            await foreach (var ev in Feed.Subscribe(_tenantId, ct))
+            {
+                _incoming.Enqueue(ev);
+            }
+        }
+        catch (OperationCanceledException) { /* circuit closing — expected */ }
+        catch (Microsoft.AspNetCore.SignalR.HubException ex) { _ = ex.Message; }
+        catch (System.IO.IOException ex) { _ = ex.Message; }
+        catch (InvalidOperationException ex) { _ = ex.Message; }
+        finally { _live = false; }
+    }
+
+    private void Flush()
+    {
+        if (_incoming.IsEmpty) { return; }
+        while (_incoming.TryDequeue(out var ev))
+        {
+            _lines.Add(ev);
+            if (_lines.Count > 500) { _lines.RemoveRange(0, _lines.Count - 500); }  // bounded scrollback
+        }
+        StateHasChanged();
+    }
+
+    private static string KindClass(SessionRunEventKind k) => k switch
+    {
+        SessionRunEventKind.Done or SessionRunEventKind.RepoDone => "ok",
+        SessionRunEventKind.Failed => "err",
+        SessionRunEventKind.Running => "accent",
+        _ => "",
+    };
+
+    public void Dispose()
+    {
+        _render?.Dispose();
+        if (_cts is not null)
+        {
+            _cts.Cancel();
+            _cts.Dispose();
+        }
+    }
+}

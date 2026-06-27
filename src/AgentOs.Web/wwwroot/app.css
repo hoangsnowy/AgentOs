@@ -869,6 +869,26 @@ select {
 }
 
 /* =================================================================
+   Terminal app — read-only runner session-feed tail (GNOME terminal: always-dark chrome surface)
+   ================================================================= */
+.term { display: flex; flex-direction: column; height: 100%; min-height: 0; background: #1d1f21; color: #d4d7da; }
+.term-head { display: flex; align-items: center; gap: var(--space-2); padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.08); background: #17181a; flex: none; }
+.term-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--idle); flex: none; }
+.term-dot.live { background: var(--ok); box-shadow: 0 0 0 3px rgba(46,159,99,.18); }
+.term-title { font-size: var(--fs-sm); font-weight: 600; color: #e6e8ea; }
+.term-status { margin-left: auto; font-family: var(--mono); font-size: var(--fs-xs); color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: .06em; }
+.term-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; }
+.term-line { display: flex; gap: 10px; white-space: pre-wrap; word-break: break-word; }
+.term-line.muted { color: rgba(255,255,255,.45); }
+.term-n { color: rgba(255,255,255,.28); flex: none; }
+.term-t { color: rgba(255,255,255,.4); flex: none; }
+.term-k { flex: none; min-width: 72px; color: rgba(255,255,255,.55); }
+.term-m { color: #d4d7da; }
+.term-line.ok .term-k, .term-line.ok .term-m { color: #6fd49a; }
+.term-line.err .term-k, .term-line.err .term-m { color: #ff8a7a; }
+.term-line.accent .term-k { color: #79b0ee; }
+
+/* =================================================================
    Blazor reconnection modal — themed override of the default white box
    ================================================================= */
 #components-reconnect-modal {
@@ -1259,7 +1279,23 @@ select {
     padding-top: 44px; /* clear the top panel */
     animation: login-fade var(--duration-base) var(--ease-standard);
 }
-/* Workspace thumbnails strip */
+/* GNOME workspace thumbnail strip — mini wallpaper tiles, app-colour dots, active outlined white. */
+.ko-workspaces { display: flex; gap: 10px; justify-content: center; margin: 6px 0 18px; flex-wrap: wrap; }
+.ko-ws {
+    position: relative;
+    width: 124px; height: 72px;
+    border-radius: var(--radius-sm);
+    background: var(--wallpaper-bg);
+    border: 1px solid rgba(255,255,255,.28);
+    cursor: pointer; padding: 0; overflow: hidden;
+    transition: border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+.ko-ws:hover { border-color: rgba(255,255,255,.5); }
+.ko-ws.active { border: 2px solid #fff; box-shadow: var(--shadow-2); }
+.ko-ws-num { position: absolute; top: 6px; left: 8px; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.ko-ws-dots { position: absolute; bottom: 8px; left: 8px; display: flex; gap: 4px; }
+.ko-ws-dot { width: 8px; height: 8px; border-radius: 999px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+
 .ko-overview .ko-search {
     width: min(560px, 72vw);
     padding: 0; background: transparent; border-bottom: 0; margin-bottom: 6px;

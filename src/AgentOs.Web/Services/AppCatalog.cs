@@ -23,6 +23,7 @@ public static class AppCatalog
         new("workflow", "Workflow", "graph", "Edit the same pipeline as a visual graph",     "Agents", 1080, 660, Pinned: true, ComponentType: typeof(OrchestrationStudio), Color: "#9141ac"),
         new("board",    "Board",    "git-pull-request", "Boards → tickets → AI sessions → PRs", "Agents", 1000, 660, Pinned: true, ComponentType: typeof(BoardApp), Color: "#2ec27e"),
         new("settings", "Settings", "gear",  "LLM keys, governance, users, system",   "System", 1060, 700, Pinned: true, ComponentType: typeof(SettingsHub), Color: "#5e5c64"),
+        new("terminal", "Terminal", "terminal", "Live read-only tail of the runner's session feed", "Agents", 780, 520, Pinned: true, ComponentType: typeof(TerminalApp), Color: "#2b2b2e"),
         // ── unpinned: reachable via the Settings hub, Activities search, or in-app deep links ──
         // (Workspaces + Sessions were standalone admin windows fully subsumed by Board → deleted.)
         new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: false, AdminOnly: true, ComponentType: typeof(UsersApp), Color: "#e5a50a"),

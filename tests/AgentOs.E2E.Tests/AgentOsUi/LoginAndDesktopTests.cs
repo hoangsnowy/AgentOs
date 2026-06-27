@@ -61,6 +61,7 @@ public sealed class LoginAndDesktopTests : IClassFixture<AgentOsPageFixture>
     [InlineData("Workflow")]
     [InlineData("Board")]
     [InlineData("Settings")]
+    [InlineData("Terminal")]
     public async Task DockIcon_Click_OpensAppWindow(string title)
     {
         if (!AgentOsPageFixture.IsEnabled) { Assert.Skip(AgentOsPageFixture.SkipReason); }
