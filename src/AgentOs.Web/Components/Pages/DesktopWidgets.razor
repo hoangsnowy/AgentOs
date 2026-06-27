@@ -1,0 +1,205 @@
+@* DesktopWidgets — GNOME-style live widgets sitting on the desktop wallpaper. The glanceable control
+   plane: clock + greeting, headline KPIs, the 5-agent pipeline, and recent runs — visible the moment
+   you sign in, no window to open. Reads the same tenant-explicit run data as the Overview app (a
+   Blazor circuit has no HttpContext, so the tenant comes from AuthenticationState). Each widget links
+   to the full app. Solid Adwaita cards (not wallpaper-tinted) so text stays legible on any wallpaper. *@
+
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Modules.Pipeline.Persistence
+@using AgentOs.Web.Services
+@inject IPipelineRunRepository Runs
+@inject AgentOs.Web.Shell.Services.WindowManagerService WM
+@implements IDisposable
+
+<div class="dash">
+    @* Greeting · clock · quick-start *@
+    <section class="widget w-hello">
+        <div class="w-hello-top">
+            <div>
+                <div class="w-greet">@Greeting()@(string.IsNullOrEmpty(_user) ? "" : $", {_user}")</div>
+                <div class="w-date">@DateTime.Now.ToString("dddd, d MMMM", CultureInfo.CurrentCulture)</div>
+            </div>
+            <div class="w-time">@_now</div>
+        </div>
+        <div class="w-start">
+            <input class="prefs-input" placeholder="Describe what to build…" aria-label="Start from an idea"
+                   @bind="_idea" @bind:event="oninput" @onkeydown="OnIdeaKey" />
+            <Btn Variant="Btn.ButtonVariant.Primary" OnClick="StartFromIdea" Disabled="@(string.IsNullOrWhiteSpace(_idea))">
+                <Icon Name="lightning" Size="14" /> Start
+            </Btn>
+        </div>
+    </section>
+
+    @* Headline KPIs *@
+    <section class="widget">
+        <div class="widget-h">
+            <span>Activity</span>
+            <button class="w-open" @onclick="@(() => Open("overview"))" title="Open Overview">Overview <Icon Name="arrow-right" Size="12" /></button>
+        </div>
+        <div class="w-kpis">
+            <div class="w-kpi"><div class="v">5</div><div class="k">Agents</div></div>
+            <div class="w-kpi"><div class="v">@(_summary is null ? "—" : Num(_summary.RunCount))</div><div class="k">Runs</div></div>
+            <div class="w-kpi"><div class="v">@Success()</div><div class="k">Success</div></div>
+            <div class="w-kpi">
+                <div class="v">@(_summary is null ? "—" : (_isAdmin ? Money(_summary.TotalCostUsd) : Num(_summary.CallCount)))</div>
+                <div class="k">@(_isAdmin ? "Cost" : "Calls")</div>
+            </div>
+        </div>
+    </section>
+
+    @* 5-agent pipeline at a glance *@
+    <section class="widget">
+        <div class="widget-h">
+            <span>Pipeline</span>
+            <button class="w-open" @onclick="@(() => Open("pipeline"))" title="Open Agents">Agents <Icon Name="arrow-right" Size="12" /></button>
+        </div>
+        <div class="w-flow">
+            @for (var i = 0; i < Stages.Length; i++)
+            {
+                var s = Stages[i];
+                <div class="w-node @(i == 0 ? "lead" : "")">
+                    <span class="w-node-ic"><Icon Name="@s.Icon" Size="14" /></span>@s.Name
+                </div>
+                @if (i < Stages.Length - 1)
+                {
+                    <span class="w-arr" aria-hidden="true"><Icon Name="arrow-right" Size="13" /></span>
+                }
+            }
+        </div>
+    </section>
+
+    @* Recent runs *@
+    <section class="widget">
+        <div class="widget-h">
+            <span>Recent runs</span>
+            <button class="w-open" @onclick="@(() => Open("overview"))" title="Open Overview">All <Icon Name="arrow-right" Size="12" /></button>
+        </div>
+        @if (_runs is null || _runs.Count == 0)
+        {
+            <div class="w-empty"><Icon Name="play" Size="16" /><span>No runs yet — start one above.</span></div>
+        }
+        else
+        {
+            <ul class="w-runlist">
+                @foreach (var r in _runs.Take(4))
+                {
+                    <li>
+                        <span class="w-run-dot @StatusClass(r.Status)"></span>
+                        <span class="w-run-title">@(string.IsNullOrWhiteSpace(r.UserStoryPreview) ? "—" : r.UserStoryPreview)</span>
+                        <span class="w-run-when">@r.CreatedAtUtc.ToLocalTime().ToString("d MMM", CultureInfo.CurrentCulture)</span>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string _user = "";
+    private bool _isAdmin;
+    private string _tenantId = "";
+    private string _idea = "";
+    private string _now = "";
+
+    private CostSummary? _summary;
+    private IReadOnlyList<PipelineRunSummary>? _runs;
+    private System.Threading.Timer? _clock;
+
+    private sealed record Stage(string Name, string Icon);
+    private static readonly Stage[] Stages =
+    [
+        new("Orchestrator", "squares-four"),
+        new("Requirement", "tag"),
+        new("Coding", "play"),
+        new("Testing", "check"),
+        new("QA", "lock"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        UpdateClock();
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsAdmin();
+            _tenantId = state.User.GetTenantId() ?? string.Empty;
+            _user = state.User.Identity?.Name ?? "";
+        }
+        if (_tenantId.Length > 0)
+        {
+            await LoadAsync();
+        }
+        // Calm clock: tick every second, repaint only when the HH:mm string actually changes.
+        _clock = new System.Threading.Timer(_ => InvokeAsync(() =>
+        {
+            var prev = _now;
+            UpdateClock();
+            if (_now != prev) { StateHasChanged(); }
+        }), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _summary = await Runs.GetCostSummaryForTenantAsync(_tenantId);
+            _runs = await Runs.ListForTenantAsync(_tenantId, limit: 50);
+        }
+        // The desktop must never crash on a transient read — degrade to empty widgets.
+        catch (System.InvalidOperationException ex) { _ = ex.Message; }
+        catch (System.Net.Http.HttpRequestException ex) { _ = ex.Message; }
+        catch (System.Text.Json.JsonException ex) { _ = ex.Message; }
+        catch (System.TimeoutException ex) { _ = ex.Message; }
+    }
+
+    private void UpdateClock() => _now = DateTime.Now.ToString("HH:mm", CultureInfo.CurrentCulture);
+
+    private static string Greeting()
+    {
+        var h = DateTime.Now.Hour;
+        return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+    }
+
+    private string Success()
+    {
+        if (_runs is null || _runs.Count == 0) { return "—"; }
+        var done = _runs.Count(r => r.Status == "Done");
+        return (int)System.Math.Round(100.0 * done / _runs.Count) + "%";
+    }
+
+    private void Open(string key)
+    {
+        var app = AppCatalog.Find(key);
+        if (app is null) { return; }
+        WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
+    }
+
+    private void StartFromIdea()
+    {
+        var idea = _idea.Trim();
+        if (idea.Length == 0) { return; }
+        WM.RequestLaunchPayload("board", idea);
+        Open("board");
+    }
+
+    private void OnIdeaKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_idea)) { StartFromIdea(); }
+    }
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Done" => "ok",
+        "MaxIterationReached" => "warn",
+        "Failed" => "err",
+        _ => "",
+    };
+
+    private static string Money(decimal v) => "$" + v.ToString("0.00", CultureInfo.InvariantCulture);
+    private static string Num(int v) => v.ToString("N0", CultureInfo.InvariantCulture);
+
+    public void Dispose() => _clock?.Dispose();
+}

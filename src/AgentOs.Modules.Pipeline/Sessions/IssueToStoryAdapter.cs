@@ -1,12 +1,12 @@
-// Coherence Phase 2 (A2a) — adapts a Spine ticket into the pipeline's UserStory input so the Quality
+// Coherence Phase 2 (A2a) — adapts a Board ticket into the pipeline's UserStory input so the Quality
 // engine (the 5-agent SDLC loop) can run against a real board ticket. Pure + static: no DI, no I/O —
-// the Spine run-path calls it inside its Task.Run scope to build the story it streams.
+// the Board run-path calls it inside its Task.Run scope to build the story it streams.
 
 using AgentOs.Domain.Pipeline;
 
 namespace AgentOs.Modules.Pipeline.Sessions;
 
-/// <summary>Builds a <see cref="UserStory"/> from a Spine ticket's title + body.</summary>
+/// <summary>Builds a <see cref="UserStory"/> from a Board ticket's title + body.</summary>
 public static class IssueToStoryAdapter
 {
     /// <summary>

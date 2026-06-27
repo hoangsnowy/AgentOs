@@ -1,0 +1,252 @@
+@* OverviewApp — the AgentOS control plane. One screen that answers "what is this and what did it do":
+   a hero that starts a run from an idea, headline KPI tiles (agents · runs · success · cost), the
+   5-agent pipeline at a glance, and a recent-runs list. Mirrors the ORCA "Overview" dashboard.
+   A Blazor circuit has no HttpContext, so ITenantContext is blank — tenant is read from
+   AuthenticationState and passed to the tenant-explicit repo overloads (cost summary + run list). *@
+
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Modules.Pipeline.Persistence
+@using AgentOs.Web.Services
+@inject IPipelineRunRepository Runs
+@inject AgentOs.Web.Shell.Services.WindowManagerService WM
+
+<header class="page-head">
+    <div>
+        <h1 class="page-title">AgentOS</h1>
+        <p class="page-sub">Turn an idea into a reviewed pull request — the agents do the spec, code and tests.</p>
+    </div>
+    <Btn Variant="Btn.ButtonVariant.Ghost" OnClick="Reload" Disabled="_loading">
+        <Icon Name="arrow-clockwise" Size="14" /> Refresh
+    </Btn>
+</header>
+
+@* ── Hero: start from an idea ─────────────────────────────────────────────────────────────── *@
+<Panel Title="Start from an idea">
+    <Field Label="What do you want to build?"
+           Hint="One or two sentences. AgentOS drafts tickets, then implements, tests and opens a PR.">
+        <textarea class="prefs-input home-idea" rows="3" @bind="_idea" @bind:event="oninput"
+                  placeholder="e.g. Add CSV export to the cost report"></textarea>
+    </Field>
+    <div class="home-cta">
+        <Btn Variant="Btn.ButtonVariant.Primary" OnClick="StartFromIdea"
+             Disabled="@(string.IsNullOrWhiteSpace(_idea))">
+            <Icon Name="lightning" Size="14" /> Start from idea
+        </Btn>
+        <span class="muted">Opens the Board wizard with your idea — review the tickets, then run them to PRs.</span>
+    </div>
+</Panel>
+
+@* ── Headline KPI tiles ───────────────────────────────────────────────────────────────────── *@
+<div class="metrics">
+    <div class="metric">
+        <div class="v">5</div>
+        <div class="k">Specialist agents</div>
+    </div>
+    <div class="metric">
+        <div class="v">@(_summary is null ? "—" : Num(_summary.RunCount))</div>
+        <div class="k">Pipeline runs</div>
+    </div>
+    <div class="metric">
+        <div class="v">@SuccessLabel()</div>
+        <div class="k">Success rate</div>
+    </div>
+    @if (_isAdmin)
+    {
+        <div class="metric">
+            <div class="v">@(_summary is null ? "—" : Money(_summary.TotalCostUsd))</div>
+            <div class="k">LLM cost (USD)</div>
+        </div>
+    }
+    else
+    {
+        <div class="metric">
+            <div class="v">@(_summary is null ? "—" : Num(_summary.CallCount))</div>
+            <div class="k">LLM calls</div>
+        </div>
+    }
+</div>
+
+@* ── The 5-agent pipeline at a glance ─────────────────────────────────────────────────────── *@
+<Panel Title="The pipeline">
+    <HeaderActions>
+        <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => Open("pipeline"))">
+            Open Agents <Icon Name="arrow-right" Size="13" />
+        </Btn>
+    </HeaderActions>
+    <ChildContent>
+        <div class="ov-flow">
+            <div class="ov-node ov-leader">
+                <div class="ov-node-top">
+                    <span class="ov-node-ic"><Icon Name="squares-four" Size="18" /></span>
+                    <Badge Variant="Badge.BadgeVariant.Brand">Leader</Badge>
+                </div>
+                <div class="ov-node-name">Orchestrator</div>
+                <div class="ov-node-desc">Plans the work, routes each step and scores the quality loop.</div>
+            </div>
+            <span class="home-arrow" aria-hidden="true"><Icon Name="arrow-right" Size="16" /></span>
+            @for (var i = 0; i < Specialists.Length; i++)
+            {
+                var s = Specialists[i];
+                <div class="ov-node">
+                    <div class="ov-node-top">
+                        <span class="ov-node-ic"><Icon Name="@s.Icon" Size="18" /></span>
+                        <span class="ov-node-step">@(i + 1)</span>
+                    </div>
+                    <div class="ov-node-name">@s.Name</div>
+                    <div class="ov-node-desc">@s.Desc</div>
+                </div>
+                @if (i < Specialists.Length - 1)
+                {
+                    <span class="home-arrow" aria-hidden="true"><Icon Name="arrow-right" Size="16" /></span>
+                }
+            }
+        </div>
+        <p class="ov-loop-note">
+            <Icon Name="arrow-clockwise" Size="13" />
+            QA scores requirement ↔ code ↔ test and loops back to Coding until they agree (or the iteration cap is hit).
+        </p>
+    </ChildContent>
+</Panel>
+
+@* ── Recent runs ──────────────────────────────────────────────────────────────────────────── *@
+<Panel Title="Recent runs">
+    @if (_loading && _runs is null)
+    {
+        <Spinner />
+    }
+    else if (_runs is null || _runs.Count == 0)
+    {
+        <EmptyState Icon="play"
+                    Title="No runs yet"
+                    Hint="Start from an idea above, or open Agents to run the pipeline on a sandbox story." />
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Story</th>
+                    <th>Status</th>
+                    <th class="num">QA rounds</th>
+                    @if (_isAdmin) { <th class="num">Cost</th> }
+                    <th>When</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _runs.Take(8))
+                {
+                    <tr>
+                        <td>@(string.IsNullOrWhiteSpace(r.UserStoryPreview) ? "—" : r.UserStoryPreview)</td>
+                        <td><Badge Variant="@StatusVariant(r.Status)">@StatusLabel(r.Status)</Badge></td>
+                        <td class="num">@r.IterationCount</td>
+                        @if (_isAdmin) { <td class="num">@Money(r.TotalCostUsd)</td> }
+                        <td class="muted">@r.CreatedAtUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</Panel>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string _idea = "";
+    private bool _isAdmin;
+    private string _tenantId = "";
+    private bool _loading;
+
+    private CostSummary? _summary;
+    private IReadOnlyList<PipelineRunSummary>? _runs;
+
+    private sealed record Specialist(string Name, string Desc, string Icon);
+
+    private static readonly Specialist[] Specialists =
+    [
+        new("Requirement", "Idea → spec + acceptance criteria.", "tag"),
+        new("Coding",      "Spec → implementation.",             "play"),
+        new("Testing",     "Generates and runs the tests.",      "check"),
+        new("QA",          "Scores consistency, gates the loop.", "lock"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsAdmin();
+            _tenantId = state.User.GetTenantId() ?? string.Empty;
+        }
+        if (_tenantId.Length > 0)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            // Tenant-explicit reads — a circuit's ITenantContext is blank, so pass the tenant in.
+            _summary = await Runs.GetCostSummaryForTenantAsync(_tenantId);
+            _runs = await Runs.ListForTenantAsync(_tenantId, limit: 50);
+        }
+        // Degrade to empty tiles on any transient read failure — the dashboard must never crash the circuit.
+        catch (System.InvalidOperationException ex) { _ = ex.Message; }
+        catch (System.Net.Http.HttpRequestException ex) { _ = ex.Message; }
+        catch (System.Text.Json.JsonException ex) { _ = ex.Message; }
+        catch (System.TimeoutException ex) { _ = ex.Message; }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Reload() => await LoadAsync();
+
+    // Success rate over the loaded runs (Done counts as success). Em-dash when there are no runs yet.
+    private string SuccessLabel()
+    {
+        if (_runs is null || _runs.Count == 0) { return "—"; }
+        var done = _runs.Count(r => r.Status == "Done");
+        var pct = (int)System.Math.Round(100.0 * done / _runs.Count);
+        return pct + "%";
+    }
+
+    private void Open(string key)
+    {
+        var app = AppCatalog.Find(key);
+        if (app is null) { return; }
+        WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
+    }
+
+    // Hand the idea to the Board wizard via a one-shot launch payload, then open it on the Idea step.
+    private void StartFromIdea()
+    {
+        var idea = _idea.Trim();
+        if (idea.Length == 0) { return; }
+        WM.RequestLaunchPayload("board", idea);
+        Open("board");
+    }
+
+    private static Badge.BadgeVariant StatusVariant(string status) => status switch
+    {
+        "Done" => Badge.BadgeVariant.Ok,
+        "MaxIterationReached" => Badge.BadgeVariant.Warn,
+        "Failed" => Badge.BadgeVariant.Err,
+        _ => Badge.BadgeVariant.Default,
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "Done" => "Complete",
+        "MaxIterationReached" => "Iteration limit",
+        "Failed" => "Failed",
+        _ => status,
+    };
+
+    private static string Money(decimal v) => "$" + v.ToString("0.0000", CultureInfo.InvariantCulture);
+    private static string Num(int v) => v.ToString("N0", CultureInfo.InvariantCulture);
+}

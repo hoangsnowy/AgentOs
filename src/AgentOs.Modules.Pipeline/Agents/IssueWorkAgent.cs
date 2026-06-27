@@ -42,7 +42,7 @@ public sealed class IssueWorkAgent : IIssueWorkAgent
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(options);
-        // Resolve the LLM client lazily in RunAsync — NOT here. This agent is injected into the Spine
+        // Resolve the LLM client lazily in RunAsync — NOT here. This agent is injected into the Board
         // desktop app, so it is constructed eagerly when that window opens. Resolving a provider client
         // in the ctor builds a pooled client (which throws when no API key is configured), and that
         // exception would crash the Blazor circuit on open. The ctor must stay side-effect-free.

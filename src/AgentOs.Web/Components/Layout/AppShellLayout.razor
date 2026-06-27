@@ -219,6 +219,8 @@
         if (firstRender)
         {
             await RestorePreferencesAsync();
+            // No auto-opened window: the desktop itself shows live widgets (DesktopWidgets) as the
+            // landing. The Overview app stays one click away in the dock for the detailed view.
         }
 
         if (_focusOnRender)

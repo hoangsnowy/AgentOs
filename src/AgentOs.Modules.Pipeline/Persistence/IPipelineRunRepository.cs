@@ -26,6 +26,13 @@ public interface IPipelineRunRepository
     /// <paramref name="offset"/> skips that many rows for paging.</summary>
     Task<IReadOnlyList<PipelineRunSummary>> ListAsync(int limit = 50, int offset = 0, CancellationToken ct = default);
 
+    /// <summary>Most recent runs for one tenant, newest first. <b>Tenant-explicit</b>: the caller passes
+    /// the tenant id rather than relying on the DbContext's <c>ITenantContext</c>-driven global query
+    /// filter, which is blank in a Blazor circuit (no HttpContext). Use this from the desktop (Overview /
+    /// run history) so the list is scoped to the signed-in tenant instead of leaking or coming back empty.</summary>
+    Task<IReadOnlyList<PipelineRunSummary>> ListForTenantAsync(
+        string tenantId, int limit = 50, int offset = 0, CancellationToken ct = default);
+
     /// <summary>Aggregated LLM cost for one tenant since an optional cutoff (null = all time).
     /// Tenant-explicit: the caller passes the tenant id so this is safe to call from a Blazor
     /// circuit, where ITenantContext is blank (no HttpContext) and the DbContext's global query

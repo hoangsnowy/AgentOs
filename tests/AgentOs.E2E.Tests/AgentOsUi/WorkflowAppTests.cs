@@ -5,7 +5,7 @@
 // window; these drive Run → live node status → completion, including the new control-flow + Human nodes.
 //
 // Window interactions are scoped to ".appwin.focused" (the WindowManagerService singleton stacks windows
-// across runs), matching SpineAppTests. Blazor Server can drop a click that lands before the freshly-opened
+// across runs), matching BoardAppTests. Blazor Server can drop a click that lands before the freshly-opened
 // window's circuit is interactive, so the Run click is retried until the Run-Log panel confirms it took.
 
 using System.Threading.Tasks;

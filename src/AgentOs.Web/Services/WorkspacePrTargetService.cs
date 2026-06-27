@@ -1,7 +1,7 @@
-// Hydrates a Spine-connected workspace repo into a WorkspaceDescriptor (repo coords + decrypted PAT) so the
-// Pipeline can open a PR against the SAME boards Spine manages — one repo/token source. This lives Web-side
+// Hydrates a Board-connected workspace repo into a WorkspaceDescriptor (repo coords + decrypted PAT) so the
+// Pipeline can open a PR against the SAME boards the Board app manages — one repo/token source. This lives Web-side
 // (not in Integration) because hydration needs IWorkspaceRepository + IAppConfigStore, which Integration must
-// not reference; it extracts the descriptor build SpineApp inlines at RunSession. Side-effect-free ctor
+// not reference; it extracts the descriptor build BoardApp inlines at RunSession. Side-effect-free ctor
 // (eager @inject rule): it stores the two repos only — no LLM client, no I/O.
 
 using System;

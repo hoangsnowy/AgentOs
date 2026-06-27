@@ -1,6 +1,6 @@
 // No-op fallbacks so the host boots stateless when no ConnectionStrings:DefaultConnection is set
 // (CI / local probes). Mirrors NullWorkspaceRepository. With no DB, no runner can be paired and no
-// session persisted — the remote spine is simply inert rather than crashing the host.
+// session persisted — the remote runner is simply inert rather than crashing the host.
 
 using System;
 using System.Collections.Generic;

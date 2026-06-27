@@ -135,6 +135,31 @@ internal sealed class PipelineRunRepository(
             .ToListAsync(ct);
     }
 
+    // Tenant-explicit list: bypass the ITenantContext-driven global query filter (a Blazor circuit has no
+    // HttpContext, so ITenantContext is blank) and scope to the tenant the caller passed in. Mirrors
+    // GetCostSummaryForTenantAsync so the desktop Overview / run history is correct from a circuit.
+    public async Task<IReadOnlyList<PipelineRunSummary>> ListForTenantAsync(
+        string tenantId, int limit = 50, int offset = 0, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        return await db.PipelineRuns
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => x.TenantId == tenantId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Skip(offset)
+            .Take(limit)
+            .Select(x => new PipelineRunSummary(
+                x.Id,
+                x.Status,
+                x.TotalCostUsd,
+                x.IterationCount,
+                x.CreatedAtUtc,
+                x.CompletedAtUtc,
+                x.UserStoryText.Length > 120 ? x.UserStoryText.Substring(0, 120) : x.UserStoryText))
+            .ToListAsync(ct);
+    }
+
     public async Task<CostSummary> GetCostSummaryForTenantAsync(
         string tenantId, DateTimeOffset? since = null, CancellationToken ct = default)
     {

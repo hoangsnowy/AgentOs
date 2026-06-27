@@ -9,9 +9,10 @@
      @oncontextmenu="OnRightClick"
      @oncontextmenu:preventDefault="true">
 
-    @* Authentic GNOME desktop: clean wallpaper, no icons. Apps live in the Dash (bottom dock)
-       and the Activities overview (top-left "Activities" → search + app grid + window exposé).
-       Right-click opens the desktop context menu. *@
+    @* GNOME desktop with live widgets on the wallpaper (clock · KPIs · pipeline · recent runs) —
+       glanceable the moment you sign in. Apps live in the Dash; the Activities overview + right-click
+       context menu still work in the empty wallpaper around the widgets. *@
+    <DesktopWidgets />
 </div>
 
 <ContextMenu Show="_ctxShow" X="_ctxX" Y="_ctxY" OnClose="@(() => _ctxShow = false)">
@@ -28,8 +29,8 @@
     <button class="ctx-item" @onclick="DemoToast">
         <span class="ctx-ic"><Icon Name="bell" Size="14" /></span> Test notification
     </button>
-    <button class="ctx-item" @onclick="@(() => Launch("pipeline", "Pipeline", "play", 920, 620))">
-        <span class="ctx-ic"><Icon Name="play" Size="14" /></span> Open Pipeline
+    <button class="ctx-item" @onclick="@(() => Launch("overview", "Overview", "house", 1000, 680))">
+        <span class="ctx-ic"><Icon Name="house" Size="14" /></span> Open Overview
     </button>
 </ContextMenu>
 

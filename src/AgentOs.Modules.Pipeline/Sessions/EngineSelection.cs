@@ -1,4 +1,4 @@
-// Coherence Phase 2 (A2b) — the engine a Spine session runs under and the rule that keeps the choice
+// Coherence Phase 2 (A2b) — the engine a Board session runs under and the rule that keeps the choice
 // coherent. "Quick" = IssueWorkAgent (an edit loop dispatched to the paired runner). "Quality" = the
 // 5-agent pipeline (server-side). Pure so the mutual-exclusion guard is unit-tested without a circuit.
 
@@ -6,7 +6,7 @@ using System;
 
 namespace AgentOs.Modules.Pipeline.Sessions;
 
-/// <summary>The two Spine engines + the validity rule for selecting one.</summary>
+/// <summary>The two Board engines + the validity rule for selecting one.</summary>
 public static class EngineSelection
 {
     /// <summary>The runner edit loop (IssueWorkAgent) — the default.</summary>

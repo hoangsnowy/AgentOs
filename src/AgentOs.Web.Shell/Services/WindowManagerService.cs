@@ -56,7 +56,7 @@ public sealed class WindowManagerService
     }
 
     /// <summary>
-    /// One-shot launch payload: data a freshly-opened app consumes on init (e.g. the Spine "Open in
+    /// One-shot launch payload: data a freshly-opened app consumes on init (e.g. the Board "Open in
     /// Pipeline" action prefills the Pipeline app's story text). Set it right before <see cref="OpenApp"/>;
     /// the app reads it once via <see cref="ConsumeLaunchPayload"/> and it self-clears, so a later plain
     /// launch starts empty. Keyed by app so concurrent deep-links don't collide.
