@@ -104,7 +104,7 @@
         get
         {
             var w = WM.Open
-                .Where(x => !x.Minimized)
+                .Where(x => !x.Minimized && x.Workspace == WM.ActiveWorkspace)
                 .OrderByDescending(x => x.Z)
                 .FirstOrDefault();
             return w is null ? "AgentOS — Desktop" : w.Title;

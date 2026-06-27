@@ -1,4 +1,4 @@
-@* SpineApp — Boards (a connected GitHub Projects v2 board, spanning many repos) → Tickets (board
+@* BoardApp — Boards (a connected GitHub Projects v2 board, spanning many repos) → Tickets (board
    items across repos) → AI sessions. A board has a Repositories sub-list (the services under it) and
    a unified Tickets list filtered by repo / label / status. "Work on this" starts a session against
    the ticket's repo, then "Run" triggers the IssueWorkAgent → branch → PR.
@@ -37,7 +37,7 @@
 
 <header class="page-head">
     <div>
-        <h1 class="page-title">Spine · <code>@_tenantId</code></h1>
+        <h1 class="page-title">Board · <code>@_tenantId</code></h1>
         <p class="page-sub">Boards → Tickets → AI sessions. Remote repo-execution path.</p>
     </div>
     <Btn OnClick="ReloadAll" Disabled="_loading">
@@ -45,17 +45,17 @@
     </Btn>
 </header>
 
-<div class="spine-tabs">
-    <button class="spine-tab @(_tab == Tab.Boards ? "active" : "")" @onclick="@(() => { _tab = Tab.Boards; _selectedBoard = null; })">
+<div class="board-tabs">
+    <button class="board-tab @(_tab == Tab.Boards ? "active" : "")" @onclick="@(() => { _tab = Tab.Boards; _selectedBoard = null; })">
         Boards <Badge>@(_boards?.Count ?? 0)</Badge>
     </button>
-    <button class="spine-tab @(_tab == Tab.Idea ? "active" : "")" @onclick="@(() => _tab = Tab.Idea)">
+    <button class="board-tab @(_tab == Tab.Idea ? "active" : "")" @onclick="@(() => _tab = Tab.Idea)">
         Start from idea
     </button>
-    <button class="spine-tab @(_tab == Tab.Runners ? "active" : "")" @onclick="@(() => _tab = Tab.Runners)">
+    <button class="board-tab @(_tab == Tab.Runners ? "active" : "")" @onclick="@(() => _tab = Tab.Runners)">
         Runners <Badge>@(_runners?.Count ?? 0)</Badge>
     </button>
-    <button class="spine-tab @(_tab == Tab.Sessions ? "active" : "")" @onclick="@(() => _tab = Tab.Sessions)">
+    <button class="board-tab @(_tab == Tab.Sessions ? "active" : "")" @onclick="@(() => _tab = Tab.Sessions)">
         Sessions <Badge>@(_sessions?.Count ?? 0)</Badge>
     </button>
 </div>
@@ -114,7 +114,7 @@ else if (_tab == Tab.Boards)
                     }
                     else if (_foundBoards is { Count: 0 })
                     {
-                        <p class="muted spine-form-hint">No boards found for that owner + token.</p>
+                        <p class="muted board-form-hint">No boards found for that owner + token.</p>
                     }
                 </Field>
                 <Field Label="Access token (PAT)">
@@ -130,7 +130,7 @@ else if (_tab == Tab.Boards)
                     @(_busy ? "Connecting…" : "Connect")
                 </Btn>
             </div>
-            <p class="muted spine-form-hint">Token is validated, then stored encrypted — never shown again or kept on the row. A GitHub board number is its Projects v2 number (in the project URL).</p>
+            <p class="muted board-form-hint">Token is validated, then stored encrypted — never shown again or kept on the row. A GitHub board number is its Projects v2 number (in the project URL).</p>
         </Panel>
 
         @if (_boards is null) { <Spinner /> }
@@ -189,11 +189,11 @@ else if (_tab == Tab.Boards)
     else
     {
         @* Board detail: repositories + unified tickets *@
-        <div class="spine-back-bar">
+        <div class="board-back-bar">
             <Btn Size="Btn.ButtonSize.Sm" OnClick="CloseBoard">
                 <Icon Name="arrow-left" Size="13" /> @_selectedBoard.Name
             </Btn>
-            <span class="spine-back-repo muted">
+            <span class="board-back-repo muted">
                 <code>@_selectedBoard.ProjectOwner@(_selectedBoard.ProjectNumber is not null ? $" #{_selectedBoard.ProjectNumber}" : "")</code>
             </span>
         </div>
@@ -273,7 +273,7 @@ else if (_tab == Tab.Boards)
         else if (_tickets is not null)
         {
             <Panel Title="@($"Tickets · {_selectedBoard.Name}")">
-                <div class="spine-filters">
+                <div class="board-filters">
                     <Field Label="Repository">
                         <select class="prefs-select" @bind="_filterRepo">
                             <option value="">All repos</option>
@@ -305,7 +305,7 @@ else if (_tab == Tab.Boards)
                 @{ var readyCount = ReadyTickets().Count; }
                 @if (readyCount > 0)
                 {
-                    <div class="form-actions spine-runall">
+                    <div class="form-actions board-runall">
                         <Btn Variant="Btn.ButtonVariant.Primary" OnClick="RunAllReady" Disabled="_busy">
                             <Icon Name="lightning" Size="13" /> Run all ai:ready (@readyCount)
                         </Btn>
@@ -335,7 +335,7 @@ else if (_tab == Tab.Boards)
                                     }
                                     else
                                     {
-                                        <a href="@ticket.HtmlUrl" target="_blank" rel="noopener" class="spine-issue-link">@ticket.Title</a>
+                                        <a href="@ticket.HtmlUrl" target="_blank" rel="noopener" class="board-issue-link">@ticket.Title</a>
                                     }
                                 </td>
                                 <td>
@@ -384,10 +384,10 @@ else if (_tab == Tab.Boards)
 else if (_tab == Tab.Idea)
 {
     <Panel Title="Start from idea">
-        <div class="spine-wizard-steps">
-            <span class="spine-wizard-step @StepClass(IdeaStep.Input)">1 · Idea</span>
-            <span class="spine-wizard-step @StepClass(IdeaStep.Review)">2 · Review</span>
-            <span class="spine-wizard-step @StepClass(IdeaStep.Result)">3 · Create</span>
+        <div class="board-wizard-steps">
+            <span class="board-wizard-step @StepClass(IdeaStep.Input)">1 · Idea</span>
+            <span class="board-wizard-step @StepClass(IdeaStep.Review)">2 · Review</span>
+            <span class="board-wizard-step @StepClass(IdeaStep.Result)">3 · Create</span>
         </div>
 
         @if (_ideaStep == IdeaStep.Input)
@@ -422,11 +422,11 @@ else if (_tab == Tab.Idea)
                     @(_ideaBusy ? "Generating…" : "Generate spec + tickets")
                 </Btn>
             </div>
-            <p class="muted spine-form-hint">Nothing is written to GitHub yet — you review and edit the tickets before anything is created. The board needs a Projects v2 number.</p>
+            <p class="muted board-form-hint">Nothing is written to GitHub yet — you review and edit the tickets before anything is created. The board needs a Projects v2 number.</p>
         }
         else if (_ideaStep == IdeaStep.Review && _preview is not null)
         {
-            <div class="spine-spec">
+            <div class="board-spec">
                 <h3>@_preview.Spec.Title</h3>
                 <p class="muted">@_preview.Spec.Summary</p>
             </div>
@@ -439,10 +439,10 @@ else if (_tab == Tab.Idea)
                     @foreach (var row in _draftRows)
                     {
                         <tr>
-                            <td><input class="spine-ticket-title" @bind="row.Title" /></td>
+                            <td><input class="board-ticket-title" @bind="row.Title" /></td>
                             <td>@foreach (var l in row.Labels) { <Badge>@l</Badge> }</td>
                             <td>
-                                <label class="spine-ai-toggle">
+                                <label class="board-ai-toggle">
                                     <input type="checkbox" checked="@row.AiReady" aria-label="Auto-run this ticket (ai:ready)"
                                            @onchange="@(e => ToggleAiReady(row, e))" /> ai:ready
                                 </label>
@@ -462,7 +462,7 @@ else if (_tab == Tab.Idea)
             </table>
 
             @if (_ideaError is not null) { <p class="login-error">@_ideaError</p> }
-            <label class="spine-ai-toggle" style="margin:var(--space-3) 0 0">
+            <label class="board-ai-toggle" style="margin:var(--space-3) 0 0">
                 Engine
                 <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:var(--space-2)">
                     <option value="Quick">Quick — runner edit loop</option>
@@ -471,15 +471,15 @@ else if (_tab == Tab.Idea)
             </label>
             @if (_brain == "Quality")
             {
-                <p class="muted spine-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
+                <p class="muted board-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
             }
-            <label class="spine-ai-toggle" style="margin:var(--space-3) 0">
+            <label class="board-ai-toggle" style="margin:var(--space-3) 0">
                 <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" aria-label="Run on my machine" />
                 Run on my machine — your paired runner's CLI does the work (0 server tokens)
             </label>
             @if (_runOnMachine)
             {
-                <label class="spine-ai-toggle" style="margin:0 0 var(--space-3)">
+                <label class="board-ai-toggle" style="margin:0 0 var(--space-3)">
                     CLI agent
                     <select @bind="_cliProfile" class="prefs-input" style="width:auto;margin-left:var(--space-2)">
                         <option value="claude">Claude Code</option>
@@ -489,7 +489,7 @@ else if (_tab == Tab.Idea)
             }
             @if (_runOnMachine && !HasRunner())
             {
-                <p class="muted spine-form-hint">No paired runner yet — register one in the <strong>Runners</strong> tab and start the AgentOS remote agent (@_cliProfile) on your machine first.</p>
+                <p class="muted board-form-hint">No paired runner yet — register one in the <strong>Runners</strong> tab and start the AgentOS remote agent (@_cliProfile) on your machine first.</p>
             }
             <div class="form-actions">
                 <Btn OnClick="@(() => { _ideaStep = IdeaStep.Input; _ideaError = null; })" Disabled="_ideaBusy">Back</Btn>
@@ -500,7 +500,7 @@ else if (_tab == Tab.Idea)
                     Create only
                 </Btn>
             </div>
-            <p class="muted spine-form-hint">Creates real GitHub issues on the selected repo and adds them to the board (labels seeded first). <strong>Create &amp; run</strong> then starts an AI session on every <code>ai:ready</code> ticket — review the list above first; this is the one human gate.</p>
+            <p class="muted board-form-hint">Creates real GitHub issues on the selected repo and adds them to the board (labels seeded first). <strong>Create &amp; run</strong> then starts an AI session on every <code>ai:ready</code> ticket — review the list above first; this is the one human gate.</p>
         }
         else if (_ideaStep == IdeaStep.Result)
         {
@@ -512,7 +512,7 @@ else if (_tab == Tab.Idea)
                     {
                         <tr>
                             <td class="muted">#@t.Number</td>
-                            <td><a href="@t.HtmlUrl" target="_blank" rel="noopener" class="spine-issue-link">@t.Title</a></td>
+                            <td><a href="@t.HtmlUrl" target="_blank" rel="noopener" class="board-issue-link">@t.Title</a></td>
                         </tr>
                     }
                 </tbody>
@@ -615,7 +615,7 @@ else if (_tab == Tab.Sessions)
                             @s.Title
                             @if (!string.IsNullOrEmpty(s.Error))
                             {
-                                <br /><span class="spine-session-repo-err" style="font-size:11px">@s.Error</span>
+                                <br /><span class="board-session-repo-err" style="font-size:11px">@s.Error</span>
                             }
                         </td>
                         <td><code>@BoardName(s.WorkspaceId)</code></td>
@@ -625,7 +625,7 @@ else if (_tab == Tab.Sessions)
                             {
                                 @foreach (var r in sessionRepos)
                                 {
-                                    <div class="spine-session-repo">
+                                    <div class="board-session-repo">
                                         <code>@r.Owner/@r.Repo</code>
                                         <Badge>@r.Status</Badge>
                                         @if (!string.IsNullOrEmpty(r.PrUrl))
@@ -634,7 +634,7 @@ else if (_tab == Tab.Sessions)
                                         }
                                         @if (!string.IsNullOrEmpty(r.Error))
                                         {
-                                            <span class="muted spine-session-repo-err" title="@r.Error">!</span>
+                                            <span class="muted board-session-repo-err" title="@r.Error">!</span>
                                         }
                                     </div>
                                 }
@@ -668,13 +668,13 @@ else if (_tab == Tab.Sessions)
                     </tr>
                     @if (_activity.TryGetValue(s.Id, out var feed) && feed.Count > 0)
                     {
-                        <tr class="spine-activity-tr">
+                        <tr class="board-activity-tr">
                             <td colspan="@(_isAdmin ? 7 : 6)">
-                                <div class="spine-activity">
+                                <div class="board-activity">
                                     @foreach (var ev in feed.TakeLast(8))
                                     {
-                                        <div class="spine-activity-row">
-                                            <span class="spine-activity-time">@ev.At.ToLocalTime().ToString("HH:mm:ss")</span>
+                                        <div class="board-activity-row">
+                                            <span class="board-activity-time">@ev.At.ToLocalTime().ToString("HH:mm:ss")</span>
                                             <span>@ev.Message</span>
                                         </div>
                                     }
@@ -694,10 +694,10 @@ else if (_tab == Tab.Sessions)
 <Dialog Show="_showWorkDialog" Title="@($"Work on #{_workTicket?.Number}")" OnClose="CloseWorkDialog">
     <ChildContent>
         <p class="muted">Pick the repositories this ticket spans. The AI works each one and opens a PR per repo.</p>
-        <div class="spine-repo-picker">
+        <div class="board-repo-picker">
             @foreach (var opt in _workRepoOptions)
             {
-                <label class="spine-repo-option">
+                <label class="board-repo-option">
                     <input type="checkbox" @bind="opt.Selected" aria-label="@($"Include {opt.Owner}/{opt.Repo} in this session")" />
                     <code>@opt.Owner/@opt.Repo</code>
                     <span class="muted">@opt.DefaultBranch</span>
@@ -708,7 +708,7 @@ else if (_tab == Tab.Sessions)
                 <p class="muted">No repositories available — add one under the board first.</p>
             }
         </div>
-        <label class="spine-ai-toggle" style="margin-top:var(--space-3)">
+        <label class="board-ai-toggle" style="margin-top:var(--space-3)">
             Engine
             <select @bind="_brain" @bind:after="OnBrainChanged" class="prefs-input" style="width:auto;margin-left:var(--space-2)">
                 <option value="Quick">Quick — runner edit loop</option>
@@ -717,15 +717,15 @@ else if (_tab == Tab.Sessions)
         </label>
         @if (_brain == "Quality")
         {
-            <p class="muted spine-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
+            <p class="muted board-form-hint">Quality runs the 5-agent SDLC pipeline server-side — up to @QualityNMax() QA iteration(s), higher server-token cost. Greenfield feature tickets only; bug/edit tickets are refused.</p>
         }
-        <label class="spine-ai-toggle" style="margin-top:var(--space-3)">
+        <label class="board-ai-toggle" style="margin-top:var(--space-3)">
             <input type="checkbox" @bind="_runOnMachine" disabled="@(_brain == "Quality")" aria-label="Run on my machine" />
             Run on my machine — your paired runner's CLI does the work (0 server tokens)
         </label>
         @if (_runOnMachine)
         {
-            <label class="spine-ai-toggle" style="margin:0 0 var(--space-3)">
+            <label class="board-ai-toggle" style="margin:0 0 var(--space-3)">
                 CLI agent
                 <select @bind="_cliProfile" class="prefs-input" style="width:auto;margin-left:var(--space-2)">
                     <option value="claude">Claude Code</option>
@@ -861,7 +861,7 @@ else if (_tab == Tab.Sessions)
         }
         _resolved = true;
         // Deep-link from the Home app's "Start from idea": prefill the wizard's idea + open the Idea tab.
-        var ideaPayload = WM.ConsumeLaunchPayload("spine");
+        var ideaPayload = WM.ConsumeLaunchPayload("board");
         if (!string.IsNullOrWhiteSpace(ideaPayload))
         {
             _ideaText = ideaPayload;
@@ -922,7 +922,7 @@ else if (_tab == Tab.Sessions)
         }
 
         void HandleLoadError(Exception ex) =>
-            Toasts.Show("Spine", $"Load failed: {ex.Message}", ToastKind.Err);
+            Toasts.Show("Board", $"Load failed: {ex.Message}", ToastKind.Err);
     }
 
     private async Task PollRunningSessions()
@@ -1109,7 +1109,7 @@ else if (_tab == Tab.Sessions)
         if (_busy || _selectedBoard is null) { return; }
         if (string.IsNullOrWhiteSpace(_addRepoOwner) || string.IsNullOrWhiteSpace(_addRepoName))
         {
-            Toasts.Show("Spine", "Owner and repository are required.", ToastKind.Err);
+            Toasts.Show("Board", "Owner and repository are required.", ToastKind.Err);
             return;
         }
         _busy = true;
@@ -1120,19 +1120,19 @@ else if (_tab == Tab.Sessions)
                 string.IsNullOrWhiteSpace(_addRepoBranch) ? null : _addRepoBranch.Trim());
             if (result.Ok)
             {
-                Toasts.Show("Spine", $"Added {_addRepoOwner.Trim()}/{_addRepoName.Trim()}.", ToastKind.Ok);
+                Toasts.Show("Board", $"Added {_addRepoOwner.Trim()}/{_addRepoName.Trim()}.", ToastKind.Ok);
                 _addRepoOwner = _addRepoName = _addRepoBranch = "";
                 _repos = await Workspaces.ListReposForTenantAsync(_tenantId, _selectedBoard.Id);
             }
             else
             {
-                Toasts.Show("Spine", result.Error ?? "Could not add the repository.", ToastKind.Err);
+                Toasts.Show("Board", result.Error ?? "Could not add the repository.", ToastKind.Err);
             }
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Add failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Add failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Add failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Add failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Add failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;
@@ -1146,13 +1146,13 @@ else if (_tab == Tab.Sessions)
         try
         {
             await Workspaces.RemoveRepoForTenantAsync(_tenantId, repo.Id);
-            Toasts.Show("Spine", $"Removed {repo.Owner}/{repo.Repo}.", ToastKind.Ok);
+            Toasts.Show("Board", $"Removed {repo.Owner}/{repo.Repo}.", ToastKind.Ok);
             _repos = await Workspaces.ListReposForTenantAsync(_tenantId, _selectedBoard.Id);
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Remove failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Remove failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Remove failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Remove failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Remove failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1170,22 +1170,22 @@ else if (_tab == Tab.Sessions)
             var pat = await ConfigStore.GetForTenantAsync(_tenantId, _selectedBoard.CredentialRef);
             if (string.IsNullOrEmpty(pat))
             {
-                Toasts.Show("Spine", "Could not retrieve board credentials. Reconnect the board.", ToastKind.Err);
+                Toasts.Show("Board", "Could not retrieve board credentials. Reconnect the board.", ToastKind.Err);
                 return;
             }
 
             var descriptor = RepoDescriptor(_selectedBoard, _tenantId, repo.Owner, repo.Repo, repo.DefaultBranch, pat);
             var result = await BoardWriteSvc.EnsureLabelsAsync(descriptor, StandardLabels.All);
 
-            Toasts.Show("Spine",
+            Toasts.Show("Board",
                 $"{repo.Owner}/{repo.Repo}: {result.Created.Count} label(s) created, {result.Existing.Count} already present.",
                 ToastKind.Ok);
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
-        catch (System.Text.Json.JsonException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Seed failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Seed failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Text.Json.JsonException ex) { Toasts.Show("Board", $"Seed failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Seed failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Seed failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Seed failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1313,7 +1313,7 @@ else if (_tab == Tab.Sessions)
                 .ToList();
             _createdTickets = await BoardWriteSvc.CreateTicketsAsync(boardDesc, repoDesc, drafts);
 
-            Toasts.Show("Spine", $"Created {_createdTickets.Count} ticket(s) on {repo.Owner}/{repo.Repo}.", ToastKind.Ok);
+            Toasts.Show("Board", $"Created {_createdTickets.Count} ticket(s) on {repo.Owner}/{repo.Repo}.", ToastKind.Ok);
 
             // Auto-run: one session per ai:ready created ticket (created order matches the drafts sent).
             if (runReady)
@@ -1330,7 +1330,7 @@ else if (_tab == Tab.Sessions)
                 }
                 if (sessions.Count > 0)
                 {
-                    Toasts.Show("Spine", $"Running {sessions.Count} ai:ready ticket(s)…", ToastKind.Ok);
+                    Toasts.Show("Board", $"Running {sessions.Count} ai:ready ticket(s)…", ToastKind.Ok);
                     await ReloadAll();
                     ResetIdea();
                     _tab = Tab.Sessions;
@@ -1357,7 +1357,7 @@ else if (_tab == Tab.Sessions)
         void HandleCreateError(Exception ex)
         {
             _ideaError = $"Create failed: {ex.Message}";
-            Toasts.Show("Spine", _ideaError, ToastKind.Err);
+            Toasts.Show("Board", _ideaError, ToastKind.Err);
         }
     }
 
@@ -1430,12 +1430,12 @@ else if (_tab == Tab.Sessions)
         var selected = _workRepoOptions.Where(o => o.Selected).ToList();
         if (selected.Count == 0)
         {
-            Toasts.Show("Spine", "Select at least one repository.", ToastKind.Err);
+            Toasts.Show("Board", "Select at least one repository.", ToastKind.Err);
             return;
         }
         if (EngineSelection.Validate(_brain, _runOnMachine) is { } brainErr)
         {
-            Toasts.Show("Spine", brainErr, ToastKind.Err);
+            Toasts.Show("Board", brainErr, ToastKind.Err);
             return;
         }
         _busy = true;
@@ -1451,16 +1451,16 @@ else if (_tab == Tab.Sessions)
                 ticket.ItemNodeId, ticket.Kind.ToString(), ordered, _runOnMachine,
                 brain: _brain, ticketType: TicketTypeOf(ticket.Labels));
 
-            Toasts.Show("Spine", $"Session created for #{ticket.Number} across {ordered.Count} repo(s). Switch to Sessions to run it.", ToastKind.Ok);
+            Toasts.Show("Board", $"Session created for #{ticket.Number} across {ordered.Count} repo(s). Switch to Sessions to run it.", ToastKind.Ok);
             CloseWorkDialog();
             await ReloadAll();
             _tab = Tab.Sessions;
             CloseBoard();
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Failed to create session: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Failed to create session: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Failed to create session: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Failed to create session: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Failed to create session: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;
@@ -1532,7 +1532,7 @@ else if (_tab == Tab.Sessions)
         new(board.Id, tenantId, board.Kind, owner, repo, board.Project,
             string.IsNullOrWhiteSpace(defaultBranch) ? "main" : defaultBranch, pat);
 
-    // The ai:ready tickets on the board that the spine can run unattended (real issue, has a repo).
+    // The ai:ready tickets on the board that the agent can run unattended (real issue, has a repo).
     private List<BoardTicket> ReadyTickets() => _tickets is null
         ? new List<BoardTicket>()
         : _tickets.Where(t => t.Labels.Contains(StandardLabels.AiReady)
@@ -1560,7 +1560,7 @@ else if (_tab == Tab.Sessions)
         var ready = ReadyTickets();
         if (ready.Count == 0)
         {
-            Toasts.Show("Spine", "No ai:ready tickets to run.", ToastKind.Err);
+            Toasts.Show("Board", "No ai:ready tickets to run.", ToastKind.Err);
             return;
         }
         _busy = true;
@@ -1574,7 +1574,7 @@ else if (_tab == Tab.Sessions)
                     ticket.ItemNodeId, ticket.Kind.ToString(), [RepoOptionForTicket(ticket)],
                     ticketType: TicketTypeOf(ticket.Labels)));
             }
-            Toasts.Show("Spine", $"Running {sessions.Count} ai:ready ticket(s)…", ToastKind.Ok);
+            Toasts.Show("Board", $"Running {sessions.Count} ai:ready ticket(s)…", ToastKind.Ok);
             await ReloadAll();
             _tab = Tab.Sessions;
             CloseBoard();
@@ -1583,10 +1583,10 @@ else if (_tab == Tab.Sessions)
                 await RunSession(s);
             }
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Run all failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Run all failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Run all failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Run all failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Run all failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;
@@ -1608,26 +1608,26 @@ else if (_tab == Tab.Sessions)
             var board = _boards?.FirstOrDefault(w => w.Id == session.WorkspaceId);
             if (board is null)
             {
-                Toasts.Show("Spine", "Board not found — reload and try again.", ToastKind.Err);
+                Toasts.Show("Board", "Board not found — reload and try again.", ToastKind.Err);
                 return;
             }
             var children = await Sessions.ListReposForTenantAsync(_tenantId, session.Id);
             if (children.Count == 0)
             {
-                Toasts.Show("Spine", "This session has no target repos. Recreate it from a board ticket.", ToastKind.Err);
+                Toasts.Show("Board", "This session has no target repos. Recreate it from a board ticket.", ToastKind.Err);
                 return;
             }
             var pat = await ConfigStore.GetForTenantAsync(_tenantId, board.CredentialRef);
             if (string.IsNullOrEmpty(pat))
             {
-                Toasts.Show("Spine", "Could not retrieve board credentials. Reconnect the board.", ToastKind.Err);
+                Toasts.Show("Board", "Could not retrieve board credentials. Reconnect the board.", ToastKind.Err);
                 return;
             }
 
             await Sessions.UpdateRunResultAsync(_tenantId, session.Id, "Running", null, null);
             var all = await Sessions.ListForTenantAsync(_tenantId);
             _sessions = _isAdmin ? all : all.Where(s => s.MemberUserId == _userId).ToList();
-            Toasts.Show("Spine", $"Session #{session.IssueNumber} is running — AI agent dispatched to runner.", ToastKind.Ok);
+            Toasts.Show("Board", $"Session #{session.IssueNumber} is running — AI agent dispatched to runner.", ToastKind.Ok);
             StartPolling();
 
             // Fire-and-forget background work in a fresh DI scope (independent of this circuit).
@@ -1762,10 +1762,10 @@ else if (_tab == Tab.Sessions)
                 }
             });
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Run failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Run failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Run failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Run failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Run failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1892,7 +1892,7 @@ else if (_tab == Tab.Sessions)
         if (_busy) { return; }
         if (string.IsNullOrWhiteSpace(_runnerLabel))
         {
-            Toasts.Show("Spine", "A label is required.", ToastKind.Err);
+            Toasts.Show("Board", "A label is required.", ToastKind.Err);
             return;
         }
         _busy = true;
@@ -1913,14 +1913,14 @@ else if (_tab == Tab.Sessions)
             await Runners.AddForTenantAsync(entity);
             _newRunner = (entity.Id, secret.Token);
             _runnerLabel = "";
-            Toasts.Show("Spine", "Runner registered. Copy the pairing token now — it won't be shown again.", ToastKind.Ok);
+            Toasts.Show("Board", "Runner registered. Copy the pairing token now — it won't be shown again.", ToastKind.Ok);
             var r0 = await Runners.ListForTenantAsync(_tenantId);
             _runners = _isAdmin ? r0 : r0.Where(r => r.OwnerUserId == _userId).ToList();
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Register failed: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Register failed: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Register failed: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Register failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Register failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Register failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Register failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Register failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;
@@ -1933,14 +1933,14 @@ else if (_tab == Tab.Sessions)
         try
         {
             await Runners.SetStatusForTenantAsync(_tenantId, r.Id, "Revoked");
-            Toasts.Show("Spine", $"Revoked '{r.Label}'.", ToastKind.Ok);
+            Toasts.Show("Board", $"Revoked '{r.Label}'.", ToastKind.Ok);
             var r0 = await Runners.ListForTenantAsync(_tenantId);
             _runners = _isAdmin ? r0 : r0.Where(r => r.OwnerUserId == _userId).ToList();
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Revoke failed: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Revoke failed: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Revoke failed: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Revoke failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Revoke failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Revoke failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Revoke failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Revoke failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1955,14 +1955,14 @@ else if (_tab == Tab.Sessions)
         try
         {
             await Sessions.CloseForTenantAsync(_tenantId, s.Id, DateTimeOffset.UtcNow);
-            Toasts.Show("Spine", $"Closed '{s.Title}'.", ToastKind.Ok);
+            Toasts.Show("Board", $"Closed '{s.Title}'.", ToastKind.Ok);
             var s0 = await Sessions.ListForTenantAsync(_tenantId);
             _sessions = _isAdmin ? s0 : s0.Where(s => s.MemberUserId == _userId).ToList();
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Close failed: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Close failed: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Close failed: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Close failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Close failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Close failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Close failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Close failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busyId = null;
@@ -1976,7 +1976,7 @@ else if (_tab == Tab.Sessions)
         if (_findingBoards) { return; }
         if (string.IsNullOrWhiteSpace(_wsProjectOwner) || string.IsNullOrWhiteSpace(_wsToken))
         {
-            Toasts.Show("Spine", "Owner and token are required to find boards.", ToastKind.Err);
+            Toasts.Show("Board", "Owner and token are required to find boards.", ToastKind.Err);
             return;
         }
         _findingBoards = true;
@@ -1985,7 +1985,7 @@ else if (_tab == Tab.Sessions)
             _foundBoards = await Connector.ListBoardsAsync(_wsKind, _wsProjectOwner.Trim(), _wsToken);
             if (_foundBoards.Count == 0)
             {
-                Toasts.Show("Spine", "No boards visible to that token.", ToastKind.Info);
+                Toasts.Show("Board", "No boards visible to that token.", ToastKind.Info);
             }
         }
         catch (System.Net.Http.HttpRequestException ex) { HandleFindError(ex); }
@@ -2000,7 +2000,7 @@ else if (_tab == Tab.Sessions)
 
         void HandleFindError(Exception ex)
         {
-            Toasts.Show("Spine", $"Find boards failed: {ex.Message}", ToastKind.Err);
+            Toasts.Show("Board", $"Find boards failed: {ex.Message}", ToastKind.Err);
             _foundBoards = null;
         }
     }
@@ -2022,7 +2022,7 @@ else if (_tab == Tab.Sessions)
         if (string.IsNullOrWhiteSpace(_wsName) || string.IsNullOrWhiteSpace(_wsProjectOwner)
             || string.IsNullOrWhiteSpace(_wsToken))
         {
-            Toasts.Show("Spine", "Name, owner and token are required.", ToastKind.Err);
+            Toasts.Show("Board", "Name, owner and token are required.", ToastKind.Err);
             return;
         }
         int? number = null;
@@ -2030,7 +2030,7 @@ else if (_tab == Tab.Sessions)
         {
             if (!int.TryParse(_wsNumberText.Trim(), out var n) || n <= 0)
             {
-                Toasts.Show("Spine", "Board number must be a positive integer.", ToastKind.Err);
+                Toasts.Show("Board", "Board number must be a positive integer.", ToastKind.Err);
                 return;
             }
             number = n;
@@ -2047,21 +2047,21 @@ else if (_tab == Tab.Sessions)
             var result = await Connector.ConnectAsync(_tenantId, string.IsNullOrEmpty(_userId) ? null : _userId, input);
             if (result.Ok)
             {
-                Toasts.Show("Spine", $"Connected '{_wsName.Trim()}'.", ToastKind.Ok);
+                Toasts.Show("Board", $"Connected '{_wsName.Trim()}'.", ToastKind.Ok);
                 _wsName = _wsProjectOwner = _wsNumberText = _wsProject = _wsToken = "";
                 _foundBoards = null;
                 _boards = await Workspaces.ListForTenantAsync(_tenantId);
             }
             else
             {
-                Toasts.Show("Spine", result.Error ?? "Connect failed.", ToastKind.Err);
+                Toasts.Show("Board", result.Error ?? "Connect failed.", ToastKind.Err);
             }
         }
-        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
-        catch (System.Text.Json.JsonException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
-        catch (InvalidOperationException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
-        catch (System.IO.IOException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
-        catch (TimeoutException ex) { Toasts.Show("Spine", $"Connect failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Net.Http.HttpRequestException ex) { Toasts.Show("Board", $"Connect failed: {ex.Message}", ToastKind.Err); }
+        catch (System.Text.Json.JsonException ex) { Toasts.Show("Board", $"Connect failed: {ex.Message}", ToastKind.Err); }
+        catch (InvalidOperationException ex) { Toasts.Show("Board", $"Connect failed: {ex.Message}", ToastKind.Err); }
+        catch (System.IO.IOException ex) { Toasts.Show("Board", $"Connect failed: {ex.Message}", ToastKind.Err); }
+        catch (TimeoutException ex) { Toasts.Show("Board", $"Connect failed: {ex.Message}", ToastKind.Err); }
         finally
         {
             _busy = false;

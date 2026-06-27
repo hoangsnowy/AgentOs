@@ -5,7 +5,8 @@
       "name": "web",
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "src/AgentOs.Web", "-c", "Release", "--launch-profile", "preview"],
-      "port": 5180
+      "port": 5180,
+      "autoPort": false
     },
     {
       "name": "api",

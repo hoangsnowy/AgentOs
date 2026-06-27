@@ -5,22 +5,27 @@
 
 ## North star
 
-**An operating system for agents — a desktop world, GNOME-on-Linux at heart, with the tactility of
-a game.** AgentOS isn't a dashboard with a sidebar; it's a *desktop metaphor*: a wallpaper, a top
-bar, a dock, draggable/resizable windows, a Start-menu (Kickoff) launcher, a lock screen. Every
-feature is an **app** you launch into a window, not a route you navigate to.
+**An operating system for agents — a desktop world, authentic GNOME / Adwaita.** AgentOS isn't a
+dashboard with a sidebar; it's a *desktop metaphor*: a wallpaper, a top bar, the GNOME Dash, CSD
+draggable/resizable windows, **virtual workspaces**, a full-screen **Activities overview**, and a
+GDM lock/sign-in. Every feature is an **app** you launch into a window, not a route you navigate to.
+
+**The desktop boots to a clean EMPTY wallpaper — no desktop icons, no widgets, no auto-opened
+window.** Apps live only in the Dash + the Activities overview; the glanceable control plane is the
+**Overview app** (pinned first), NOT a desktop widget. (DesktopWidgets was tried and removed — GNOME
+has no desktop widgets. **Do not re-add them.**)
 
 Three feelings, in priority order:
 
-1. **Familiar OS** — anyone who's used GNOME / KDE Plasma / macOS / Win11 knows where things are.
-   Top bar = status + clock + user. Dock = launch + running apps. Windows = focus ring, Adwaita CSD
-   controls (min/max/close), drag, resize, minimize.
-2. **Calm enterprise** — Breeze-leaning: low-chroma single accent (`#3584e4`), small radii, flat
-   surfaces, restrained shadows. It runs all day without fatigue. Color carries *state*, never
-   decoration.
-3. **A touch of game** — alive, not sterile: the dock magnifies on hover, windows scale-in, the
-   wallpaper drifts, status dots pulse. Motion is a reward, never a blocker (`prefers-reduced-motion`
-   kills all of it).
+1. **Familiar OS** — anyone who's used GNOME knows where things are. Top bar = Activities + active
+   title + clock + status/quick-settings. Dash = launch pinned apps + running-app dots (focused =
+   wider accent pill). Windows = stronger shadow when focused, Adwaita CSD controls (min/max/close),
+   drag, resize, minimize, grab-a-maximized-window-to-restore.
+2. **Calm enterprise** — low-chroma single accent (`#3584e4`), small radii, flat surfaces, restrained
+   shadows. It runs all day without fatigue. Color carries *state*, never decoration.
+3. **A touch of motion** — alive, not sterile: windows scale-in, the wallpaper drifts, the focused
+   dock dot grows to a pill. The Dash is flat — **no magnify-on-hover** (that's macOS/KDE, not GNOME).
+   Motion is a reward, never a blocker (`prefers-reduced-motion` kills all of it).
 
 When a design decision is ambiguous, resolve it in that order: **familiar > calm > playful.** A
 playful flourish that hurts familiarity or calm loses.
@@ -31,8 +36,8 @@ playful flourish that hurts familiarity or calm loses.
 |---|---|---|
 | **Tokens** | `src/AgentOs.Web/wwwroot/app.css` `:root` block | Every color/space/radius/font/shadow/motion value. Components reference `var(--…)` only. |
 | **Theme axes** | same file, `:root[data-theme]` + `:root[data-wallpaper]` | `data-theme` = light \| dark (color). `data-wallpaper` = enterprise-light/dark \| aurora \| midnight \| sunset (bg + glass). Orthogonal — any theme × any wallpaper. |
-| **Components** | `src/AgentOs.Web/Components/UI/*.razor` | The vocabulary. Reuse before you invent. |
-| **Icons** | `src/AgentOs.Web/Components/UI/Icon.razor` (+ [icon-map.md](icon-map.md)) | One monochrome 24×24 Lucide-style set, `currentColor`. Never inline an `<svg>` or emoji in a page. |
+| **Components** | `src/AgentOs.Web.Shell/UI/*.razor` (primitives + shell host) | The vocabulary. Reuse before you invent. (`TopBar.razor` is the one UI piece still under `AgentOs.Web/Components/UI`.) |
+| **Icons** | `src/AgentOs.Web.Shell/UI/Icon.razor` (+ [icon-map.md](icon-map.md)) | One monochrome 24×24 Lucide-style set, `currentColor`. Never inline an `<svg>` or emoji in a page. |
 | **Theme JS** | `src/AgentOs.Web/wwwroot/theme.js` | `agenticTheme.*` — persists + applies theme/wallpaper/glass to `<html>` data-attrs. |
 | **KC login skin** | `infra/keycloak/themes/agentos/login/` | Mirrors these tokens so sign-in matches the shell. |
 
@@ -80,23 +85,41 @@ Don't memorize values — reference these names. Full list in `app.css`; the fam
 
 ### Desktop shell anatomy (and who owns what)
 
-- **TopBar** (`Components/UI/TopBar.razor`) — brand · workspace · active-window title · health dot ·
-  theme toggle · **clock** · user menu. Status surface, not a toolbar.
-- **Dock + Start** (`Taskbar.razor` + `AppShellLayout.razor`) — launch pinned apps, show running
-  dots, Kickoff search. Reads `AppCatalog` (respect `AdminOnly` via `VisiblePinned/VisibleAll`).
+- **TopBar** (`Components/UI/TopBar.razor`) — GNOME top panel: LEFT = an **Activities** button + the
+  active-window title; CENTER = the **clock** (deep-links System → Date & time); RIGHT = theme toggle +
+  a GNOME system menu (aggregated network/sound/battery + gateway health dot + avatar → quick settings).
+  Dark in both themes. No brand mark, no standalone workspace item.
+- **Dash (dock)** (`Taskbar.razor` in `AgentOs.Web.Shell/UI`) — flat translucent GNOME Dash, no Start
+  button, no magnify. **Seven pinned apps**: Overview · Agents (5-agent pipeline) · Workflow · Board ·
+  Settings (hub) · Terminal · Files. Running apps show a dot; the focused app's dot widens to an accent
+  pill. Unpinned admin/system apps (Users, Evidence, Cost, Policy, Prompts, Plugins, MCP, System) are
+  reached via the Settings hub + Activities search. Reads `AppCatalog` (respect `AdminOnly`).
+- **Activities overview** (`AppShellLayout.razor`, `.ko-overview` — the old `.kickoff` selector) —
+  full-screen launcher opened from the top-bar Activities button: a search field, a **virtual-workspace
+  thumbnail strip** (each thumb previews its windows as app-colour dots, active outlined white), a
+  **window exposé** of the active workspace, the pinned-app grid, and recents.
+- **Virtual workspaces** (`WindowManagerService`: `WorkspaceCount` / `ActiveWorkspace` / `SwitchWorkspace`
+  / `WindowsOn`) — N GNOME workspaces. A window belongs to a workspace; `WindowHost` renders only the
+  active workspace's windows, and the TopBar title + dock pill reflect it. Switch from the Activities
+  thumbnail strip.
 - **Windows** (`AppFrame` ← `WindowHost` ← `WindowManagerService`) — one entry per open app; z-order
-  on focus; optional auto-minimize-on-blur.
-- **System app** (`SystemApp.razor`) — the OS settings: General, Appearance, **Date & time**,
-  Notifications, About, Session. **All device/shell preferences live here** — never scatter an OS
-  setting into a feature page or a top-bar dropdown. (The clock dropdown *deep-links* here via
-  `WM.RequestLaunchTab("system","datetime")`; it does not own the setting.)
+  on focus; CSD drag/resize/maximize; grab a maximized window's titlebar to restore it under the cursor.
+- **Settings hub** (`SettingsHub.razor`, pinned "Settings") — one window collecting every admin/system
+  surface behind a category rail (LLM & providers, Prompts, Tool policy, Cost, Evidence, Users, MCP,
+  Plugins, **System**). Each category is also independently launchable + deep-linkable.
+- **System category** (`SystemApp.razor`, the System tab inside the hub — unpinned standalone) — OS
+  preferences: General, Appearance, **Date & time**, Notifications, About, Session. **Device/shell
+  preferences live here**; admin governance lives in the hub's other categories. (The clock dropdown
+  *deep-links* here via `WM.RequestLaunchTab("system","datetime")`.)
 
 ## Rules (the part that keeps it coherent)
 
 1. **New feature = new app, in a window.** Register it in `AppCatalog`, render it in `WindowHost`,
    gate with `AdminOnly` if needed. Don't add top-level routes/pages.
-2. **Settings belong in the System app.** A preference toggled anywhere else is a smell. Surfaces
-   may *deep-link* to the right System tab, but the control + persistence live in System.
+2. **Settings live in the Settings hub.** Device/shell preferences go in the **System** category
+   (`SystemApp`); admin/governance config goes in its own hub category — never scattered into a
+   feature page or a top-bar dropdown. Surfaces may *deep-link* to the right category, but the control
+   + persistence live in the hub.
 3. **Tokens or nothing.** No raw hex, px spacing, or px radius in a component. If a needed value
    doesn't exist as a token, add the token first.
 4. **One accent, color = state.** Blue accent for interactivity/selection; ok/warn/err for state.

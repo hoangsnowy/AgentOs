@@ -2,8 +2,8 @@
 // Gated by RUN_AGENTOS_E2E_REAL=true with the AppHost running. See AgentOsRealAuthFixture.
 //
 // Login_RealAuth_RendersDesktop proves the real OIDC login harness (works on any AppHost build).
-// Spine_RealAuth_RegisterRunner_AppearsInList additionally exercises the Spine app + real persistence
-// (needs an AppHost build that includes the Spine desktop app).
+// Board_RealAuth_RegisterRunner_AppearsInList additionally exercises the Board app + real persistence
+// (needs an AppHost build that includes the Board desktop app).
 
 using System;
 using System.Threading.Tasks;
@@ -12,11 +12,11 @@ using Xunit;
 
 namespace AgentOs.E2E.Tests.AgentOsUi;
 
-public sealed class SpineAppRealAuthTests : IClassFixture<AgentOsRealAuthFixture>
+public sealed class BoardAppRealAuthTests : IClassFixture<AgentOsRealAuthFixture>
 {
     private readonly AgentOsRealAuthFixture _fx;
 
-    public SpineAppRealAuthTests(AgentOsRealAuthFixture fx) => _fx = fx;
+    public BoardAppRealAuthTests(AgentOsRealAuthFixture fx) => _fx = fx;
 
     // The real Keycloak OIDC round-trip lands an authenticated user on the desktop.
     [Fact]
@@ -35,14 +35,14 @@ public sealed class SpineAppRealAuthTests : IClassFixture<AgentOsRealAuthFixture
     // Register a runner through the real stack and confirm it persists (appears in the list) — real
     // Postgres, real auth, real tenant scoping.
     [Fact]
-    public async Task Spine_RealAuth_RegisterRunner_AppearsInList()
+    public async Task Board_RealAuth_RegisterRunner_AppearsInList()
     {
         if (!AgentOsRealAuthFixture.IsEnabled) { Assert.Skip(AgentOsRealAuthFixture.SkipReason); }
 
         await _fx.LoginAsync();
-        await _fx.Page.Locator(".dock-item[title=\"Spine\"]").First.ClickAsync();
+        await _fx.Page.Locator(".dock-item[title=\"Board\"]").First.ClickAsync();
         var win = _fx.Page.Locator(".appwin.focused");
-        await Assertions.Expect(win.Locator(".appwin-title")).ToHaveTextAsync("Spine");
+        await Assertions.Expect(win.Locator(".appwin-title")).ToHaveTextAsync("Board");
 
         var label = "e2e-runner-" + Guid.NewGuid().ToString("N")[..8];
         await win.GetByPlaceholder("Hoang's laptop").FillAsync(label);

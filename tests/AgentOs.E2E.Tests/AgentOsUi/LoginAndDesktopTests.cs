@@ -56,12 +56,13 @@ public sealed class LoginAndDesktopTests : IClassFixture<AgentOsPageFixture>
 
     // Scenario 3: clicking a Desktop icon opens an AppFrame for the corresponding app key.
     [Theory]
-    [InlineData("Pipeline")]
+    [InlineData("Overview")]
+    [InlineData("Agents")]
     [InlineData("Workflow")]
-    [InlineData("Spine")]
-    [InlineData("Evidence")]
+    [InlineData("Board")]
     [InlineData("Settings")]
-    [InlineData("System")]
+    [InlineData("Terminal")]
+    [InlineData("Files")]
     public async Task DockIcon_Click_OpensAppWindow(string title)
     {
         if (!AgentOsPageFixture.IsEnabled) { Assert.Skip(AgentOsPageFixture.SkipReason); }

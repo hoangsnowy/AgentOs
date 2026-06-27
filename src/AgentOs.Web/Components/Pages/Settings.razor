@@ -135,7 +135,7 @@ else
             case "github":
                 <div class="prefs-section">
                     <h2 class="prefs-h">GitHub — Pipeline auto-PR</h2>
-                    <p class="prefs-sub">Used <strong>only</strong> by the 5-agent Pipeline to open a PR with generated code. Spine boards use their own per-board token — connect those in the Spine app, not here. PAT needs the <code>repo</code> scope.</p>
+                    <p class="prefs-sub">Used <strong>only</strong> by the 5-agent Pipeline to open a PR with generated code. Boards use their own per-board token — connect those in the Board app, not here. PAT needs the <code>repo</code> scope.</p>
                 </div>
                 <div class="prefs-row">
                     <div class="prefs-label"><strong>Personal access token</strong></div>
@@ -524,7 +524,7 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
     }
 
     // Probe GitHub with the form's token + repo coordinates (nothing has to be saved first).
-    // In-process: the same ISourceProvider.ValidateAsync the Spine board-connect flow uses.
+    // In-process: the same ISourceProvider.ValidateAsync the Board app's board-connect flow uses.
     // Split mode: the API's token probe (POST /workspaces/repos) — validates the token's reach.
     private async Task TestGithub()
     {

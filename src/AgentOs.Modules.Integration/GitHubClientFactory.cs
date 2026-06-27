@@ -1,5 +1,5 @@
 // One place that builds an authenticated Octokit client. Both PR paths (Pipeline artifacts -> PR and the
-// Spine pushed-branch -> PR) plus the source provider went through their own near-identical copies of this;
+// Board pushed-branch -> PR) plus the source provider went through their own near-identical copies of this;
 // they now share it, so GitHub auth + Enterprise-host handling live in a single, tested spot.
 //
 // Every GitHubClient is built over ONE shared HttpClient/handler (the static HttpClientAdapter) so the

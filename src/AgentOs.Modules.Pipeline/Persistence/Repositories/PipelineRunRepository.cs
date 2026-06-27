@@ -122,6 +122,7 @@ internal sealed class PipelineRunRepository(
         return await db.PipelineRuns
             .AsNoTracking()
             .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenByDescending(x => x.Id)
             .Skip(offset)
             .Take(limit)
             .Select(x => new PipelineRunSummary(
@@ -133,6 +134,67 @@ internal sealed class PipelineRunRepository(
                 x.CompletedAtUtc,
                 x.UserStoryText.Length > 120 ? x.UserStoryText.Substring(0, 120) : x.UserStoryText))
             .ToListAsync(ct);
+    }
+
+    // Tenant-explicit list: bypass the ITenantContext-driven global query filter (a Blazor circuit has no
+    // HttpContext, so ITenantContext is blank) and scope to the tenant the caller passed in. Mirrors
+    // GetCostSummaryForTenantAsync — Dapper fast-path when a real Npgsql connection is wired, EF fallback
+    // for the in-memory test provider / no-DB boot — so the desktop Overview / run history is correct.
+    public async Task<IReadOnlyList<PipelineRunSummary>> ListForTenantAsync(
+        string tenantId, int limit = 50, int offset = 0, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+
+        if (connectionFactory is not null)
+        {
+            return await ListForTenantViaDapperAsync(tenantId, limit, offset, ct).ConfigureAwait(false);
+        }
+
+        return await db.PipelineRuns
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => x.TenantId == tenantId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .Skip(offset)
+            .Take(limit)
+            .Select(x => new PipelineRunSummary(
+                x.Id,
+                x.Status,
+                x.TotalCostUsd,
+                x.IterationCount,
+                x.CreatedAtUtc,
+                x.CompletedAtUtc,
+                x.UserStoryText.Length > 120 ? x.UserStoryText.Substring(0, 120) : x.UserStoryText))
+            .ToListAsync(ct);
+    }
+
+    // Dapper fast-path for the tenant run list: one round-trip, no EF materialization. PascalCase columns
+    // are quoted (no snake_case convention); LEFT(..,120) mirrors the EF substring preview.
+    private async Task<IReadOnlyList<PipelineRunSummary>> ListForTenantViaDapperAsync(
+        string tenantId, int limit, int offset, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT
+                "Id"             AS Id,
+                "Status"         AS Status,
+                "TotalCostUsd"   AS TotalCostUsd,
+                "IterationCount" AS IterationCount,
+                "CreatedAtUtc"   AS CreatedAtUtc,
+                "CompletedAtUtc" AS CompletedAtUtc,
+                LEFT("UserStoryText", 120) AS UserStoryPreview
+            FROM pipeline.pipeline_runs
+            WHERE "TenantId" = @tenantId
+            ORDER BY "CreatedAtUtc" DESC, "Id" DESC
+            OFFSET @offset LIMIT @limit
+            """;
+
+        await using var conn = connectionFactory!.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<RunSummaryRow>(
+            new CommandDefinition(sql, new { tenantId, limit, offset }, cancellationToken: ct)).ConfigureAwait(false);
+        return [.. rows.Select(r => new PipelineRunSummary(
+            r.Id, r.Status, r.TotalCostUsd, r.IterationCount, r.CreatedAtUtc, r.CompletedAtUtc, r.UserStoryPreview))];
     }
 
     public async Task<CostSummary> GetCostSummaryForTenantAsync(
@@ -341,5 +403,17 @@ internal sealed class PipelineRunRepository(
         public int Calls { get; init; }
 
         public CostBucket ToBucket() => new(Key, CostUsd, TokensIn, TokensOut, Calls);
+    }
+
+    // Dapper row for ListForTenantViaDapperAsync — column names match the SELECT aliases.
+    private sealed class RunSummaryRow
+    {
+        public Guid Id { get; init; }
+        public string Status { get; init; } = string.Empty;
+        public decimal TotalCostUsd { get; init; }
+        public int IterationCount { get; init; }
+        public DateTimeOffset CreatedAtUtc { get; init; }
+        public DateTimeOffset? CompletedAtUtc { get; init; }
+        public string UserStoryPreview { get; init; } = string.Empty;
     }
 }

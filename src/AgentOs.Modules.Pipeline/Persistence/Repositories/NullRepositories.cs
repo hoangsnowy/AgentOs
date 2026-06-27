@@ -15,6 +15,10 @@ internal sealed class NullPipelineRunRepository : IPipelineRunRepository
     public Task<IReadOnlyList<PipelineRunSummary>> ListAsync(int limit = 50, int offset = 0, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<PipelineRunSummary>>([]);
 
+    public Task<IReadOnlyList<PipelineRunSummary>> ListForTenantAsync(
+        string tenantId, int limit = 50, int offset = 0, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PipelineRunSummary>>([]);
+
     public Task<CostSummary> GetCostSummaryForTenantAsync(
         string tenantId, DateTimeOffset? since = null, CancellationToken ct = default) =>
         Task.FromResult(CostSummary.Empty);

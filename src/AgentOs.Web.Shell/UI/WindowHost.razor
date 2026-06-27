@@ -6,7 +6,8 @@
 @inject WindowManagerService WM
 @inject IAppRegistry Registry
 
-@foreach (var w in WM.Open.Where(w => !w.Minimized))
+@* Only the active workspace's windows render — GNOME virtual workspaces. *@
+@foreach (var w in WM.Open.Where(w => !w.Minimized && w.Workspace == WM.ActiveWorkspace))
 {
         <AppFrame W="@w" @key="w.Id">
             @if (Registry.ResolveComponent(w.AppKey) is { } appComponent)

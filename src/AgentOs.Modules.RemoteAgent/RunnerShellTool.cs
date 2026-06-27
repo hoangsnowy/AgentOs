@@ -64,7 +64,7 @@ public sealed class RunnerShellTool : ITool
         _broker = broker ?? throw new ArgumentNullException(nameof(broker));
         _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
         // Optional: live session-run feed. When the work runs under a session (AmbientIdentity carries
-        // a SessionId), each shell command is published as a Step so the Spine activity feed shows it.
+        // a SessionId), each shell command is published as a Step so the Board activity feed shows it.
         _feed = feed;
     }
 

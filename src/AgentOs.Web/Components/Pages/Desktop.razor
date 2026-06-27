@@ -1,7 +1,7 @@
 @page "/"
 @using Microsoft.AspNetCore.Components.Authorization
 @inject AgentOs.Web.Shell.Services.WindowManagerService WM
-@inject AgentOs.Web.Shell.Services.ToastService Toasts
+@inject Microsoft.JSInterop.IJSRuntime JS
 
 <PageTitle>Desktop — AgentOS</PageTitle>
 
@@ -9,27 +9,23 @@
      @oncontextmenu="OnRightClick"
      @oncontextmenu:preventDefault="true">
 
-    @* Authentic GNOME desktop: clean wallpaper, no icons. Apps live in the Dash (bottom dock)
-       and the Activities overview (top-left "Activities" → search + app grid + window exposé).
-       Right-click opens the desktop context menu. *@
+    @* Authentic GNOME desktop: a clean empty wallpaper — no icons, no widgets. Apps live only in the
+       Dash and the Activities overview; right-click opens the desktop context menu. *@
 </div>
 
 <ContextMenu Show="_ctxShow" X="_ctxX" Y="_ctxY" OnClose="@(() => _ctxShow = false)">
-    <button class="ctx-item" @onclick="Refresh">
-        <span class="ctx-ic"><Icon Name="arrow-clockwise" Size="14" /></span> Refresh
+    <button class="ctx-item" @onclick="OpenActivities">
+        <span class="ctx-ic"><Icon Name="squares-four" Size="14" /></span> Activities
     </button>
-    <button class="ctx-item" @onclick="@(() => Launch("system", "System", "wrench", 760, 600))">
-        <span class="ctx-ic"><Icon Name="wrench" Size="14" /></span> System settings
-    </button>
-    <button class="ctx-item" @onclick="@(() => Launch("settings", "Settings", "gear", 720, 600))">
-        <span class="ctx-ic"><Icon Name="gear" Size="14" /></span> App settings
+    <button class="ctx-item" @onclick="ChangeBackground">
+        <span class="ctx-ic"><Icon Name="palette" Size="14" /></span> Change background…
     </button>
     <div class="ctx-sep"></div>
-    <button class="ctx-item" @onclick="DemoToast">
-        <span class="ctx-ic"><Icon Name="bell" Size="14" /></span> Test notification
+    <button class="ctx-item" @onclick="ToggleTheme">
+        <span class="ctx-ic"><Icon Name="moon" Size="14" /></span> Toggle theme
     </button>
-    <button class="ctx-item" @onclick="@(() => Launch("pipeline", "Pipeline", "play", 920, 620))">
-        <span class="ctx-ic"><Icon Name="play" Size="14" /></span> Open Pipeline
+    <button class="ctx-item" @onclick="@(() => Launch("system", "System", "wrench", 760, 600))">
+        <span class="ctx-ic"><Icon Name="gear" Size="14" /></span> Display settings…
     </button>
 </ContextMenu>
 
@@ -44,21 +40,36 @@
         _ctxShow = true;
     }
 
-    private void Refresh()
+    // GNOME wallpaper menu: open the Activities overview.
+    private void OpenActivities()
     {
         _ctxShow = false;
-        Toasts.Show("Desktop", "Refreshed.", AgentOs.Web.Shell.Services.ToastKind.Ok);
+        WM.RequestStartMenuToggle();
+    }
+
+    // Deep-link the System app to its Appearance (wallpaper/theme) tab.
+    private void ChangeBackground()
+    {
+        WM.RequestLaunchTab("system", "appearance");
+        WM.OpenApp("system", "System", "wrench", 760, 600);
+        _ctxShow = false;
+    }
+
+    private async Task ToggleTheme()
+    {
+        _ctxShow = false;
+        try
+        {
+            await JS.InvokeAsync<string>("agenticTheme.toggleAppearance");
+            WM.NotifyThemeChanged();
+        }
+        catch (Microsoft.JSInterop.JSException ex) { _ = ex.Message; }
+        catch (System.InvalidOperationException ex) { _ = ex.Message; }
     }
 
     private void Launch(string key, string title, string icon, int w, int h)
     {
         WM.OpenApp(key, title, icon, w, h);
-        _ctxShow = false;
-    }
-
-    private void DemoToast()
-    {
-        Toasts.Show("Demo", "Triggered from right-click context menu.", AgentOs.Web.Shell.Services.ToastKind.Info);
         _ctxShow = false;
     }
 }

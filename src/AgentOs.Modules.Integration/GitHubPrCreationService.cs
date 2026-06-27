@@ -1,7 +1,7 @@
 // M5 — creates a PR from an already-pushed branch in the workspace repo.
 // The runner pushes the branch; this service calls the GitHub API to open the PR.
 // PAT comes from WorkspaceDescriptor.AccessToken (per-workspace credential), never from
-// tenant-global IRuntimeOverrides — correct grain for the Spine per-workspace flow.
+// tenant-global IRuntimeOverrides — correct grain for the Board per-workspace flow.
 
 using System;
 using System.Threading;

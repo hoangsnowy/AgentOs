@@ -106,8 +106,15 @@
 
     private void StartDrag(MouseEventArgs e)
     {
-        if (_maximized) { return; }
         WM.Focus(W.Id);
+        if (_maximized)
+        {
+            // GNOME grab-to-unmaximize: restore the window under the cursor, then drag from there.
+            _maximized = false;
+            var rx = System.Math.Max(0, (int)e.ClientX - W.W / 2);
+            var ry = System.Math.Max(30, (int)e.ClientY - 16);
+            WM.Move(W.Id, rx, ry);
+        }
         _dragging = true;
         _startMouseX = e.ClientX; _startMouseY = e.ClientY;
         _startWinX = W.X; _startWinY = W.Y;

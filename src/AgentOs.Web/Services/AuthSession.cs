@@ -21,9 +21,6 @@ public sealed class AuthSession : IAuthTokenProvider
     /// <summary>Username of the signed-in user, or <c>null</c> when anonymous.</summary>
     public string? Username => _accessor.HttpContext?.User?.Identity?.Name;
 
-    /// <summary>True when the current request principal is authenticated by the cookie scheme.</summary>
-    public bool IsAuthenticated => _accessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
-
     /// <summary>Bearer access token captured from the OIDC cookie. <c>null</c> when anonymous or not yet loaded.</summary>
     public string? Token => _cachedToken;
 

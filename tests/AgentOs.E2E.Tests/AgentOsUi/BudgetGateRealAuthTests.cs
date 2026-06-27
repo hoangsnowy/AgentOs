@@ -72,11 +72,12 @@ public sealed class BudgetGateRealAuthTests : IClassFixture<AgentOsRealAuthFixtu
 
         await _fx.LoginAsync();
 
-        // Open the Cost app from its Dash (dock) button — the GNOME desktop is empty.
-        await _fx.Page.Locator(".dock-item[title=\"Cost\"]").First.ClickAsync();
-        var cost = _fx.Page.Locator(".appwin:has(.appwin-title:has-text(\"Cost\"))");
+        // Open the Cost surface (now a tab in the Settings hub) from the dock.
+        await _fx.Page.Locator(".dock-item[title=\"Settings\"]").First.ClickAsync();
+        var cost = _fx.Page.Locator(".appwin.focused");
         await Assertions.Expect(cost).ToBeVisibleAsync(
             new LocatorAssertionsToBeVisibleOptions { Timeout = 15_000 });
+        await cost.Locator(".prefs-cat", new() { HasTextString = "Cost" }).ClickAsync();
 
         // Set an enforced $5 cap.
         var capInput = cost.Locator(".budget-row input.prefs-input");

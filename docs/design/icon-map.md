@@ -1,6 +1,6 @@
 # Icon migration map — emoji → `<Icon>`
 
-`Components/UI/Icon.razor` is the single SVG source. Style: Lucide-flavored monochrome, 24×24 viewBox, `currentColor` stroke, 1.75px stroke-width, MIT inspiration. The component is hand-authored — we did not pull a runtime icon package because Blazor Server is the host and a thirty-icon switch beats shipping a font.
+`AgentOs.Web.Shell/UI/Icon.razor` is the single SVG source. Style: Lucide-flavored monochrome, 24×24 viewBox, `currentColor` stroke, 1.75px stroke-width, MIT inspiration. The component is hand-authored — we did not pull a runtime icon package because Blazor Server is the host and a thirty-icon switch beats shipping a font.
 
 **Use** with the friendly name, e.g. `<Icon Name="play" Size="16" />` or with a screen-reader title `<Icon Name="play" Title="Run pipeline" />`.
 
@@ -23,7 +23,8 @@
 | ⏻ | `power` | TopBar.razor:63, AppShellLayout.razor:47,70, SystemApp.razor:15,93 |
 | 🎨 | `palette` | SystemApp.razor:12 |
 | ⊞ | `squares-four` | Taskbar.razor:11 |
-| 🏠 | `house` | AppCatalog.cs (Home app), HomeApp.razor |
+| 🏠 | `house` | AppCatalog.cs (Overview app), OverviewApp.razor |
+| ⌨ | `terminal` | AppCatalog.cs (Terminal app), TerminalApp.razor |
 | ⟳ | `arrow-clockwise` | Desktop.razor:44 |
 | ◆ | `diamond` | AppShellLayout.razor:28, LoginOverlay.razor:10, TopBar.razor:12 |
 | ● | `circle-fill` | Settings.razor:10, TopBar.razor (tb-dot — already SVG-ish via CSS) |

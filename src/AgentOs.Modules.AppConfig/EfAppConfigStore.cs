@@ -134,7 +134,7 @@ public sealed class EfAppConfigStore : IAppConfigStore
     }
 
     // The ambient identity (seeded by background Task.Run work that has no HttpContext — e.g. the
-    // in-process pipeline run or a Spine session) is the override of last resort; otherwise the
+    // in-process pipeline run or a Board session) is the override of last resort; otherwise the
     // request-scoped ITenantContext. Without this, a circuit's fire-and-forget run reads/writes the
     // `default` tenant's keys instead of the signed-in member's.
     private static string ResolveTenant(IServiceProvider scopedProvider)

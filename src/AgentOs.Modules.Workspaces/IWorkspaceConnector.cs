@@ -1,5 +1,5 @@
 // M2 / board reshape — the connect-a-board flow + add-a-repo flow, shared by the HTTP endpoints
-// (tenant from ITenantContext) and the desktop Spine app (tenant from the signed-in principal — a
+// (tenant from ITenantContext) and the desktop Board app (tenant from the signed-in principal — a
 // circuit has no HttpContext). Connect validates the board via the source provider, stores the token
 // ONLY in the encrypted AppConfig store under the board's CredentialRef, and persists the row (which
 // never carries the secret). Adding a repo validates the repo with the board's stored token, then
@@ -57,7 +57,7 @@ public interface IWorkspaceConnector
 
     /// <summary>List the Projects-v2 / ADO boards the supplied token can see — drives the "Find boards"
     /// picker so the user selects a board instead of typing its number. In-proc seam for the desktop
-    /// Spine app (the equivalent REST endpoint lives on the API host, which the Web circuit can't call).</summary>
+    /// Board app (the equivalent REST endpoint lives on the API host, which the Web circuit can't call).</summary>
     Task<IReadOnlyList<BoardSummary>> ListBoardsAsync(
         SourceProviderKind kind, string owner, string token, string? host = null, CancellationToken ct = default);
 }

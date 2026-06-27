@@ -20,7 +20,7 @@ public interface IGitHubPrService
     Task<GitHubPrResult> OpenPrAsync(PipelineResult result, string title, string body, CancellationToken ct);
 
     /// <summary>
-    /// Same as above, but targets a connected <see cref="WorkspaceDescriptor"/> (a Spine-managed board's
+    /// Same as above, but targets a connected <see cref="WorkspaceDescriptor"/> (a connected board's
     /// repo) using the per-workspace PAT — the unified repo/token source. GitHub-only.
     /// </summary>
     Task<GitHubPrResult> OpenPrAsync(PipelineResult result, WorkspaceDescriptor workspace, string title, string body, CancellationToken ct);

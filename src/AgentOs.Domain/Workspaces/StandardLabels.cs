@@ -1,6 +1,6 @@
 // Bootstrap — the standard label taxonomy AgentOS stamps on a board's repos so generated tickets are
 // classified consistently. Four axes: type (what kind of work), area (which layer), priority, and the
-// ai gate (ai:ready = the spine may auto-run it; needs-human = it must not). Lives in Domain so the
+// ai gate (ai:ready = AgentOS may auto-run it; needs-human = it must not). Lives in Domain so the
 // Web can seed it and the Pipeline decomposer (slice 2) can constrain itself to these names — both
 // reference Domain only. Colors are GitHub 6-hex without a leading '#'.
 
@@ -11,7 +11,7 @@ namespace AgentOs.Domain.Workspaces;
 /// <summary>The canonical label set AgentOS seeds onto a repo and decomposes tickets against.</summary>
 public static class StandardLabels
 {
-    /// <summary>The <c>ai:ready</c> gate — a ticket the spine is allowed to pick up and run autonomously.</summary>
+    /// <summary>The <c>ai:ready</c> gate — a ticket the agent is allowed to pick up and run autonomously.</summary>
     public const string AiReady = "ai:ready";
 
     /// <summary>The <c>needs-human</c> gate — a ticket that must not be auto-run.</summary>

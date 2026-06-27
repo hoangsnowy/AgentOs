@@ -282,27 +282,9 @@ body::after {
     mix-blend-mode: overlay;
 }
 
-.app-shell { min-height: 100vh; display: flex; flex-direction: column; }
-
-.app-header {
-    padding: 14px 28px;
-    border-bottom: 1px solid var(--line);
-    background: linear-gradient(180deg, var(--bg-2), var(--bg));
-    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-}
 .brand { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 600; }
 .brand-mark { color: var(--accent-text); }
-.brand-text em { color: var(--accent-text); font-style: normal; font-weight: 600; }
 .brand-sub { color: var(--txt-dim); font-size: 13px; }
-.theme-toggle {
-    margin-left: auto;
-    background: var(--bg-2); color: var(--txt); border: 1px solid var(--line);
-    border-radius: 7px; padding: 6px 11px; cursor: pointer;
-    font-family: inherit; font-size: 12.5px;
-}
-.theme-toggle:hover { background: var(--bg-3); border-color: var(--idle); }
-
-.app-main { padding: 24px 28px 60px; max-width: 1320px; width: 100%; margin: 0 auto; }
 
 .studio-grid {
     display: grid;
@@ -329,7 +311,7 @@ body::after {
     border-radius: var(--r-4) var(--r-4) 0 0;
     color: var(--txt);
     font-size: 11.5px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: .06em;
     text-transform: uppercase;
 }
@@ -377,7 +359,7 @@ button.ghost:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-s
 .stage:last-child { border-bottom: 0; }
 .dot {
     width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
-    font-size: 13px; font-weight: 700; background: var(--idle); color: #0b0e12;
+    font-size: 13px; font-weight: 600; background: var(--idle); color: #0b0e12;
     border: 2px solid transparent;
 }
 .stage.idle .dot { background: var(--bg-3); color: var(--txt-dim); border-color: var(--line); }
@@ -402,7 +384,7 @@ button.ghost:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-s
     display: flex; align-items: center; gap: 12px; padding: 9px 12px;
     background: var(--bg-3); border: 1px solid var(--line); border-radius: 8px; font-size: 13px;
 }
-.qa-round .score { font-family: var(--mono); font-weight: 700; }
+.qa-round .score { font-family: var(--mono); font-weight: 600; }
 .score-bar { flex: 1; height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; }
 .score-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--warn), var(--ok)); }
 
@@ -417,8 +399,9 @@ button.ghost:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-s
     box-shadow: var(--shadow-1);
 }
 .metric .v {
+    font-family: var(--mono);
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: -.01em;
     color: var(--txt);
     line-height: 1.15;
@@ -432,13 +415,26 @@ button.ghost:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-s
     font-weight: 600;
 }
 
+/* Cost app — layout only (was a dead .razor.css; the scoped bundle is never linked). Tables/cards
+   reuse .data-table / .metrics; colours + spacing are all tokens. */
+.cost-actions { display: inline-flex; gap: var(--space-2); align-items: center; }
+.cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-3); }
+@media (max-width: 720px) { .cost-grid { grid-template-columns: 1fr; } }
+.budget-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); }
+.budget-row .field { max-width: 180px; }
+.budget-bar { flex: 1 1 220px; display: flex; flex-direction: column; gap: var(--space-1); }
+
 /* Home app — guided idea→spec→code→test→PR landing (tokens only) */
 .home-idea { width: 100%; resize: vertical; min-height: 64px; font: inherit; }
 .home-cta { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); }
-.home-rail { display: flex; align-items: stretch; gap: var(--space-2); flex-wrap: wrap; }
-.home-stage {
-    flex: 1 1 150px;
-    min-width: 150px;
+.home-arrow { display: inline-flex; align-items: center; color: var(--txt-dim); }
+@media (max-width: 760px) { .home-arrow { display: none; } }
+
+/* Overview — the control-plane dashboard: 5-agent pipeline at a glance (tokens only) */
+.ov-flow { display: flex; align-items: stretch; gap: var(--space-2); flex-wrap: wrap; }
+.ov-node {
+    flex: 1 1 140px;
+    min-width: 140px;
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
@@ -447,19 +443,21 @@ button.ghost:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-s
     border: 1px solid var(--line);
     border-radius: var(--r-4);
 }
-.home-stage-top { display: flex; align-items: center; justify-content: space-between; }
-.home-stage-ic {
+.ov-node.ov-leader { border-color: var(--accent); box-shadow: var(--shadow-1); }
+.ov-node-top { display: flex; align-items: center; justify-content: space-between; }
+.ov-node-ic {
     display: inline-flex; align-items: center; justify-content: center;
     width: 32px; height: 32px; border-radius: var(--r-3);
     background: var(--accent-soft); color: var(--accent);
 }
-.home-step { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--txt-dim); }
-.home-stage-name { font-weight: var(--fw-semibold); }
-.home-stage-desc { color: var(--txt-soft); flex: 1 1 auto; }
-.home-arrow { display: inline-flex; align-items: center; color: var(--txt-dim); }
-.home-track-sub { margin: 0 0 var(--space-3); }
-.home-track { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-@media (max-width: 760px) { .home-arrow { display: none; } }
+.ov-node-step { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--txt-dim); }
+.ov-node-name { font-weight: var(--fw-semibold); }
+.ov-node-desc { color: var(--txt-soft); flex: 1 1 auto; font-size: var(--fs-sm); }
+.ov-loop-note {
+    display: flex; align-items: center; gap: var(--space-2);
+    margin: var(--space-3) 0 0; color: var(--txt-soft); font-size: var(--fs-sm);
+}
+.ov-loop-note > svg { color: var(--accent); flex: none; }
 
 /* Tabs — classic enterprise underline-active */
 .tabs { display: flex; gap: 0; flex-wrap: nowrap; margin-bottom: 0; border-bottom: 1px solid var(--line-strong); }
@@ -506,14 +504,12 @@ pre.code {
 pre.code .kw { color: #d73a49; }
 pre.code .str { color: #032f62; }
 pre.code .cm { color: #6a737d; font-style: italic; }
-pre.code .ty { color: #6f42c1; }
 pre.code .num { color: #005cc5; }
 
 :root[data-theme="dark"] pre.code { background: #0b0f14; }
 :root[data-theme="dark"] pre.code .kw { color: #ff7b72; }
 :root[data-theme="dark"] pre.code .str { color: #a5d6ff; }
 :root[data-theme="dark"] pre.code .cm { color: #8b949e; font-style: italic; }
-:root[data-theme="dark"] pre.code .ty { color: #ffa657; }
 :root[data-theme="dark"] pre.code .num { color: #79c0ff; }
 
 ul.clean { margin: 4px 0; padding-left: 18px; }
@@ -524,39 +520,14 @@ ul.clean li { margin: 3px 0; }
 .issue.Critical { border-left-color: var(--err); }
 .issue.Major { border-left-color: var(--warn); }
 .issue.Minor { border-left-color: var(--accent); }
-.issue .sev { font-weight: 700; font-size: 11px; text-transform: uppercase; }
+.issue .sev { font-weight: 600; font-size: 11px; text-transform: uppercase; }
 .empty-state { color: var(--txt-dim); text-align: center; padding: 50px 20px; }
 .empty-state .big { font-size: 40px; opacity: .4; }
-
-/* ===== Architecture story header (Leader · Specialists · Quality Loop) ===== */
-.card.arch { background: linear-gradient(180deg, var(--bg-2), var(--bg-3)); }
-.arch-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
-.arch-head h2 { margin: 0 0 4px; font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--txt); }
-.arch-tagline { font-size: 13px; max-width: 780px; margin: 0; }
-.arch-designer { white-space: nowrap; color: var(--accent-text); text-decoration: none; font-size: 13px; border: 1px solid var(--line); padding: 6px 12px; border-radius: 8px; }
-.arch-designer:hover { border-color: var(--accent); }
-
-.arch-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.arch-chain { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; }
-.arch-node {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
-    background: var(--bg-3); border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; min-width: 118px;
-}
-.arch-node.leader { border-color: var(--accent); background: rgba(53,132,228,.10); }
-.arch-node.qa { border-color: var(--warn); }
-.arch-node.agg { border-color: var(--ok); }
-.arch-node .an-role { font-weight: 600; font-size: 13px; }
-.an-tag { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-text); font-weight: 700; }
-.arch-arr, .arch-feed { color: var(--txt-dim); font-size: 13px; }
-.arch-feed { font-style: italic; }
-.arch-loop { margin-top: 12px; font-size: 12.5px; color: var(--txt-dim); background: rgba(210,153,34,.08); border: 1px solid rgba(210,153,34,.25); border-radius: 8px; padding: 8px 12px; }
-.arch-loop strong { color: var(--warn-text); }
 
 /* Provider badge — the hybrid-LLM signal (which vendor handled each step) */
 .prov { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid transparent; }
 .prov.anthropic { background: rgba(53,132,228,.10); color: var(--accent-text); border-color: rgba(53,132,228,.30); }
 .prov.azure { background: rgba(37,99,235,.10); color: var(--accent-text); border-color: rgba(37,99,235,.30); }
-.prov.mock { background: rgba(100,116,139,.12); color: var(--txt-dim); border-color: rgba(100,116,139,.25); }
 
 :root[data-theme="dark"] .prov.anthropic { background: rgba(98,160,234,.18); color: #9cc2f0; border-color: rgba(98,160,234,.40); }
 :root[data-theme="dark"] .prov.azure { background: rgba(78,161,255,.18); color: #a5cfff; border-color: rgba(78,161,255,.40); }
@@ -565,16 +536,6 @@ ul.clean li { margin: 3px 0; }
 .stage.leader .dot { background: var(--accent); color: #0b0e12; }
 .stage.leader.idle .dot { background: var(--bg-3); color: var(--accent-text); border-color: var(--accent); }
 
-/* ===== Status bar (mode · persistence · settings) ===== */
-.status-bar {
-    display: flex; justify-content: space-between; align-items: center; gap: 10px;
-    padding: 5px 10px; margin-bottom: 10px;
-    background: var(--bg-toolbar);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-3);
-    flex-wrap: wrap;
-}
-.status-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .status-chip {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 2px 8px; border-radius: 3px; font-size: 11px;
@@ -582,37 +543,9 @@ ul.clean li { margin: 3px 0; }
     font-weight: 500;
 }
 .status-chip em { color: var(--txt-dim); font-style: normal; }
-.status-chip.mode-demo { background: rgba(217,119,6,.10); border-color: rgba(217,119,6,.30); color: var(--warn-text); }
 .status-chip.mode-live { background: rgba(22,163,74,.10); border-color: rgba(22,163,74,.30); color: var(--ok-text); }
 .status-chip.db-on { background: rgba(37,99,235,.10); border-color: rgba(37,99,235,.30); color: var(--accent-text); }
 .status-chip.db-off { color: var(--txt-dim); }
-.settings-link {
-    color: var(--accent-text); text-decoration: none; font-size: 13px;
-    padding: 5px 11px; border: 1px solid var(--line); border-radius: 7px;
-}
-.settings-link:hover { border-color: var(--accent); background: var(--bg-3); }
-
-/* 3-step onboarding row inside the arch card */
-.steps-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
-.step-pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 6px 12px; border-radius: 999px;
-    background: var(--bg-3); border: 1px solid var(--line); color: var(--txt-dim);
-    font-size: 13px;
-}
-.step-pill .num {
-    display: inline-grid; place-items: center; width: 18px; height: 18px;
-    border-radius: 50%; background: var(--accent); color: #fff;
-    font-size: 11px; font-weight: 700;
-}
-.step-pill strong { color: var(--txt); font-weight: 600; }
-
-/* ===== Settings page ===== */
-.settings-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.settings-table th, .settings-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
-.settings-table th { width: 220px; font-weight: 600; color: var(--txt-dim); }
-.settings-table tr:last-child th, .settings-table tr:last-child td { border-bottom: 0; }
-.settings-table code { font-family: var(--mono); background: var(--bg-3); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
 select {
     width: 100%; background: var(--bg-2); color: var(--txt);
     border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px;
@@ -631,24 +564,6 @@ select {
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
-/* --- Sidebar --- */
-.shell-sidebar {
-    background: rgba(247,249,252,.75);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    border-right: 1px solid rgba(255,255,255,.30);
-    display: flex;
-    flex-direction: column;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-}
-.shell-brand {
-    display: flex; align-items: center; gap: 9px;
-    padding: 10px 14px;
-    background: var(--bg-titlebar);
-    border-bottom: 1px solid var(--line-strong);
-}
 .shell-brand .brand-mark {
     width: 26px; height: 26px;
     display: grid; place-items: center;
@@ -657,58 +572,11 @@ select {
     border: 1px solid var(--accent-active);
     border-radius: 4px;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
     box-shadow: var(--shadow-inset);
 }
-.shell-brand .brand-text { line-height: 1.2; }
-.shell-brand .brand-title { font-weight: 700; font-size: 13px; color: var(--txt); letter-spacing: -.01em; }
+.shell-brand .brand-title { font-weight: 600; font-size: 13px; color: var(--txt); letter-spacing: -.01em; }
 .shell-brand .brand-sub { font-size: 10.5px; color: var(--txt-dim); margin-top: 1px; }
-
-.shell-nav {
-    padding: 12px 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex: 1;
-    overflow-y: auto;
-}
-.nav-section {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: .08em;
-    color: var(--txt-faint);
-    padding: 12px 14px 4px;
-    text-transform: uppercase;
-}
-.nav-section:first-child { padding-top: 8px; }
-
-.nav-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 5px 12px 5px 9px;
-    color: var(--txt-soft);
-    text-decoration: none;
-    border-radius: 3px;
-    font-size: 12.5px;
-    font-weight: 500;
-    margin: 0 6px;
-    border-left: 3px solid transparent;
-}
-.nav-item:hover { background: var(--bg-3); color: var(--txt); }
-.nav-item.active {
-    background: var(--accent-soft);
-    color: var(--txt);
-    border-left-color: var(--accent);
-    font-weight: 600;
-}
-.nav-item .nav-ic { width: 16px; text-align: center; font-size: 12px; opacity: .9; }
-
-.shell-foot {
-    padding: 8px 14px;
-    background: var(--bg-statusbar);
-    border-top: 1px solid var(--line-strong);
-    color: var(--txt-dim);
-    font-size: 11px;
-}
 
 /* --- Topbar --- */
 .shell-pane {
@@ -716,50 +584,6 @@ select {
     flex-direction: column;
     min-width: 0;
 }
-/* --- Desktop chrome: toolbar + status bar (dead .shell-topbar + .menubar removed — GNOME TopBar) --- */
-
-.toolbar-strip {
-    height: 32px;
-    background: var(--bg-toolbar);
-    border-bottom: 1px solid var(--line-strong);
-    display: flex; align-items: center;
-    padding: 0 6px;
-    gap: 4px;
-    user-select: none;
-}
-.tbtn {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 3px 9px;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: var(--r-3);
-    color: var(--txt-soft);
-    font-size: 11.5px;
-    font-family: inherit;
-    cursor: pointer;
-}
-.tbtn:hover {
-    background: linear-gradient(180deg, var(--bg-3), var(--bg-sunk));
-    border-color: var(--line-strong);
-    color: var(--txt);
-}
-.tbtn:active { background: var(--bg-sunk); }
-.tbtn-sep { width: 1px; height: 18px; background: var(--line-strong); margin: 0 4px; }
-.tbtn-lbl { color: var(--txt-dim); font-size: 11px; margin: 0 4px 0 6px; }
-.urlbar {
-    flex: 1;
-    background: var(--bg-2);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-3);
-    padding: 3px 8px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--txt);
-    box-shadow: inset 0 1px 2px rgba(15,23,42,.05);
-    height: 22px;
-    display: flex; align-items: center;
-}
-
 /* (removed) legacy .statusbar bottom strip — GNOME has no desktop status bar; status lives in .topbar. */
 
 /* ===== Activities overview launcher (GNOME). The Windows-style .start-btn/.start-glyph orb was
@@ -794,7 +618,7 @@ select {
 .drag-overlay { position: fixed; inset: 0; z-index: 9999; cursor: move; background: transparent; }
 
 /* About dialog content */
-.about-h { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--txt); }
+.about-h { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--txt); }
 .about-tag { margin: 0 0 12px; color: var(--txt-dim); }
 .about-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .about-tbl th { text-align: left; padding: 4px 8px 4px 0; color: var(--txt-dim); font-weight: 600; width: 90px; }
@@ -828,7 +652,7 @@ select {
 .panel-title {
     margin: 0;
     font-size: 11.5px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: .06em;
     text-transform: uppercase;
     color: var(--txt);
@@ -894,7 +718,7 @@ select {
     background: var(--bg-3); color: var(--text-disabled); cursor: not-allowed;
 }
 
-/* --- Admin / data pages (Users, Spine, Evidence, Audit, Members) ---
+/* --- Admin / data pages (Users, Board, Evidence, Audit, Members) ---
    First-class, token-based primitives so every admin screen shares ONE professional vocabulary.
    Pair with .page-head + <Panel> + Field/Btn. Replaces the old phantom admin-* classes. */
 .data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
@@ -997,20 +821,6 @@ select {
     color: var(--desktop-text);
     text-shadow: var(--desktop-text-shadow);
 }
-.desktop-group { margin-bottom: var(--space-6); }
-.desktop-group-title {
-    font-size: var(--fs-xs);
-    font-weight: var(--fw-semibold);
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--desktop-text-secondary);
-    margin-bottom: var(--space-3);
-}
-.desktop-icons {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 16px;
-}
 .dicon {
     display: flex; flex-direction: column; align-items: center; gap: 6px;
     padding: 12px 8px;
@@ -1051,24 +861,62 @@ select {
     max-width: 130px;
 }
 
-/* GNOME shows the clock in the top panel, not on the desktop. */
-.desktop-clock { display: none; }
-.desktop-clock-legacy {
-    position: absolute;
-    top: var(--space-5); right: var(--space-6);
-    text-align: right;
-    color: var(--desktop-text);
-    text-shadow: var(--desktop-text-shadow);
-}
-.clock-time { font-size: 38px; font-weight: 200; letter-spacing: -.02em; line-height: 1; }
-.clock-date { font-size: 12px; opacity: .80; margin-top: 4px; }
-
 /* Make shell-main transparent on Desktop so wallpaper shines through */
 .shell-main:has(.desktop) {
     background: transparent;
     padding: 0;
     max-width: none;
 }
+
+/* =================================================================
+   Files app — read-only GNOME files browser over a connected repo (two-pane)
+   ================================================================= */
+.files { display: flex; height: 100%; min-height: 0; }
+.files-rail { width: 240px; flex: none; background: var(--bg-3); border-right: 1px solid var(--line); overflow-y: auto; padding: 6px; }
+.files-rail-head { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-faint); padding: 8px 10px 6px; }
+.files-repo { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; background: transparent; cursor: pointer; border-radius: var(--r-2); color: var(--txt-soft); font: inherit; font-size: var(--fs-sm); text-align: left; }
+.files-repo:hover { background: var(--bg-2); }
+.files-repo.active { background: var(--accent-soft); color: var(--accent-text); }
+.files-repo-ic { color: var(--txt-dim); flex: none; }
+.files-empty-rail { padding: 10px; color: var(--txt-soft); font-size: var(--fs-sm); line-height: 1.5; }
+.files-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.files-blank { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); color: var(--txt-dim); }
+.files-crumb { display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); flex: none; flex-wrap: wrap; }
+.files-crumb-seg { background: transparent; border: 0; cursor: pointer; color: var(--accent-text); font: inherit; font-size: var(--fs-sm); padding: 2px 4px; border-radius: var(--r-2); }
+.files-crumb-seg:hover { background: var(--accent-soft); }
+.files-crumb-sep { color: var(--txt-dim); }
+.files-crumb-busy { display: inline-flex; }
+.files-error { margin: var(--space-3); }
+.files-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1; }
+.files-entry { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; background: transparent; cursor: pointer; border-radius: var(--r-2); color: var(--txt); font: inherit; font-size: var(--fs-md); text-align: left; }
+.files-entry:hover { background: var(--bg-3); }
+.files-entry-ic { color: var(--txt-dim); flex: none; }
+.files-entry.dir .files-entry-ic { color: var(--accent); }
+.files-entry-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-entry-size { color: var(--txt-dim); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; flex: none; }
+.files-entry-chev { color: var(--txt-dim); flex: none; }
+.files-empty { padding: 10px; color: var(--txt-dim); font-size: var(--fs-sm); }
+.files-code { flex: 1; overflow: auto; margin: 0; padding: 12px 14px; background: var(--bg-sunk); font-family: var(--mono); font-size: 12.5px; line-height: 1.6; color: var(--txt-soft); white-space: pre; }
+
+/* =================================================================
+   Terminal app — read-only runner session-feed tail (GNOME terminal: always-dark chrome surface)
+   ================================================================= */
+.term { display: flex; flex-direction: column; height: 100%; min-height: 0; background: #1d1f21; color: #d4d7da; }
+.term-head { display: flex; align-items: center; gap: var(--space-2); padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.08); background: #17181a; flex: none; }
+.term-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--idle); flex: none; }
+.term-dot.live { background: var(--ok); box-shadow: 0 0 0 3px rgba(46,159,99,.18); }
+.term-title { font-size: var(--fs-sm); font-weight: 600; color: #e6e8ea; }
+.term-status { margin-left: auto; font-family: var(--mono); font-size: var(--fs-xs); color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: .06em; }
+.term-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; }
+.term-line { display: flex; gap: 10px; white-space: pre-wrap; word-break: break-word; }
+.term-line.muted { color: rgba(255,255,255,.45); }
+.term-n { color: rgba(255,255,255,.28); flex: none; }
+.term-t { color: rgba(255,255,255,.4); flex: none; }
+.term-k { flex: none; min-width: 72px; color: rgba(255,255,255,.55); }
+.term-m { color: #d4d7da; }
+.term-line.ok .term-k, .term-line.ok .term-m { color: #6fd49a; }
+.term-line.err .term-k, .term-line.err .term-m { color: #ff8a7a; }
+.term-line.accent .term-k { color: #79b0ee; }
 
 /* =================================================================
    Blazor reconnection modal — themed override of the default white box
@@ -1186,9 +1034,9 @@ select {
     border-radius: var(--radius-sm);
     box-shadow: 0 6px 16px -4px rgba(53,132,228,.55), inset 0 1px 0 rgba(255,255,255,.25);
     font-size: 18px;
-    font-weight: 700;
+    font-weight: 600;
 }
-.login-brand .brand-title { font-size: 15px; font-weight: 700; color: var(--txt); }
+.login-brand .brand-title { font-size: 15px; font-weight: 600; color: var(--txt); }
 .login-brand .brand-sub { font-size: 11px; color: var(--txt-dim); margin-top: 1px; }
 .login-form .btn.login-btn { width: 100%; justify-content: center; margin-top: 4px; }
 .login-hint { font-size: 11px; color: var(--txt-dim); margin-top: 10px; text-align: center; }
@@ -1240,17 +1088,15 @@ select {
     bottom: -6px; left: 50%; transform: translateX(-50%);
     width: 6px; height: 6px;
     background: var(--accent);
-    border-radius: 50%;
+    border-radius: var(--radius-pill);
+    transition: width var(--duration-base) var(--ease-standard);
 }
 .dock-item.min .di-dot { background: rgba(255,255,255,.45); }
+/* GNOME Dash: the focused app's dot grows to a wider accent pill (design signature). */
+.dock-item.focused .di-dot { width: 16px; }
 
 /* GNOME Dash separator — between pinned apps and unpinned running windows. */
 .dock-sep { width: 1px; height: 28px; background: rgba(255,255,255,.18); margin: 0 4px; align-self: center; }
-
-/* (legacy .systray + .st-* removed — the GNOME TopBar owns the status area) */
-
-/* Hide legacy bottom taskbar (.taskbar) if still anywhere */
-.taskbar { display: none !important; }
 
 /* (legacy .tb-* taskbar skin removed — superseded by the GNOME TopBar + Dash) */
 
@@ -1463,7 +1309,23 @@ select {
     padding-top: 44px; /* clear the top panel */
     animation: login-fade var(--duration-base) var(--ease-standard);
 }
-/* Workspace thumbnails strip */
+/* GNOME workspace thumbnail strip — mini wallpaper tiles, app-colour dots, active outlined white. */
+.ko-workspaces { display: flex; gap: 10px; justify-content: center; margin: 6px 0 18px; flex-wrap: wrap; }
+.ko-ws {
+    position: relative;
+    width: 124px; height: 72px;
+    border-radius: var(--radius-sm);
+    background: var(--wallpaper-bg);
+    border: 1px solid rgba(255,255,255,.28);
+    cursor: pointer; padding: 0; overflow: hidden;
+    transition: border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+.ko-ws:hover { border-color: rgba(255,255,255,.5); }
+.ko-ws.active { border: 2px solid #fff; box-shadow: var(--shadow-2); }
+.ko-ws-num { position: absolute; top: 6px; left: 8px; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.ko-ws-dots { position: absolute; bottom: 8px; left: 8px; display: flex; gap: 4px; }
+.ko-ws-dot { width: 8px; height: 8px; border-radius: 999px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+
 .ko-overview .ko-search {
     width: min(560px, 72vw);
     padding: 0; background: transparent; border-bottom: 0; margin-bottom: 6px;
@@ -1550,7 +1412,7 @@ select {
     color: #fff;
     background: var(--accent);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     flex: none;
 }
 .toast.toast-ok   { border-left-color: var(--ok); }
@@ -1562,7 +1424,7 @@ select {
 .toast.toast-info { border-left-color: var(--state-info); }
 .toast.toast-info .toast-ic { background: var(--state-info); }
 .toast-body { flex: 1; min-width: 0; }
-.toast-title { font-size: 12.5px; font-weight: 700; color: var(--txt); }
+.toast-title { font-size: 12.5px; font-weight: 600; color: var(--txt); }
 .toast-msg { font-size: 11.5px; color: var(--txt-dim); margin-top: 2px; line-height: 1.35; }
 .toast-close {
     background: transparent; border: 0; color: var(--txt-dim);
@@ -1724,26 +1586,11 @@ select {
 }
 .tb-clock-day  { font-weight: 600; opacity: .85; }
 .tb-clock-time { font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
-.topbar .tb-logo {
-    width: 20px; height: 20px;
-    display: grid; place-items: center;
-    background: var(--accent);
-    color: #fff;
-    border-radius: 4px;
-    font-size: 12px; font-weight: 700;
-    border: 1px solid rgba(255,255,255,.30);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.30);
-}
-.topbar .tb-brand { font-weight: 700; letter-spacing: .03em; }
-.topbar .tb-workspace { color: rgba(255,255,255,.65); font-weight: 500; }
-.topbar .tb-sep { width: 1px; height: 14px; background: rgba(255,255,255,.18); }
-.topbar .tb-indicator { display: inline-flex; align-items: center; gap: 6px; opacity: .90; }
 .topbar .tb-dot { width: 6px; height: 6px; border-radius: 50%; }
 .topbar .tb-dot.ok { background: var(--ok); box-shadow: 0 0 6px rgba(22,163,74,.80); }
 .topbar .tb-dot.warn { background: var(--warn); box-shadow: 0 0 6px rgba(217,119,6,.80); }
 .topbar .tb-dot.err { background: var(--err); box-shadow: 0 0 6px rgba(220,38,38,.80); }
 .topbar .tb-clock { font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: .02em; }
-.topbar .tb-user { display: flex; align-items: center; gap: 7px; }
 /* GNOME aggregated system menu (network · sound · battery · health · avatar) */
 .topbar .tb-tray { display: inline-flex; align-items: center; gap: 7px; padding: 3px 9px; }
 .topbar .tb-tray-ic { display: inline-flex; opacity: .92; }
@@ -1753,17 +1600,15 @@ select {
     background: var(--accent);
     color: #fff;
     display: grid; place-items: center;
-    font-size: 10px; font-weight: 700;
+    font-size: 10px; font-weight: 600;
     border: 1px solid rgba(255,255,255,.35);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.30);
 }
-.topbar .tb-name { font-weight: 500; }
 
 /* Push Desktop content below the TopBar so wallpaper icons aren't clipped */
 .desktop { padding-top: 50px; }
 /* Empty GNOME desktop — fill the viewport so right-click works anywhere on the wallpaper. */
 .desktop-empty { min-height: calc(100dvh - 50px); }
-.desktop-clock { top: 50px; }
 
 /* AppFrame windows should not start inside the TopBar either */
 .appwin { top: max(40px, var(--win-top, 0px)); }
@@ -1844,31 +1689,6 @@ select {
     /* A full dock can exceed a phone's width — scroll it instead of overflowing. */
     .dock { max-width: calc(100vw - 16px); overflow-x: auto; }
 }
-
-/* =================================================================
-   SystemApp — tabbed OS settings dialog content
-   ================================================================= */
-.sys-app { display: flex; flex-direction: column; height: 100%; }
-.sys-tabs {
-    display: flex; gap: 2px;
-    padding: 6px 10px 0;
-    border-bottom: 1px solid var(--line);
-    background: var(--bg-titlebar);
-}
-.sys-tab {
-    background: transparent;
-    border: 0;
-    padding: 6px 14px;
-    font-family: inherit; font-size: 12.5px; font-weight: 500;
-    color: var(--txt-soft);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-    border-radius: 0;
-}
-.sys-tab:hover { color: var(--txt); background: var(--bg-3); }
-.sys-tab.active { color: var(--accent-text); border-bottom-color: var(--accent); font-weight: 600; }
-.sys-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 12px 4px; }
 
 /* =================================================================
    Toggle switch
@@ -1970,7 +1790,7 @@ select {
     background: var(--bg-3);
     color: var(--txt);
     border: 1px solid var(--line-strong);
-    font-size: 10.5px; font-weight: 700;
+    font-size: 10.5px; font-weight: 600;
     min-width: 18px; justify-content: center;
 }
 .badgepill.badge-ok    { background: rgba(22,163,74,.12); color: var(--ok-text); border-color: rgba(22,163,74,.40); }
@@ -2065,11 +1885,11 @@ select {
     background: var(--accent);
     color: #fff;
     display: grid; place-items: center;
-    font-size: 16px; font-weight: 700;
+    font-size: 16px; font-weight: 600;
     border: 1px solid rgba(255,255,255,.30);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.30);
 }
-.dd-user-name { font-weight: 700; font-size: 13px; color: var(--txt); }
+.dd-user-name { font-weight: 600; font-size: 13px; color: var(--txt); }
 .dd-user-role { font-size: 11px; color: var(--txt-dim); margin-top: 1px; }
 
 .dd-clock-big  { font-size: 26px; font-weight: 200; letter-spacing: -.02em; color: var(--txt); padding: 12px 12px 0; font-variant-numeric: tabular-nums; }
@@ -2091,7 +1911,6 @@ select {
 }
 .tb-trigger:hover { background: rgba(255,255,255,.10); }
 .tb-trigger.open  { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.22); }
-.tb-caret { font-size: 10px; opacity: .70; }
 .tb-icon-btn { padding: 4px 6px; line-height: 0; }
 
 /* =================================================================
@@ -2112,7 +1931,7 @@ select {
 }
 .prefs-side-head {
     font-size: 10.5px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: .08em;
     color: var(--txt-faint);
     padding: 8px 10px 6px;
@@ -2145,6 +1964,9 @@ select {
     container-type: inline-size;
     container-name: prefs;
 }
+/* A hosted category that owns its own prefs rail (LLM, System) runs edge-to-edge: no outer padding
+   or scroll, so the embedded component's two-pane shell fills the content area. */
+.prefs-content.flush { padding: 0; overflow: hidden; }
 /* Stack label above control when the content pane is too narrow for both. */
 @container prefs (max-width: 380px) {
     .prefs-row { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-2); }
@@ -2297,7 +2119,7 @@ input[type=range] { accent-color: var(--accent); }
     flex: none;
 }
 .asb-item { display: inline-flex; align-items: center; gap: 4px; }
-.asb-item strong { color: var(--txt); font-variant-numeric: tabular-nums; }
+.asb-item strong { color: var(--txt); font-family: var(--mono); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
 .asb-sub { color: var(--txt-dim); }
 .asb-sep { width: 1px; height: 14px; background: var(--line-strong); }
 .asb-spacer { flex: 1; }
@@ -2312,19 +2134,6 @@ input[type=range] { accent-color: var(--accent); }
     box-shadow: 0 0 6px rgba(74,140,255,.80);
     animation: dot-pulse 1.2s ease-in-out infinite;
 }
-.topbar-spacer { flex: 1; }
-.theme-btn {
-    background: linear-gradient(180deg, var(--bg-2), var(--bg-3));
-    color: var(--txt-soft);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-3);
-    padding: 3px 9px;
-    font-size: 11.5px;
-    font-family: inherit;
-    cursor: pointer;
-    box-shadow: var(--shadow-inset);
-}
-.theme-btn:hover { background: linear-gradient(180deg, var(--bg-3), var(--bg-sunk)); border-color: var(--line-strong); color: var(--txt); }
 
 /* --- Main content --- */
 .shell-main {
@@ -2348,7 +2157,7 @@ input[type=range] { accent-color: var(--accent); }
 .page-head > :first-child { min-width: 0; }
 .page-title {
     font-size: 17px;
-    font-weight: 700;
+    font-weight: 600;
     margin: 0 0 2px;
     color: var(--txt);
     letter-spacing: -.01em;
@@ -2429,8 +2238,6 @@ input[type=range] { accent-color: var(--accent); }
     border-radius: var(--r-3);
     margin-bottom: 12px;
 }
-.toolbar .sep { width: 1px; height: 18px; background: var(--line-strong); margin: 0 4px; }
-.toolbar .spacer { flex: 1; }
 .toolbar .lbl { font-size: 11.5px; color: var(--txt-dim); margin: 0 4px; font-weight: 500; }
 
 /* (removed) legacy .statusbar utility — GNOME has no desktop status strip; status lives in .topbar. */
@@ -2440,10 +2247,6 @@ input[type=range] { accent-color: var(--accent); }
    ================================================================= */
 @media (max-width: 800px) {
     .shell { grid-template-columns: 1fr; }
-    .shell-sidebar { position: relative; height: auto; flex-direction: row; align-items: center; overflow-x: auto; }
-    .shell-brand { border-bottom: 0; border-right: 1px solid var(--line); padding: 12px 16px; }
-    .shell-nav { flex-direction: row; padding: 8px; }
-    .shell-foot { display: none; }
 }
 
 /* =================================================================
@@ -2467,7 +2270,7 @@ input[type=range] { accent-color: var(--accent); }
 .issues-panel h3 {
     margin: 0 0 10px;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: .04em;
     text-transform: uppercase;
     color: var(--err);
@@ -2486,7 +2289,7 @@ input[type=range] { accent-color: var(--accent); }
     display: inline-grid; place-items: center;
     width: 24px; height: 24px;
     border-radius: 6px;
-    font-size: 12px; font-weight: 700;
+    font-size: 12px; font-weight: 600;
     background: var(--bg-3);
     color: var(--txt);
     border: 1px solid var(--line);
@@ -2529,61 +2332,59 @@ input[type=range] { accent-color: var(--accent); }
 }
 .catalog-icon-cell span { color: var(--text-tertiary); }
 
-/* Spine app — tabbed Workspaces / Runners / Sessions */
-.spine-tabs {
+/* Board app — tabbed Workspaces / Runners / Sessions */
+.board-tabs {
     display: flex; gap: var(--space-1);
     border-bottom: 1px solid var(--border-subtle);
     margin: var(--space-3) 0 var(--space-4);
 }
-.spine-tab {
+.board-tab {
     background: transparent; border: none; cursor: pointer;
     padding: var(--space-2) var(--space-3);
     color: var(--text-tertiary); font-size: var(--fs-sm);
     border-bottom: 2px solid transparent; margin-bottom: -1px;
     display: inline-flex; align-items: center; gap: 6px;
 }
-.spine-tab:hover { color: var(--text-primary); }
-.spine-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
-.spine-empty { padding: var(--space-4); }
-.spine-form { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
-.spine-form-hint { margin-top: var(--space-2); }
+.board-tab:hover { color: var(--text-primary); }
+.board-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+.board-form-hint { margin-top: var(--space-2); }
 
-/* Spine — back bar (issues sub-view) */
-.spine-back-bar {
+/* Board — back bar (issues sub-view) */
+.board-back-bar {
     display: flex; align-items: center; gap: var(--space-2);
     margin-bottom: var(--space-3);
 }
-.spine-back-repo { font-size: 13px; }
+.board-back-repo { font-size: 13px; }
 
-/* Spine — issue link */
-.spine-issue-link {
+/* Board — issue link */
+.board-issue-link {
     color: var(--text-primary); text-decoration: none;
 }
-.spine-issue-link:hover { text-decoration: underline; color: var(--accent-text); }
+.board-issue-link:hover { text-decoration: underline; color: var(--accent-text); }
 
-/* Spine — ticket filters (repo / label / status) */
-.spine-filters {
+/* Board — ticket filters (repo / label / status) */
+.board-filters {
     display: flex; flex-wrap: wrap; gap: var(--space-3);
     margin-bottom: var(--space-3);
 }
 
-/* Spine — repo multi-select picker (work dialog) */
-.spine-repo-picker { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-3) 0; }
-.spine-repo-option {
+/* Board — repo multi-select picker (work dialog) */
+.board-repo-picker { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-3) 0; }
+.board-repo-option {
     display: flex; align-items: center; gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
     cursor: pointer;
 }
-.spine-repo-option:hover { border-color: var(--accent); }
+.board-repo-option:hover { border-color: var(--accent); }
 
-/* Spine — per-repo breakdown inside a session row */
-.spine-session-repo { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); margin: 2px 0; }
-.spine-session-repo-err { color: var(--err); font-weight: 700; cursor: help; }
+/* Board — per-repo breakdown inside a session row */
+.board-session-repo { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); margin: 2px 0; }
+.board-session-repo-err { color: var(--err); font-weight: 600; cursor: help; }
 
 /* Live run activity feed (M6) — a session's streamed progress, under its row. */
-.spine-activity-tr td { padding-top: 0; }
-.spine-activity {
+.board-activity-tr td { padding-top: 0; }
+.board-activity {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -2596,24 +2397,24 @@ input[type=range] { accent-color: var(--accent); }
     font-family: var(--mono);
     font-size: var(--fs-xs);
 }
-.spine-activity-row { display: flex; gap: var(--space-2); color: var(--txt-soft); }
-.spine-activity-time { color: var(--txt-dim); flex: 0 0 auto; }
+.board-activity-row { display: flex; gap: var(--space-2); color: var(--txt-soft); }
+.board-activity-time { color: var(--txt-dim); flex: 0 0 auto; }
 
-/* Spine — "Start from idea" wizard (bootstrap) */
-.spine-wizard-steps { display: flex; gap: var(--space-2); margin: var(--space-2) 0 var(--space-4); flex-wrap: wrap; }
-.spine-wizard-step {
+/* Board — "Start from idea" wizard (bootstrap) */
+.board-wizard-steps { display: flex; gap: var(--space-2); margin: var(--space-2) 0 var(--space-4); flex-wrap: wrap; }
+.board-wizard-step {
     font-size: var(--fs-xs); color: var(--text-tertiary);
     padding: 4px var(--space-2); border-radius: var(--radius-sm);
     border: 1px solid var(--line); background: var(--bg-sunk);
 }
-.spine-wizard-step.active { color: var(--text-primary); border-color: var(--accent); }
-.spine-wizard-step.done { color: var(--text-primary); opacity: 0.7; }
-.spine-spec {
+.board-wizard-step.active { color: var(--text-primary); border-color: var(--accent); }
+.board-wizard-step.done { color: var(--text-primary); opacity: 0.7; }
+.board-spec {
     padding: var(--space-3); margin-bottom: var(--space-3);
     border: 1px solid var(--line); border-radius: var(--radius-sm);
     background: var(--bg-sunk);
 }
-.spine-spec h3 { margin: 0 0 var(--space-1); font-size: var(--fs-sm); }
-.spine-ticket-title { width: 100%; }
-.spine-runall { margin-bottom: var(--space-3); }
-.spine-ai-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-tertiary); white-space: nowrap; }
+.board-spec h3 { margin: 0 0 var(--space-1); font-size: var(--fs-sm); }
+.board-ticket-title { width: 100%; }
+.board-runall { margin-bottom: var(--space-3); }
+.board-ai-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-tertiary); white-space: nowrap; }
