@@ -11,7 +11,9 @@
     @foreach (var app in Registry.VisiblePinned(_isAdmin))
     {
         var isOpen = WM.Open.Any(o => o.AppKey == app.Key);
-        <button class="dock-item @(isOpen ? "running" : "")"
+        // Focused = this app owns the front-most (highest-Z, non-minimized) window → its dot grows to a pill.
+        var isFocused = isOpen && WM.Open.Where(o => !o.Minimized).OrderByDescending(o => o.Z).FirstOrDefault()?.AppKey == app.Key;
+        <button class="dock-item @(isOpen ? "running" : "") @(isFocused ? "focused" : "")"
                 @onclick="@(() => Launch(app))"
                 title="@app.Title" aria-label="@app.Title">
             <span class="di-ic" style="background:@app.Color;color:#fff"><Icon Name="@app.Icon" Size="18" /></span>
