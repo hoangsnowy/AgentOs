@@ -59,5 +59,6 @@ public sealed class IntegrationModule : IModule
         services.AddSingleton<ISourceProvider, GitHubSourceProvider>();
         services.AddSingleton<ISourceProvider, AzureDevOpsSourceProvider>();
         services.AddSingleton<ISourceProviderResolver, SourceProviderResolver>();
+        services.AddSingleton<IRepoFileBrowser, GitHubRepoFileBrowser>();
     }
 }

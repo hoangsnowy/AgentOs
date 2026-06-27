@@ -90,11 +90,10 @@ Don't memorize values — reference these names. Full list in `app.css`; the fam
   a GNOME system menu (aggregated network/sound/battery + gateway health dot + avatar → quick settings).
   Dark in both themes. No brand mark, no standalone workspace item.
 - **Dash (dock)** (`Taskbar.razor` in `AgentOs.Web.Shell/UI`) — flat translucent GNOME Dash, no Start
-  button, no magnify. **Six pinned apps**: Overview · Agents (5-agent pipeline) · Workflow · Board ·
-  Settings (hub) · Terminal. Running apps show a dot; the focused app's dot widens to an accent pill.
-  Unpinned admin/system apps (Users, Evidence, Cost, Policy, Prompts, Plugins, MCP, System) are reached
-  via the Settings hub + Activities search. Reads `AppCatalog` (respect `AdminOnly`). *(The AppCatalog
-  inline comment still says "Exactly five apps are Pinned" — stale, it's six now.)*
+  button, no magnify. **Seven pinned apps**: Overview · Agents (5-agent pipeline) · Workflow · Board ·
+  Settings (hub) · Terminal · Files. Running apps show a dot; the focused app's dot widens to an accent
+  pill. Unpinned admin/system apps (Users, Evidence, Cost, Policy, Prompts, Plugins, MCP, System) are
+  reached via the Settings hub + Activities search. Reads `AppCatalog` (respect `AdminOnly`).
 - **Activities overview** (`AppShellLayout.razor`, `.ko-overview` — the old `.kickoff` selector) —
   full-screen launcher opened from the top-bar Activities button: a search field, a **virtual-workspace
   thumbnail strip** (each thumb previews its windows as app-colour dots, active outlined white), a

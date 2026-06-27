@@ -1,0 +1,216 @@
+@* FilesApp — read-only browse of a connected workspace's GitHub repos (the GNOME Files app). Lists the
+   repositories under each connected board/workspace, walks a repo's file tree, and shows a file's text in
+   a code view. GitHub only (the Octokit Contents API). READ-ONLY — no writes — so it stays clear of the
+   IToolGateway write-governance path. A circuit has no HttpContext, so the tenant comes from
+   AuthenticationState and the per-workspace PAT is read tenant-explicitly from the AppConfig store. *@
+
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Domain.Workspaces
+@using AgentOs.Modules.AppConfig
+@using AgentOs.Modules.Integration
+@using AgentOs.Modules.Workspaces.Persistence
+@inject IWorkspaceRepository Workspaces
+@inject IAppConfigStore ConfigStore
+@inject IRepoFileBrowser Browser
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
+
+<div class="files">
+    <aside class="files-rail">
+        <div class="files-rail-head">Repositories</div>
+        @if (!_resolved)
+        {
+            <Spinner />
+        }
+        else if (_repos.Count == 0)
+        {
+            <div class="files-empty-rail">No connected repos. Open <strong>Board</strong> → connect a GitHub board and add repositories, then browse them here.</div>
+        }
+        else
+        {
+            @foreach (var r in _repos)
+            {
+                <button class="files-repo @(_repoOwner == r.Owner && _repoName == r.Repo ? "active" : "")" @onclick="@(() => OpenRepo(r))">
+                    <span class="files-repo-ic"><Icon Name="git-pull-request" Size="14" /></span>
+                    <code>@r.Owner/@r.Repo</code>
+                </button>
+            }
+        }
+    </aside>
+
+    <div class="files-main">
+        @if (_repoOwner is null)
+        {
+            <div class="files-blank"><Icon Name="folder" Size="30" /><p>Select a repository to browse its files.</p></div>
+        }
+        else
+        {
+            <div class="files-crumb">
+                <button class="files-crumb-seg" @onclick="@(() => Navigate(""))"><code>@_repoOwner/@_repoName</code></button>
+                @{ var acc = ""; }
+                @foreach (var seg in CurrentSegments())
+                {
+                    acc = string.IsNullOrEmpty(acc) ? seg : $"{acc}/{seg}";
+                    var target = acc;
+                    <span class="files-crumb-sep">/</span>
+                    <button class="files-crumb-seg" @onclick="@(() => Navigate(target))">@seg</button>
+                }
+                @if (_busy) { <span class="files-crumb-busy"><Spinner /></span> }
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="login-error files-error">@_error</div>
+            }
+            else if (_file is not null)
+            {
+                <pre class="files-code"><code>@_fileText</code></pre>
+            }
+            else
+            {
+                <ul class="files-list">
+                    @foreach (var e in _entries)
+                    {
+                        <li>
+                            @if (e.IsDir)
+                            {
+                                <button class="files-entry dir" @onclick="@(() => Navigate(e.Path))">
+                                    <span class="files-entry-ic"><Icon Name="folder" Size="15" /></span>
+                                    <span class="files-entry-name">@e.Name</span>
+                                    <span class="files-entry-chev"><Icon Name="chevron-right" Size="13" /></span>
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="files-entry" @onclick="@(() => OpenFile(e))">
+                                    <span class="files-entry-ic"><Icon Name="file" Size="15" /></span>
+                                    <span class="files-entry-name">@e.Name</span>
+                                    <span class="files-entry-size">@Size(e.Size)</span>
+                                </button>
+                            }
+                        </li>
+                    }
+                    @if (_entries.Count == 0 && !_busy) { <li class="files-empty">Empty folder.</li> }
+                </ul>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private sealed record RepoRef(string CredentialRef, string Owner, string Repo, string Branch);
+
+    private string _tenantId = "";
+    private bool _resolved;
+    private readonly List<RepoRef> _repos = new();
+
+    private string? _credRef;
+    private string? _repoOwner;
+    private string? _repoName;
+    private string _repoBranch = "main";
+    private string _path = "";
+    private readonly List<RepoEntry> _entries = new();
+    private string? _file;
+    private string _fileText = "";
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _tenantId = state.User.GetTenantId() ?? string.Empty;
+        }
+        if (_tenantId.Length > 0)
+        {
+            await LoadReposAsync();
+        }
+        _resolved = true;
+    }
+
+    private async Task LoadReposAsync()
+    {
+        try
+        {
+            var workspaces = await Workspaces.ListForTenantAsync(_tenantId);
+            foreach (var ws in workspaces.Where(w => w.Kind == SourceProviderKind.GitHub))
+            {
+                var repos = await Workspaces.ListReposForTenantAsync(_tenantId, ws.Id);
+                foreach (var repo in repos)
+                {
+                    _repos.Add(new RepoRef(ws.CredentialRef, repo.Owner, repo.Repo,
+                        string.IsNullOrWhiteSpace(repo.DefaultBranch) ? "main" : repo.DefaultBranch));
+                }
+            }
+        }
+        // No connected workspaces (or no DB) → empty rail. Never crash the circuit.
+        catch (System.InvalidOperationException ex) { _ = ex.Message; }
+        catch (System.Net.Http.HttpRequestException ex) { _ = ex.Message; }
+        catch (System.TimeoutException ex) { _ = ex.Message; }
+    }
+
+    private async Task OpenRepo(RepoRef r)
+    {
+        _credRef = r.CredentialRef;
+        _repoOwner = r.Owner;
+        _repoName = r.Repo;
+        _repoBranch = r.Branch;
+        await Navigate("");
+    }
+
+    private async Task Navigate(string path)
+    {
+        _file = null;
+        _path = path;
+        await LoadDirAsync();
+    }
+
+    private async Task LoadDirAsync()
+    {
+        if (_repoOwner is null) { return; }
+        _busy = true;
+        _error = null;
+        try
+        {
+            var pat = await ConfigStore.GetForTenantAsync(_tenantId, _credRef!) ?? "";
+            var entries = await Browser.ListAsync(_repoOwner, _repoName!, _path, _repoBranch, pat);
+            _entries.Clear();
+            _entries.AddRange(entries);
+        }
+        catch (Octokit.ApiException ex) { _error = $"GitHub: {ex.Message}"; }
+        catch (System.Net.Http.HttpRequestException ex) { _error = $"Load failed: {ex.Message}"; }
+        catch (System.InvalidOperationException ex) { _error = $"Load failed: {ex.Message}"; }
+        catch (System.TimeoutException ex) { _error = $"Load failed: {ex.Message}"; }
+        finally { _busy = false; }
+    }
+
+    private async Task OpenFile(RepoEntry e)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var pat = await ConfigStore.GetForTenantAsync(_tenantId, _credRef!) ?? "";
+            _fileText = await Browser.GetTextAsync(_repoOwner!, _repoName!, e.Path, _repoBranch, pat);
+            _file = e.Path;
+        }
+        catch (Octokit.ApiException ex) { _error = $"GitHub: {ex.Message}"; }
+        catch (System.Net.Http.HttpRequestException ex) { _error = $"Open failed: {ex.Message}"; }
+        catch (System.InvalidOperationException ex) { _error = $"Open failed: {ex.Message}"; }
+        catch (System.TimeoutException ex) { _error = $"Open failed: {ex.Message}"; }
+        finally { _busy = false; }
+    }
+
+    private IEnumerable<string> CurrentSegments() =>
+        string.IsNullOrEmpty(_path) ? Array.Empty<string>() : _path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+    private static string Size(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes / (1024.0 * 1024):0.#} MB",
+    };
+}

@@ -869,6 +869,36 @@ select {
 }
 
 /* =================================================================
+   Files app — read-only GNOME files browser over a connected repo (two-pane)
+   ================================================================= */
+.files { display: flex; height: 100%; min-height: 0; }
+.files-rail { width: 240px; flex: none; background: var(--bg-3); border-right: 1px solid var(--line); overflow-y: auto; padding: 6px; }
+.files-rail-head { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-faint); padding: 8px 10px 6px; }
+.files-repo { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; background: transparent; cursor: pointer; border-radius: var(--r-2); color: var(--txt-soft); font: inherit; font-size: var(--fs-sm); text-align: left; }
+.files-repo:hover { background: var(--bg-2); }
+.files-repo.active { background: var(--accent-soft); color: var(--accent-text); }
+.files-repo-ic { color: var(--txt-dim); flex: none; }
+.files-empty-rail { padding: 10px; color: var(--txt-soft); font-size: var(--fs-sm); line-height: 1.5; }
+.files-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.files-blank { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); color: var(--txt-dim); }
+.files-crumb { display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); flex: none; flex-wrap: wrap; }
+.files-crumb-seg { background: transparent; border: 0; cursor: pointer; color: var(--accent-text); font: inherit; font-size: var(--fs-sm); padding: 2px 4px; border-radius: var(--r-2); }
+.files-crumb-seg:hover { background: var(--accent-soft); }
+.files-crumb-sep { color: var(--txt-dim); }
+.files-crumb-busy { display: inline-flex; }
+.files-error { margin: var(--space-3); }
+.files-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1; }
+.files-entry { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; background: transparent; cursor: pointer; border-radius: var(--r-2); color: var(--txt); font: inherit; font-size: var(--fs-md); text-align: left; }
+.files-entry:hover { background: var(--bg-3); }
+.files-entry-ic { color: var(--txt-dim); flex: none; }
+.files-entry.dir .files-entry-ic { color: var(--accent); }
+.files-entry-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-entry-size { color: var(--txt-dim); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; flex: none; }
+.files-entry-chev { color: var(--txt-dim); flex: none; }
+.files-empty { padding: 10px; color: var(--txt-dim); font-size: var(--fs-sm); }
+.files-code { flex: 1; overflow: auto; margin: 0; padding: 12px 14px; background: var(--bg-sunk); font-family: var(--mono); font-size: 12.5px; line-height: 1.6; color: var(--txt-soft); white-space: pre; }
+
+/* =================================================================
    Terminal app — read-only runner session-feed tail (GNOME terminal: always-dark chrome surface)
    ================================================================= */
 .term { display: flex; flex-direction: column; height: 100%; min-height: 0; background: #1d1f21; color: #d4d7da; }

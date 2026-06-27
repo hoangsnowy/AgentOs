@@ -12,10 +12,10 @@ namespace AgentOs.Web.Services;
 /// <summary>The catalog of apps the AgentOS shell can launch — built-ins plus any registered by plugins.</summary>
 public static class AppCatalog
 {
-    // Exactly five apps are Pinned (the dock + pinned grid): Overview · Agents · Workflow · Board ·
-    // Settings. Everything else is unpinned — still launchable via Activities search / deep links, and
-    // the admin/system surfaces are collected behind the Settings hub. Pinned defaults to true on the
-    // DesktopApp record, so unpinned apps MUST say Pinned: false explicitly.
+    // Seven apps are Pinned (the GNOME Dash + pinned grid): Overview · Agents · Workflow · Board ·
+    // Settings · Terminal · Files. Everything else is unpinned — still launchable via Activities search /
+    // deep links, and the admin/system surfaces are collected behind the Settings hub. Pinned defaults to
+    // true on the DesktopApp record, so unpinned apps MUST say Pinned: false explicitly.
     private static readonly List<DesktopApp> _builtIn = new()
     {
         new("overview", "Overview", "house", "Your control plane: runs, cost, the 5-agent pipeline", "Agents", 1000, 680, Pinned: true, ComponentType: typeof(OverviewApp), Color: "#3584e4"),
@@ -24,6 +24,7 @@ public static class AppCatalog
         new("board",    "Board",    "git-pull-request", "Boards → tickets → AI sessions → PRs", "Agents", 1000, 660, Pinned: true, ComponentType: typeof(BoardApp), Color: "#2ec27e"),
         new("settings", "Settings", "gear",  "LLM keys, governance, users, system",   "System", 1060, 700, Pinned: true, ComponentType: typeof(SettingsHub), Color: "#5e5c64"),
         new("terminal", "Terminal", "terminal", "Live read-only tail of the runner's session feed", "Agents", 780, 520, Pinned: true, ComponentType: typeof(TerminalApp), Color: "#2b2b2e"),
+        new("files",    "Files",    "folder", "Browse a connected repo's files (read-only)", "Agents", 880, 600, Pinned: true, ComponentType: typeof(FilesApp), Color: "#4a86d8"),
         // ── unpinned: reachable via the Settings hub, Activities search, or in-app deep links ──
         // (Workspaces + Sessions were standalone admin windows fully subsumed by Board → deleted.)
         new("users",    "Users",    "user",  "Manage tenant members + roles", "Admin", 880, 600, Pinned: false, AdminOnly: true, ComponentType: typeof(UsersApp), Color: "#e5a50a"),
