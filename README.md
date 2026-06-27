@@ -72,9 +72,14 @@ Postgres schema, so any one of them can later ship as a standalone NuGet package
 A GNOME/Adwaita desktop in the browser — every capability ships as a window, not a wall of
 config. All shots are the standalone Web (`dotnet run --project src/AgentOs.Web`).
 
+| Overview — the control plane | Terminal — runner session feed |
+|:---:|:---:|
+| [![Overview — idea→PR at a glance: KPIs, the 5-agent pipeline, recent runs](docs/images/app-overview.png)](docs/images/app-overview.png) | [![Terminal — a read-only live tail of the paired runner's session feed](docs/images/app-terminal.png)](docs/images/app-terminal.png) |
+| Start from an idea; headline KPIs (runs, success rate, cost), the 5-agent pipeline at a glance, and recent runs. | A read-only live tail of the paired runner's session feed (`ISessionRunFeed`) — what the remote agent is doing, streamed. |
+
 | Realtime pipeline | Visual workflow editor |
 |:---:|:---:|
-| [![Pipeline — the five agents running the Leader-Specialists-Quality Loop](docs/images/app-pipeline.png)](docs/images/app-pipeline.png) | [![Workflow — the same agents as an editable Microsoft Agent Framework graph](docs/images/app-workflow.png)](docs/images/app-workflow.png) |
+| [![Agents — the five agents running the Leader-Specialists-Quality Loop](docs/images/app-pipeline.png)](docs/images/app-pipeline.png) | [![Workflow — the same agents as an editable Microsoft Agent Framework graph](docs/images/app-workflow.png)](docs/images/app-workflow.png) |
 | The five agents (Orchestrator → Requirement → Coding → Testing → QA) with live token/cost/QA-round metrics. | The same pipeline as an editable MAF Workflow graph — drag LLM / Tool / Evaluator / Loop / Human nodes. |
 
 | Boards → Tickets → Sessions | Tool-call evidence |
