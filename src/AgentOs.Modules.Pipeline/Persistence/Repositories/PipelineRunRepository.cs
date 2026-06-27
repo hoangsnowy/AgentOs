@@ -122,6 +122,7 @@ internal sealed class PipelineRunRepository(
         return await db.PipelineRuns
             .AsNoTracking()
             .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenByDescending(x => x.Id)
             .Skip(offset)
             .Take(limit)
             .Select(x => new PipelineRunSummary(
@@ -154,6 +155,7 @@ internal sealed class PipelineRunRepository(
             .AsNoTracking()
             .Where(x => x.TenantId == tenantId)
             .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenByDescending(x => x.Id)
             .Skip(offset)
             .Take(limit)
             .Select(x => new PipelineRunSummary(
@@ -183,7 +185,7 @@ internal sealed class PipelineRunRepository(
                 LEFT("UserStoryText", 120) AS UserStoryPreview
             FROM pipeline.pipeline_runs
             WHERE "TenantId" = @tenantId
-            ORDER BY "CreatedAtUtc" DESC
+            ORDER BY "CreatedAtUtc" DESC, "Id" DESC
             OFFSET @offset LIMIT @limit
             """;
 

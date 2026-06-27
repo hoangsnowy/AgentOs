@@ -63,8 +63,9 @@
             var state = await AuthState;
             _isAdmin = state.User.IsAdmin();
         }
-        // Land on the first category the user can actually use (admins → LLM, members → System).
-        _tab = VisibleCats().FirstOrDefault()?.Key ?? "system";
+        // Land on a sensible default per role (admins → LLM config, members → System prefs) —
+        // explicit so it doesn't silently depend on the Cats array order.
+        _tab = _isAdmin ? "llm" : "system";
     }
 
     private IEnumerable<Cat> VisibleCats() => Cats.Where(c => _isAdmin || !c.AdminOnly);

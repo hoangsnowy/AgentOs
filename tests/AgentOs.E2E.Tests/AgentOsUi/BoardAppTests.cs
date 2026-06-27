@@ -28,22 +28,23 @@ public sealed class BoardAppTests : IClassFixture<AgentOsPageFixture>
         return win;
     }
 
-    // Open the Board app from its desktop icon and confirm the three panes render.
+    // Open the Board app from its desktop icon and confirm the four panes render.
     [Fact]
-    public async Task Spine_Opens_ShowsThreeTabs()
+    public async Task Board_Opens_ShowsTabs()
     {
         if (!AgentOsPageFixture.IsEnabled) { Assert.Skip(AgentOsPageFixture.SkipReason); }
 
         var win = await OpenBoardAsync();
 
         await Assertions.Expect(win.Locator(".board-tab", new() { HasTextString = "Boards" })).ToBeVisibleAsync();
+        await Assertions.Expect(win.Locator(".board-tab", new() { HasTextString = "Start from idea" })).ToBeVisibleAsync();
         await Assertions.Expect(win.Locator(".board-tab", new() { HasTextString = "Runners" })).ToBeVisibleAsync();
         await Assertions.Expect(win.Locator(".board-tab", new() { HasTextString = "Sessions" })).ToBeVisibleAsync();
     }
 
     // The Boards tab shows the connect-a-board form.
     [Fact]
-    public async Task Spine_BoardsTab_ShowsConnectForm()
+    public async Task Board_BoardsTab_ShowsConnectForm()
     {
         if (!AgentOsPageFixture.IsEnabled) { Assert.Skip(AgentOsPageFixture.SkipReason); }
 
@@ -56,7 +57,7 @@ public sealed class BoardAppTests : IClassFixture<AgentOsPageFixture>
 
     // Register a runner and confirm the one-time pairing token (REMOTE_AGENT_ID/TOKEN) is shown.
     [Fact]
-    public async Task Spine_RegisterRunner_ShowsOneTimePairingToken()
+    public async Task Board_RegisterRunner_ShowsOneTimePairingToken()
     {
         if (!AgentOsPageFixture.IsEnabled) { Assert.Skip(AgentOsPageFixture.SkipReason); }
 

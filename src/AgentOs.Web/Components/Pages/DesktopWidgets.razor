@@ -40,7 +40,7 @@
         <div class="w-kpis">
             <div class="w-kpi"><div class="v">5</div><div class="k">Agents</div></div>
             <div class="w-kpi"><div class="v">@(_summary is null ? "—" : Num(_summary.RunCount))</div><div class="k">Runs</div></div>
-            <div class="w-kpi"><div class="v">@Success()</div><div class="k">Success</div></div>
+            <div class="w-kpi"><div class="v">@Success()</div><div class="k">Success (50)</div></div>
             <div class="w-kpi">
                 <div class="v">@(_summary is null ? "—" : (_isAdmin ? Money(_summary.TotalCostUsd) : Num(_summary.CallCount)))</div>
                 <div class="k">@(_isAdmin ? "Cost" : "Calls")</div>
@@ -85,7 +85,7 @@
                 @foreach (var r in _runs.Take(4))
                 {
                     <li>
-                        <span class="w-run-dot @StatusClass(r.Status)"></span>
+                        <span class="w-run-dot @StatusClass(r.Status)" title="@StatusLabel(r.Status)" aria-label="@StatusLabel(r.Status)"></span>
                         <span class="w-run-title">@(string.IsNullOrWhiteSpace(r.UserStoryPreview) ? "—" : r.UserStoryPreview)</span>
                         <span class="w-run-when">@r.CreatedAtUtc.ToLocalTime().ToString("d MMM", CultureInfo.CurrentCulture)</span>
                     </li>
@@ -196,6 +196,15 @@
         "MaxIterationReached" => "warn",
         "Failed" => "err",
         _ => "",
+    };
+
+    // Accessible name for the status dot — status must not be conveyed by colour alone (WCAG 1.4.1).
+    private static string StatusLabel(string status) => status switch
+    {
+        "Done" => "Complete",
+        "MaxIterationReached" => "Iteration limit",
+        "Failed" => "Failed",
+        _ => status,
     };
 
     private static string Money(decimal v) => "$" + v.ToString("0.00", CultureInfo.InvariantCulture);

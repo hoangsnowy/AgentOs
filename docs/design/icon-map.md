@@ -23,7 +23,7 @@
 | ⏻ | `power` | TopBar.razor:63, AppShellLayout.razor:47,70, SystemApp.razor:15,93 |
 | 🎨 | `palette` | SystemApp.razor:12 |
 | ⊞ | `squares-four` | Taskbar.razor:11 |
-| 🏠 | `house` | AppCatalog.cs (Home app), HomeApp.razor |
+| 🏠 | `house` | AppCatalog.cs (Overview app), OverviewApp.razor |
 | ⟳ | `arrow-clockwise` | Desktop.razor:44 |
 | ◆ | `diamond` | AppShellLayout.razor:28, LoginOverlay.razor:10, TopBar.razor:12 |
 | ● | `circle-fill` | Settings.razor:10, TopBar.razor (tb-dot — already SVG-ish via CSS) |
