@@ -25,10 +25,11 @@ public sealed class InvitationEmailRealAuthTests : IClassFixture<AgentOsRealAuth
         await MailHog.ClearAsync();
         await _fx.LoginAsync(); // operator / admin
 
-        // Open the (admin-only) Users app from its Dash (dock) button.
-        await _fx.Page.Locator(".dock-item[title=\"Users\"]").First.ClickAsync();
+        // Open the Users surface (now a tab in the Settings hub) from the dock.
+        await _fx.Page.Locator(".dock-item[title=\"Settings\"]").First.ClickAsync();
         var win = _fx.Page.Locator(".appwin.focused");
-        await Assertions.Expect(win.Locator(".appwin-title")).ToHaveTextAsync("Users");
+        await win.Locator(".prefs-cat", new() { HasTextString = "Users" }).ClickAsync();
+        await Assertions.Expect(win.GetByPlaceholder("bob@acme.test")).ToBeVisibleAsync();
 
         // Mint an invite for a unique address so the MailHog assertion can't collide with other runs.
         var email = $"e2e-invite-{Guid.NewGuid():N}@agentic.local";

@@ -1,5 +1,5 @@
 // REAL-AUTH E2E — role isolation, fully automated. The seeded `member` user (role=member) logs in via
-// real Keycloak and must NOT see the admin-only apps (Users, Evidence), while a normal app (Spine) is
+// real Keycloak and must NOT see the admin-only apps (Users, Evidence), while a normal app (Board) is
 // visible. This replaces the manual "log in as member and eyeball the desktop" check.
 // Gated by RUN_AGENTOS_E2E_REAL=true with the full Aspire stack running and the realm imported fresh
 // (the `member`/`member` user comes from infra/keycloak/agentic-realm.json).
@@ -27,8 +27,8 @@ public sealed class RoleIsolationRealAuthTests : IClassFixture<AgentOsRealAuthFi
         // Desktop renders (no circuit crash — guards the IssueWorkAgent eager-ctor regression too).
         await Assertions.Expect(_fx.Page.Locator(".dock")).ToBeVisibleAsync();
 
-        // Spine is visible to every member.
-        await Assertions.Expect(_fx.Page.Locator(".dock-item[title=\"Spine\"]").First).ToBeVisibleAsync();
+        // Board is visible to every member.
+        await Assertions.Expect(_fx.Page.Locator(".dock-item[title=\"Board\"]").First).ToBeVisibleAsync();
 
         // AdminOnly apps must be absent from the member's app surface.
         await Assertions.Expect(_fx.Page.Locator(".dock-item[title=\"Users\"]")).ToHaveCountAsync(0);
