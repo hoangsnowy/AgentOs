@@ -1230,32 +1230,30 @@ else if (_tab == Tab.Sessions)
         }
         _ideaBusy = true;
         _ideaError = null;
-        try
-        {
-            using var scope = ScopeFactory.CreateScope();
-            var svc = scope.ServiceProvider.GetRequiredService<IIdeaBootstrapService>();
-            _preview = await svc.GenerateAsync(_ideaText.Trim());
-
-            _draftRows.Clear();
-            foreach (var t in _preview.Tickets)
+        // The LLM-backed bootstrap agents throw LlmException (: System.Exception) on a missing key or
+        // parse failure — surface ANY failure, never tear down the circuit (see CircuitSafe).
+        await CircuitSafe.RunAsync(
+            async () =>
             {
-                _draftRows.Add(new DraftRow
+                using var scope = ScopeFactory.CreateScope();
+                var svc = scope.ServiceProvider.GetRequiredService<IIdeaBootstrapService>();
+                _preview = await svc.GenerateAsync(_ideaText.Trim());
+
+                _draftRows.Clear();
+                foreach (var t in _preview.Tickets)
                 {
-                    Title = t.Title,
-                    Body = t.Body,
-                    Labels = t.Labels.ToList(),
-                    AiReady = t.AiReady,
-                });
-            }
-            _ideaStep = IdeaStep.Review;
-        }
-#pragma warning disable CA1031 // The LLM-backed bootstrap agents throw LlmException (: System.Exception) on a missing key or parse failure — surface ANY failure, never tear down the circuit.
-        catch (System.Exception ex) { _ideaError = $"Generation failed: {ex.Message}"; }
-#pragma warning restore CA1031
-        finally
-        {
-            _ideaBusy = false;
-        }
+                    _draftRows.Add(new DraftRow
+                    {
+                        Title = t.Title,
+                        Body = t.Body,
+                        Labels = t.Labels.ToList(),
+                        AiReady = t.AiReady,
+                    });
+                }
+                _ideaStep = IdeaStep.Review;
+            },
+            ex => _ideaError = $"Generation failed: {ex.Message}");
+        _ideaBusy = false;
     }
 
     // Flip a ticket's ai gate, keeping the ai:ready / needs-human label in sync with the flag.

@@ -201,20 +201,12 @@ else
     {
         _loading = true;
         _loadError = null;
-        try
-        {
-            _members = await Kc.ListUsersByTenantAsync(_tenantId);
-        }
-#pragma warning disable CA1031 // Keycloak typed-HttpClient raises transport (HttpRequestException) + Polly (TimeoutRejected/BrokenCircuit : System.Exception) faults — surface ANY, never tear down the admin circuit.
-        catch (System.Exception ex)
-        {
-            _loadError = ex.Message;
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _loading = false;
-        }
+        // Keycloak typed-HttpClient raises transport (HttpRequestException) + Polly (TimeoutRejected/
+        // BrokenCircuit : System.Exception) faults — surface ANY, never tear down the admin circuit.
+        await CircuitSafe.RunAsync(
+            async () => _members = await Kc.ListUsersByTenantAsync(_tenantId),
+            ex => _loadError = ex.Message);
+        _loading = false;
     }
 
     private async Task Reload() => await LoadMembersAsync();
@@ -224,42 +216,30 @@ else
         var role = e.Value?.ToString() ?? "member";
         if (string.Equals(PrimaryRole(m), role, StringComparison.Ordinal)) { return; }
         _busyId = m.Id;
-        try
-        {
-            await Kc.UpdateUserRolesAsync(m.Id, new[] { role });
-            Toasts.Show("Users", $"{m.Username} is now {role}.", ToastKind.Ok);
-            await LoadMembersAsync();
-        }
-#pragma warning disable CA1031 // Keycloak transport/Polly faults must surface as a toast, never tear down the circuit.
-        catch (System.Exception ex)
-        {
-            Toasts.Show("Users", $"Role change failed: {ex.Message}", ToastKind.Err);
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _busyId = null;
-        }
+        // Keycloak transport/Polly faults must surface as a toast, never tear down the circuit.
+        await CircuitSafe.RunAsync(
+            async () =>
+            {
+                await Kc.UpdateUserRolesAsync(m.Id, new[] { role });
+                Toasts.Show("Users", $"{m.Username} is now {role}.", ToastKind.Ok);
+                await LoadMembersAsync();
+            },
+            ex => Toasts.Show("Users", $"Role change failed: {ex.Message}", ToastKind.Err));
+        _busyId = null;
     }
 
     private async Task ResetPassword(KeycloakUser m)
     {
         _busyId = m.Id;
-        try
-        {
-            await Kc.SendPasswordResetEmailAsync(m.Id);
-            Toasts.Show("Users", $"Password-reset email sent to {m.Username}.", ToastKind.Ok);
-        }
-#pragma warning disable CA1031 // Keycloak transport/Polly faults must surface as a toast, never tear down the circuit.
-        catch (System.Exception ex)
-        {
-            Toasts.Show("Users", $"Reset failed: {ex.Message}", ToastKind.Err);
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _busyId = null;
-        }
+        // Keycloak transport/Polly faults must surface as a toast, never tear down the circuit.
+        await CircuitSafe.RunAsync(
+            async () =>
+            {
+                await Kc.SendPasswordResetEmailAsync(m.Id);
+                Toasts.Show("Users", $"Password-reset email sent to {m.Username}.", ToastKind.Ok);
+            },
+            ex => Toasts.Show("Users", $"Reset failed: {ex.Message}", ToastKind.Err));
+        _busyId = null;
     }
 
     private void AskRemove(KeycloakUser m) => _confirmRemove = m;
@@ -270,24 +250,18 @@ else
         if (m is null) { return; }
         _removing = true;
         _busyId = m.Id;
-        try
-        {
-            await Kc.DeleteUserAsync(m.Id);
-            Toasts.Show("Users", $"Removed {m.Username}.", ToastKind.Ok);
-            await LoadMembersAsync();
-        }
-#pragma warning disable CA1031 // Keycloak transport/Polly faults must surface as a toast, never tear down the circuit.
-        catch (System.Exception ex)
-        {
-            Toasts.Show("Users", $"Remove failed: {ex.Message}", ToastKind.Err);
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _removing = false;
-            _busyId = null;
-            _confirmRemove = null;
-        }
+        // Keycloak transport/Polly faults must surface as a toast, never tear down the circuit.
+        await CircuitSafe.RunAsync(
+            async () =>
+            {
+                await Kc.DeleteUserAsync(m.Id);
+                Toasts.Show("Users", $"Removed {m.Username}.", ToastKind.Ok);
+                await LoadMembersAsync();
+            },
+            ex => Toasts.Show("Users", $"Remove failed: {ex.Message}", ToastKind.Err));
+        _removing = false;
+        _busyId = null;
+        _confirmRemove = null;
     }
 
     private async Task MintInvite()
