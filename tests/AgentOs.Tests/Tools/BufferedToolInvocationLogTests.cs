@@ -135,10 +135,7 @@ public sealed class BufferedToolInvocationLogTests
         var goodPersisted = false;
         while (!goodPersisted && DateTime.UtcNow < deadline)
         {
-            foreach (var e in inner.Appended)
-            {
-                if (string.Equals(e.CallId, "good", StringComparison.Ordinal)) { goodPersisted = true; break; }
-            }
+            goodPersisted = inner.Appended.Any(e => string.Equals(e.CallId, "good", StringComparison.Ordinal));
             if (!goodPersisted) { await Task.Delay(20); }
         }
 

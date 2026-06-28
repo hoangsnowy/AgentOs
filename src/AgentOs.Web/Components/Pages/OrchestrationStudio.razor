@@ -247,10 +247,7 @@
         _tenantId = await ResolveTenantAsync();
         // Resolve reads the tenant-scoped (DB-backed, DataProtection-decrypted) override store; a transient
         // fault must not crash the circuit on window open — fall back to appsettings (ActiveProvider handles null).
-#pragma warning disable CA1031
-        try { _llm = LlmConfig.Resolve(_tenantId); }
-        catch (System.Exception) { _llm = null; }
-#pragma warning restore CA1031
+        _llm = CircuitSafe.OrDefault(() => LlmConfig.Resolve(_tenantId), null);
         _all = Store.All(_tenantId).ToList();
         _graph = _all.FirstOrDefault() ?? Store.Create(_tenantId, "5-Agent SDLC Pipeline");
         if (_all.Count == 0)
@@ -510,47 +507,45 @@
             .Select(n => n.MaxIterations).FirstOrDefault();
         if (nMax <= 0) { nMax = 3; }
 
-        try
-        {
-            var result = await GraphRunner.RunAsync(_graph, story, nMax, _tenantId, _userId, ev => InvokeAsync(() =>
+        // The budget gate (DB read) + run persistence run outside the MAF per-node failure capture; any
+        // throw (DbException/DbUpdateException/…) must log + reset state, never tear down the circuit.
+        await CircuitSafe.RunAsync(
+            async () =>
             {
-                var node = _graph.Nodes.FirstOrDefault(n => n.Id == ev.NodeId);
-                if (node is not null)
+                try
                 {
-                    var state = ev.Phase switch
+                    var result = await GraphRunner.RunAsync(_graph, story, nMax, _tenantId, _userId, ev => InvokeAsync(() =>
                     {
-                        GraphNodePhase.Running => NodeRunState.Running,
-                        GraphNodePhase.Done => NodeRunState.Done,
-                        GraphNodePhase.Failed => NodeRunState.Failed,
-                        GraphNodePhase.Skipped => NodeRunState.Skipped,
-                        _ => NodeRunState.Idle,
-                    };
-                    SetNode(node, state, ev.Meta);
-                }
-                if (ev.Phase == GraphNodePhase.Running) { Log($"▷ {NodeTitle(ev.NodeId)}…"); }
-                else if (ev.Phase == GraphNodePhase.Done) { Log($"✓ {NodeTitle(ev.NodeId)}{(string.IsNullOrEmpty(ev.Meta) ? "" : "  ·  " + ev.Meta)}"); }
-                else if (ev.Phase == GraphNodePhase.Failed) { Log($"✖ {NodeTitle(ev.NodeId)}: {ev.Message}"); }
-                StateHasChanged();
-            }), HumanPromptAsync, ct);
+                        var node = _graph.Nodes.FirstOrDefault(n => n.Id == ev.NodeId);
+                        if (node is not null)
+                        {
+                            var state = ev.Phase switch
+                            {
+                                GraphNodePhase.Running => NodeRunState.Running,
+                                GraphNodePhase.Done => NodeRunState.Done,
+                                GraphNodePhase.Failed => NodeRunState.Failed,
+                                GraphNodePhase.Skipped => NodeRunState.Skipped,
+                                _ => NodeRunState.Idle,
+                            };
+                            SetNode(node, state, ev.Meta);
+                        }
+                        if (ev.Phase == GraphNodePhase.Running) { Log($"▷ {NodeTitle(ev.NodeId)}…"); }
+                        else if (ev.Phase == GraphNodePhase.Done) { Log($"✓ {NodeTitle(ev.NodeId)}{(string.IsNullOrEmpty(ev.Meta) ? "" : "  ·  " + ev.Meta)}"); }
+                        else if (ev.Phase == GraphNodePhase.Failed) { Log($"✖ {NodeTitle(ev.NodeId)}: {ev.Message}"); }
+                        StateHasChanged();
+                    }), HumanPromptAsync, ct);
 
-            Log(result.Completed ? "■ Workflow complete." : $"✖ Stopped: {result.FailureMessage}");
-        }
-        catch (OperationCanceledException)
-        {
-            Log("⏹ Run cancelled.");
-        }
-#pragma warning disable CA1031 // The budget gate (DB read) + run persistence run outside the MAF per-node failure capture; any throw (DbException/DbUpdateException/…) must log + reset state, never tear down the circuit.
-        catch (System.Exception ex)
-        {
-            Log($"✖ Run failed: {ex.Message}");
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _running = false;
-            _recentRuns++;
-            await InvokeAsync(StateHasChanged);
-        }
+                    Log(result.Completed ? "■ Workflow complete." : $"✖ Stopped: {result.FailureMessage}");
+                }
+                catch (OperationCanceledException)
+                {
+                    Log("⏹ Run cancelled.");
+                }
+            },
+            ex => Log($"✖ Run failed: {ex.Message}"));
+        _running = false;
+        _recentRuns++;
+        await InvokeAsync(StateHasChanged);
     }
 
     private string NodeTitle(string id) => _graph.Nodes.FirstOrDefault(n => n.Id == id)?.Title ?? id;

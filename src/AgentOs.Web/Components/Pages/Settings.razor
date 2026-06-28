@@ -409,38 +409,33 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             return;
         }
         _saving = true;
-        try
-        {
-            if (Split)
+        // User action: surface ANY save failure (HTTP timeout, DataProtection, raw provider errors)
+        // as an error string — never tear down the circuit (see CircuitSafe).
+        await CircuitSafe.RunAsync(
+            async () =>
             {
-                using var client = ApiClient();
-                // _saveError is null here (the validation guard above returned otherwise) — the first
-                // write assigns, the rest short-circuit on the first error.
-                _saveError = await SetRemoteAsync(client, AppConfigKeys.LlmForceProvider, _forceProvider);
-                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmClaudeApiKey, _anthropicKey);
-                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureApiKey, _azureKey);
-                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureEndpoint, _azureEndpoint);
-            }
-            else
-            {
-                using var _ = TenantScope();
-                Overrides.ForceProvider = string.IsNullOrWhiteSpace(_forceProvider) ? null : _forceProvider;
-                Overrides.AnthropicApiKey = string.IsNullOrWhiteSpace(_anthropicKey) ? null : _anthropicKey;
-                Overrides.AzureApiKey = string.IsNullOrWhiteSpace(_azureKey) ? null : _azureKey;
-                Overrides.AzureEndpoint = string.IsNullOrWhiteSpace(_azureEndpoint) ? null : _azureEndpoint;
-            }
-            _saved = _saveError is null;
-        }
-#pragma warning disable CA1031 // User action: surface ANY save failure (HTTP timeout, DataProtection, raw provider errors) as an error string — never tear down the circuit.
-        catch (System.Exception ex)
-        {
-            _saveError = ex.Message;
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _saving = false;
-        }
+                if (Split)
+                {
+                    using var client = ApiClient();
+                    // _saveError is null here (the validation guard above returned otherwise) — the first
+                    // write assigns, the rest short-circuit on the first error.
+                    _saveError = await SetRemoteAsync(client, AppConfigKeys.LlmForceProvider, _forceProvider);
+                    _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmClaudeApiKey, _anthropicKey);
+                    _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureApiKey, _azureKey);
+                    _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureEndpoint, _azureEndpoint);
+                }
+                else
+                {
+                    using var _ = TenantScope();
+                    Overrides.ForceProvider = string.IsNullOrWhiteSpace(_forceProvider) ? null : _forceProvider;
+                    Overrides.AnthropicApiKey = string.IsNullOrWhiteSpace(_anthropicKey) ? null : _anthropicKey;
+                    Overrides.AzureApiKey = string.IsNullOrWhiteSpace(_azureKey) ? null : _azureKey;
+                    Overrides.AzureEndpoint = string.IsNullOrWhiteSpace(_azureEndpoint) ? null : _azureEndpoint;
+                }
+                _saved = _saveError is null;
+            },
+            ex => _saveError = ex.Message);
+        _saving = false;
     }
 
     private async Task Clear()
@@ -449,36 +444,31 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
         _saved = false;
         _saveError = null;
         _saving = true;
-        try
-        {
-            if (Split)
+        // User action: surface ANY save failure (HTTP timeout, DataProtection, raw provider errors)
+        // as an error string — never tear down the circuit (see CircuitSafe).
+        await CircuitSafe.RunAsync(
+            async () =>
             {
-                using var client = ApiClient();
-                _saveError = await SetRemoteAsync(client, AppConfigKeys.LlmForceProvider, "");
-                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmClaudeApiKey, "");
-                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureApiKey, "");
-                _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureEndpoint, "");
-            }
-            else
-            {
-                using var _ = TenantScope();
-                Overrides.ForceProvider = null;
-                Overrides.AnthropicApiKey = null;
-                Overrides.AzureApiKey = null;
-                Overrides.AzureEndpoint = null;
-            }
-            _saved = _saveError is null;
-        }
-#pragma warning disable CA1031 // User action: surface ANY save failure (HTTP timeout, DataProtection, raw provider errors) as an error string — never tear down the circuit.
-        catch (System.Exception ex)
-        {
-            _saveError = ex.Message;
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _saving = false;
-        }
+                if (Split)
+                {
+                    using var client = ApiClient();
+                    _saveError = await SetRemoteAsync(client, AppConfigKeys.LlmForceProvider, "");
+                    _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmClaudeApiKey, "");
+                    _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureApiKey, "");
+                    _saveError ??= await SetRemoteAsync(client, AppConfigKeys.LlmAzureEndpoint, "");
+                }
+                else
+                {
+                    using var _ = TenantScope();
+                    Overrides.ForceProvider = null;
+                    Overrides.AnthropicApiKey = null;
+                    Overrides.AzureApiKey = null;
+                    Overrides.AzureEndpoint = null;
+                }
+                _saved = _saveError is null;
+            },
+            ex => _saveError = ex.Message);
+        _saving = false;
     }
 
     private async Task SaveGithub()
@@ -490,37 +480,32 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             return;
         }
         _savingGithub = true;
-        try
-        {
-            if (Split)
+        // User action: surface ANY save failure (HTTP timeout, DataProtection, raw provider errors)
+        // as an error string — never tear down the circuit (see CircuitSafe).
+        await CircuitSafe.RunAsync(
+            async () =>
             {
-                using var client = ApiClient();
-                // _saveErrorGithub is null here (guard above returned otherwise) — first write assigns.
-                _saveErrorGithub = await SetRemoteAsync(client, AppConfigKeys.GithubPat, _githubPat);
-                _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubRepoOwner, _repoOwner);
-                _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubRepoName, _repoName);
-                _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubBaseBranch, _baseBranch);
-            }
-            else
-            {
-                using var _ = TenantScope();
-                Overrides.GitHubPat = string.IsNullOrWhiteSpace(_githubPat) ? null : _githubPat;
-                Overrides.GitHubRepoOwner = string.IsNullOrWhiteSpace(_repoOwner) ? null : _repoOwner;
-                Overrides.GitHubRepoName = string.IsNullOrWhiteSpace(_repoName) ? null : _repoName;
-                Overrides.GitHubBaseBranch = string.IsNullOrWhiteSpace(_baseBranch) ? null : _baseBranch;
-            }
-            _savedGithub = _saveErrorGithub is null;
-        }
-#pragma warning disable CA1031 // User action: surface ANY save failure (HTTP timeout, DataProtection, raw provider errors) as an error string — never tear down the circuit.
-        catch (System.Exception ex)
-        {
-            _saveErrorGithub = ex.Message;
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _savingGithub = false;
-        }
+                if (Split)
+                {
+                    using var client = ApiClient();
+                    // _saveErrorGithub is null here (guard above returned otherwise) — first write assigns.
+                    _saveErrorGithub = await SetRemoteAsync(client, AppConfigKeys.GithubPat, _githubPat);
+                    _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubRepoOwner, _repoOwner);
+                    _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubRepoName, _repoName);
+                    _saveErrorGithub ??= await SetRemoteAsync(client, AppConfigKeys.GithubBaseBranch, _baseBranch);
+                }
+                else
+                {
+                    using var _ = TenantScope();
+                    Overrides.GitHubPat = string.IsNullOrWhiteSpace(_githubPat) ? null : _githubPat;
+                    Overrides.GitHubRepoOwner = string.IsNullOrWhiteSpace(_repoOwner) ? null : _repoOwner;
+                    Overrides.GitHubRepoName = string.IsNullOrWhiteSpace(_repoName) ? null : _repoName;
+                    Overrides.GitHubBaseBranch = string.IsNullOrWhiteSpace(_baseBranch) ? null : _baseBranch;
+                }
+                _savedGithub = _saveErrorGithub is null;
+            },
+            ex => _saveErrorGithub = ex.Message);
+        _savingGithub = false;
     }
 
     // Probe GitHub with the form's token + repo coordinates (nothing has to be saved first).
@@ -536,96 +521,84 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
             return;
         }
         _ghTesting = true;
-        try
-        {
-            if (Split)
+        // UI probe: surface ANY failure (HttpRequestException, Octokit ApiException/AuthorizationException,
+        // timeouts) as a message — never tear down the circuit (see CircuitSafe).
+        await CircuitSafe.RunAsync(
+            async () =>
             {
-                using var client = ApiClient();
-                using var resp = await client.PostAsJsonAsync("workspaces/repos",
-                    new { kind = "GitHub", accessToken = _githubPat, owner = _repoOwner });
-                _ghTestOk = resp.IsSuccessStatusCode;
-                _ghTestResult = _ghTestOk
-                    ? "Token OK — it can list repositories. (Repo itself not checked in split mode.)"
-                    : $"Token rejected (HTTP {(int)resp.StatusCode}).";
-            }
-            else if (string.IsNullOrWhiteSpace(_repoOwner) || string.IsNullOrWhiteSpace(_repoName))
-            {
-                _ghTestOk = false;
-                _ghTestResult = "Enter the repo owner + name to test against.";
-            }
-            else
-            {
-                var descriptor = new WorkspaceDescriptor(
-                    Guid.NewGuid(),
-                    _tenantId.Length == 0 ? "default" : _tenantId,
-                    SourceProviderKind.GitHub,
-                    _repoOwner, _repoName, null,
-                    string.IsNullOrWhiteSpace(_baseBranch) ? "main" : _baseBranch,
-                    _githubPat);
-                var result = await SourceProviders.Resolve(SourceProviderKind.GitHub).ValidateAsync(descriptor);
-                _ghTestOk = result.Ok;
-                _ghTestResult = result.Ok
-                    ? $"{_repoOwner}/{_repoName} reachable — default branch {result.DefaultBranch}."
-                    : result.Error ?? "Validation failed.";
-            }
-        }
-#pragma warning disable CA1031 // UI probe: surface ANY failure (HttpRequestException, Octokit ApiException/AuthorizationException, timeouts) as a message — never tear down the circuit.
-        catch (System.Exception ex)
-        {
-            _ghTestOk = false;
-            _ghTestResult = ex.Message;
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _ghTesting = false;
-        }
+                if (Split)
+                {
+                    using var client = ApiClient();
+                    using var resp = await client.PostAsJsonAsync("workspaces/repos",
+                        new { kind = "GitHub", accessToken = _githubPat, owner = _repoOwner });
+                    _ghTestOk = resp.IsSuccessStatusCode;
+                    _ghTestResult = _ghTestOk
+                        ? "Token OK — it can list repositories. (Repo itself not checked in split mode.)"
+                        : $"Token rejected (HTTP {(int)resp.StatusCode}).";
+                }
+                else if (string.IsNullOrWhiteSpace(_repoOwner) || string.IsNullOrWhiteSpace(_repoName))
+                {
+                    _ghTestOk = false;
+                    _ghTestResult = "Enter the repo owner + name to test against.";
+                }
+                else
+                {
+                    var descriptor = new WorkspaceDescriptor(
+                        Guid.NewGuid(),
+                        _tenantId.Length == 0 ? "default" : _tenantId,
+                        SourceProviderKind.GitHub,
+                        _repoOwner, _repoName, null,
+                        string.IsNullOrWhiteSpace(_baseBranch) ? "main" : _baseBranch,
+                        _githubPat);
+                    var result = await SourceProviders.Resolve(SourceProviderKind.GitHub).ValidateAsync(descriptor);
+                    _ghTestOk = result.Ok;
+                    _ghTestResult = result.Ok
+                        ? $"{_repoOwner}/{_repoName} reachable — default branch {result.DefaultBranch}."
+                        : result.Error ?? "Validation failed.";
+                }
+            },
+            ex => { _ghTestOk = false; _ghTestResult = ex.Message; });
+        _ghTesting = false;
     }
 
     private async Task TestConnection()
     {
         _testing = true;
         _testResult = null;
-        try
-        {
-            if (Split)
+        // UI probe: surface ANY failure (LlmException, raw provider/Azure SDK errors, timeouts) as a
+        // message — never let it escape and tear down the Blazor circuit (see CircuitSafe).
+        await CircuitSafe.RunAsync(
+            async () =>
             {
-                using var client = ApiClient();
-                using var resp = await client.PostAsync("llm/test", null);
-                var body = await resp.Content.ReadFromJsonAsync<LlmTestResult>();
-                _testOk = body?.Ok ?? false;
-                _testResult = body is { Ok: true }
-                    ? $"{body.Provider} · {body.Model}"
-                    : (body?.Error ?? $"HTTP {(int)resp.StatusCode}");
-            }
-            else
-            {
-                using var _scope = TenantScope();
-                // Honor the just-selected (possibly unsaved) Force provider from the form, not just the
-                // Orchestrator's per-agent provider — the Providers tab exists to set Force.
-                var force = EffectiveCfg().Force;
-                var provider = string.IsNullOrWhiteSpace(force)
-                    ? (Config["Agents:Orchestrator:Provider"] ?? "Anthropic")
-                    : force;
-                var model = Config["Agents:Orchestrator:Model"] ?? "claude-haiku-4-5";
-                var probe = new LlmRequest("You are a connectivity probe.", "Reply with the single word: OK", model, 0.0, 5);
-                var resp = await LlmFactory.Create(provider).SendAsync(probe);
-                _testOk = true;
-                // Label with the provider that actually answered (correct even under 429 failover), not the request value.
-                _testResult = $"{resp.Provider} · {model}";
-            }
-        }
-#pragma warning disable CA1031 // UI probe: surface ANY failure (LlmException, raw provider/Azure SDK errors, timeouts) as a message — never let it escape and tear down the Blazor circuit.
-        catch (System.Exception ex)
-        {
-            _testOk = false;
-            _testResult = ex.Message;
-        }
-#pragma warning restore CA1031
-        finally
-        {
-            _testing = false;
-        }
+                if (Split)
+                {
+                    using var client = ApiClient();
+                    using var resp = await client.PostAsync("llm/test", null);
+                    var body = await resp.Content.ReadFromJsonAsync<LlmTestResult>();
+                    _testOk = body?.Ok ?? false;
+                    _testResult = body is { Ok: true }
+                        ? $"{body.Provider} · {body.Model}"
+                        : (body?.Error ?? $"HTTP {(int)resp.StatusCode}");
+                }
+                else
+                {
+                    using var _scope = TenantScope();
+                    // Honor the just-selected (possibly unsaved) Force provider from the form, not just the
+                    // Orchestrator's per-agent provider — the Providers tab exists to set Force.
+                    var force = EffectiveCfg().Force;
+                    var provider = string.IsNullOrWhiteSpace(force)
+                        ? (Config["Agents:Orchestrator:Provider"] ?? "Anthropic")
+                        : force;
+                    var model = Config["Agents:Orchestrator:Model"] ?? "claude-haiku-4-5";
+                    var probe = new LlmRequest("You are a connectivity probe.", "Reply with the single word: OK", model, 0.0, 5);
+                    var resp = await LlmFactory.Create(provider).SendAsync(probe);
+                    _testOk = true;
+                    // Label with the provider that actually answered (correct even under 429 failover), not the request value.
+                    _testResult = $"{resp.Provider} · {model}";
+                }
+            },
+            ex => { _testOk = false; _testResult = ex.Message; });
+        _testing = false;
     }
 
     private string SaveScopeLabel()
