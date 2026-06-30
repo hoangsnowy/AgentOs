@@ -3,6 +3,7 @@ using System;
 using AgentOs.Modules.Pipeline.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AgentOs.Modules.Pipeline.Persistence.Migrations
 {
     [DbContext(typeof(PipelineDbContext))]
-    partial class PipelineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260630134501_AddPipelineRunTenantCreatedIndex")]
+    partial class AddPipelineRunTenantCreatedIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -39,6 +39,9 @@ internal sealed class NullWorkspaceRepository : IWorkspaceRepository
     public Task<IReadOnlyList<WorkspaceRepoEntity>> ListReposForTenantAsync(string tenantId, Guid workspaceId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<WorkspaceRepoEntity>>(Array.Empty<WorkspaceRepoEntity>());
 
+    public Task<IReadOnlyList<WorkspaceRepoEntity>> ListAllReposForTenantAsync(string tenantId, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<WorkspaceRepoEntity>>(Array.Empty<WorkspaceRepoEntity>());
+
     public Task AddRepoForTenantAsync(WorkspaceRepoEntity repo, CancellationToken ct = default)
         => Task.CompletedTask;
 

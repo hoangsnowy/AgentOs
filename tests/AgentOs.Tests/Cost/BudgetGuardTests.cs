@@ -40,8 +40,8 @@ public sealed class BudgetGuardTests
     private static IPipelineRunRepository Runs(decimal spentUsd)
     {
         var runs = Substitute.For<IPipelineRunRepository>();
-        runs.GetCostSummaryForTenantAsync("t1", Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
-            .Returns(new CostSummary(spentUsd, 0, 0, 0, 0, [], [], [], []));
+        runs.GetSpendForTenantAsync("t1", Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(spentUsd);
         return runs;
     }
 

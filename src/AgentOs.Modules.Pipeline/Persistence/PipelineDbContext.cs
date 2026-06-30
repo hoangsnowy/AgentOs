@@ -40,8 +40,11 @@ internal sealed class PipelineDbContext : DbContext
             e.Property(x => x.Status).HasMaxLength(32).IsRequired();
             e.Property(x => x.TotalCostUsd).HasPrecision(18, 6);
             e.Property(x => x.ResultJson).HasColumnType("jsonb").IsRequired();
-            e.HasIndex(x => x.CreatedAtUtc);
-            e.HasIndex(x => x.TenantId);
+            // The run list is always (TenantId =, ORDER BY CreatedAtUtc DESC, Id DESC) — both the global
+            // query filter path (ListAsync) and the tenant-explicit Dapper/EF path (ListForTenantAsync).
+            // One composite makes that a sort-free backward index walk (LIMIT short-circuits), and its
+            // leftmost prefix covers plain TenantId lookups — so no separate TenantId/CreatedAtUtc index.
+            e.HasIndex(x => new { x.TenantId, x.CreatedAtUtc, x.Id });
             e.HasMany(x => x.Metrics)
              .WithOne()
              .HasForeignKey(m => m.RunId)

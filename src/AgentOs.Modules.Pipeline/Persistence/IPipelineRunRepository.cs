@@ -39,6 +39,14 @@ public interface IPipelineRunRepository
     /// filter cannot resolve the tenant on its own.</summary>
     Task<CostSummary> GetCostSummaryForTenantAsync(
         string tenantId, DateTimeOffset? since = null, CancellationToken ct = default);
+
+    /// <summary>Just the total LLM spend (USD) for one tenant since an optional cutoff — a single
+    /// <c>SUM(CostUsd)</c>, no breakdown buckets. The budget gate (<c>BudgetGuard</c>) fires this per run and
+    /// only needs the headline number, so it skips the four extra GROUP BY round-trips that
+    /// <see cref="GetCostSummaryForTenantAsync"/> does for the cost dashboard. Tenant-explicit (safe from a
+    /// blank-ITenantContext Blazor circuit).</summary>
+    Task<decimal> GetSpendForTenantAsync(
+        string tenantId, DateTimeOffset? since = null, CancellationToken ct = default);
 }
 
 /// <summary>A single full run to store / read back.</summary>
