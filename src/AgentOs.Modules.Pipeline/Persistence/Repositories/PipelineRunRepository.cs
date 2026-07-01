@@ -268,6 +268,32 @@ internal sealed class PipelineRunRepository(
             [.. byDay.Select(kv => kv.Value.ToBucket(kv.Key)).OrderBy(b => b.Key, StringComparer.Ordinal)]);
     }
 
+    public async Task<decimal> GetSpendForTenantAsync(
+        string tenantId, DateTimeOffset? since = null, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+
+        // Fast path: a single server-side SUM, index-covered by (TenantId, TimestampUtc). The budget gate
+        // needs only this number, so it skips the four extra GROUP BY round-trips the full cost summary does.
+        if (connectionFactory is not null)
+        {
+            var sql = $"""SELECT COALESCE(SUM("CostUsd"), 0) FROM pipeline.run_metrics {CostWhere}""";
+            await using var conn = connectionFactory.Create();
+            await conn.OpenAsync(ct).ConfigureAwait(false);
+            return await conn.ExecuteScalarAsync<decimal>(
+                new CommandDefinition(sql, new { tenantId, since }, cancellationToken: ct)).ConfigureAwait(false);
+        }
+
+        // Tenant-explicit EF fallback (in-memory test provider / no-DB boot): bypass the ITenantContext-driven
+        // global query filter (blank on a Blazor circuit) and let the provider sum.
+        var q = db.RunMetrics.IgnoreQueryFilters().AsNoTracking().Where(m => m.TenantId == tenantId);
+        if (since is { } cutoff)
+        {
+            q = q.Where(m => m.TimestampUtc >= cutoff);
+        }
+        return await q.SumAsync(m => m.CostUsd, ct).ConfigureAwait(false);
+    }
+
     private static void Bump(Dictionary<string, Acc> map, string key, decimal cost, int tokensIn, int tokensOut)
     {
         // CollectionsMarshal would avoid the double lookup, but a plain get/set keeps it simple; the

@@ -22,6 +22,10 @@ internal sealed class NullPipelineRunRepository : IPipelineRunRepository
     public Task<CostSummary> GetCostSummaryForTenantAsync(
         string tenantId, DateTimeOffset? since = null, CancellationToken ct = default) =>
         Task.FromResult(CostSummary.Empty);
+
+    public Task<decimal> GetSpendForTenantAsync(
+        string tenantId, DateTimeOffset? since = null, CancellationToken ct = default) =>
+        Task.FromResult(0m);
 }
 
 internal sealed class NullOrchestrationRepository : IOrchestrationRepository

@@ -134,6 +134,22 @@ internal sealed class WorkspaceRepository : IWorkspaceRepository
         return rows.AsList();
     }
 
+    public async Task<IReadOnlyList<WorkspaceRepoEntity>> ListAllReposForTenantAsync(string tenantId, CancellationToken ct = default)
+    {
+        // One round-trip for every board's repos; IX_workspace_repos_TenantId_WorkspaceId serves the
+        // filter + board grouping. The caller buckets by WorkspaceId in memory (no 1+N over boards).
+        const string sql = """
+            SELECT * FROM workspaces.workspace_repos
+            WHERE "TenantId" = @tenantId
+            ORDER BY "WorkspaceId", "AddedAtUtc"
+            """;
+        await using var conn = Conn.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<WorkspaceRepoEntity>(
+            new CommandDefinition(sql, new { tenantId }, cancellationToken: ct)).ConfigureAwait(false);
+        return rows.AsList();
+    }
+
     public async Task AddRepoForTenantAsync(WorkspaceRepoEntity repo, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(repo);

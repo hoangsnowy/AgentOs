@@ -50,9 +50,9 @@ internal sealed class BudgetGuard : IBudgetGuard
 
         var now = _clock.GetUtcNow();
         var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
-        var summary = await _runs.GetCostSummaryForTenantAsync(tenantId, monthStart, cancellationToken).ConfigureAwait(false);
+        // SUM-only: the gate needs the headline spend, not the dashboard's agent/provider/model/day buckets.
+        var spent = await _runs.GetSpendForTenantAsync(tenantId, monthStart, cancellationToken).ConfigureAwait(false);
 
-        var spent = summary.TotalCostUsd;
         var remaining = cap - spent;
         var percent = (double)(spent / cap);
         var state = spent >= cap

@@ -135,11 +135,13 @@
     {
         try
         {
+            // Two round-trips total (boards + all repos), then join in memory — not 1 query per board.
             var workspaces = await Workspaces.ListForTenantAsync(_tenantId);
+            var allRepos = await Workspaces.ListAllReposForTenantAsync(_tenantId);
+            var reposByBoard = allRepos.ToLookup(r => r.WorkspaceId);
             foreach (var ws in workspaces.Where(w => w.Kind == SourceProviderKind.GitHub))
             {
-                var repos = await Workspaces.ListReposForTenantAsync(_tenantId, ws.Id);
-                foreach (var repo in repos)
+                foreach (var repo in reposByBoard[ws.Id])
                 {
                     _repos.Add(new RepoRef(ws.CredentialRef, repo.Owner, repo.Repo,
                         string.IsNullOrWhiteSpace(repo.DefaultBranch) ? "main" : repo.DefaultBranch));

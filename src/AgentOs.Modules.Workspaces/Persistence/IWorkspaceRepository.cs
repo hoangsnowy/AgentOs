@@ -38,6 +38,11 @@ public interface IWorkspaceRepository
     /// <summary>List the repos connected under a board, for an explicit tenant.</summary>
     Task<IReadOnlyList<WorkspaceRepoEntity>> ListReposForTenantAsync(string tenantId, Guid workspaceId, CancellationToken ct = default);
 
+    /// <summary>List ALL repos across every board for one tenant, in one round-trip (ordered by board then
+    /// add time). Callers that need the repos of many boards (e.g. the Files app) group the result by
+    /// <see cref="WorkspaceRepoEntity.WorkspaceId"/> in memory instead of issuing one query per board.</summary>
+    Task<IReadOnlyList<WorkspaceRepoEntity>> ListAllReposForTenantAsync(string tenantId, CancellationToken ct = default);
+
     /// <summary>Persist a repo under a board (its <see cref="WorkspaceRepoEntity.TenantId"/> is set by the caller).</summary>
     Task AddRepoForTenantAsync(WorkspaceRepoEntity repo, CancellationToken ct = default);
 
