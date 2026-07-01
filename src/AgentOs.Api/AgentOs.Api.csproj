@@ -28,6 +28,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Direct reference so CPM raises the transitive Microsoft.OpenApi past GHSA-v5pm-xwqc-g5wc — see
+         Directory.Packages.props. -->
+    <PackageReference Include="Microsoft.OpenApi" />
     <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" />
