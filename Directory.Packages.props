@@ -60,7 +60,7 @@
          2026-06-30): circular schema refs can stack-overflow the OpenAPI reader below 2.7.5. Microsoft.
          AspNetCore.OpenApi 10.0.9 floors it at 2.0.0 (no upper bound), so an explicit direct reference
          here + in AgentOs.Api.csproj is enough to raise the resolved version. -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.9.0" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="3.7.0" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.16.6" />
     <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.1.2" />
 
