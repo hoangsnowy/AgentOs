@@ -32,6 +32,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Z.Blazor.Diagrams" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <!-- Telemetry parity with the Api host (conditional on APPLICATIONINSIGHTS_CONNECTION_STRING). -->
