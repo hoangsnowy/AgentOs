@@ -47,7 +47,7 @@ public sealed class BuildVerifierToolTests
         json.RootElement.GetProperty("exit_code").GetInt32().ShouldBe(0);
         json.RootElement.GetProperty("elapsed_ms").GetInt64().ShouldBe(42);
         await verifier.Received(1).VerifyFilesAsync(
-            Arg.Is<IEnumerable<BuildVerifyFile>>(f => System.Linq.Enumerable.Count(f) == 1),
+            Arg.Is<IEnumerable<BuildVerifyFile>>(f => System.Linq.Enumerable.Count(f!) == 1),
             Arg.Any<CancellationToken>());
     }
 

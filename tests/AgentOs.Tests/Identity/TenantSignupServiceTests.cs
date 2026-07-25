@@ -91,7 +91,7 @@ public sealed class TenantSignupServiceTests
         repo.Records.Count.ShouldBe(1); // no new tenant row
         await kc.Received(1).CreateUserAsync(
             "bob", "bob@acme.test", "acme",
-            Arg.Is<IReadOnlyList<string>>(r => r.Count == 1 && r[0] == "member"),
+            Arg.Is<IReadOnlyList<string>>(r => r!.Count == 1 && r[0] == "member"),
             true, ValidPassword, Arg.Any<CancellationToken>());
     }
 

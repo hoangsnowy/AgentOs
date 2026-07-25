@@ -35,7 +35,7 @@ public sealed class RunnerShellToolStreamingTests
         broker.DispatchToolCallAsync(Arg.Any<RunnerToolCall>(), Arg.Any<RunnerTarget>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
-                var call = ci.Arg<RunnerToolCall>();
+                var call = ci.Arg<RunnerToolCall>()!;
                 return runnerOk
                     ? new RunnerToolResult(call.RequestId, call.ToolCallId, true, """{"stdout":"ok"}""", null)
                     : new RunnerToolResult(call.RequestId, call.ToolCallId, false, "", "boom");

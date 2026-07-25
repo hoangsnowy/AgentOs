@@ -53,7 +53,7 @@ public sealed class RunMetricSinkPersistenceTests
         repo.When(r => r.SaveAsync(Arg.Any<PipelineRunRecord>(), Arg.Any<CancellationToken>()))
             .Do(ci =>
             {
-                var record = ci.Arg<PipelineRunRecord>();
+                var record = ci.Arg<PipelineRunRecord>()!;
                 persisted[record.Id] = record.Metrics;
             });
 

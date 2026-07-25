@@ -137,7 +137,7 @@ public class IssueWorkAgentTests
         // in the prompt rather than to call sequence.
         var llm = Substitute.For<ILlmClient>();
         llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
-           .Returns(ci => ci.Arg<LlmRequest>().UserPrompt.Contains("acme/web", StringComparison.Ordinal)
+           .Returns(ci => ci.Arg<LlmRequest>()!.UserPrompt.Contains("acme/web", StringComparison.Ordinal)
                ? AgentTestHelpers.StubResponse("""{"branch":"","summary":"","error":"Build failed in web."}""")
                : AgentTestHelpers.StubResponse("""{"branch":"issue-9-ai-fix","summary":"Fixed api."}"""));
 
@@ -164,7 +164,7 @@ public class IssueWorkAgentTests
         llm.SendAsync(Arg.Any<LlmRequest>(), Arg.Any<CancellationToken>())
            .Returns(ci =>
            {
-               var prompt = ci.Arg<LlmRequest>().UserPrompt;
+               var prompt = ci.Arg<LlmRequest>()!.UserPrompt;
                var repo = _orderRepos.First(r => prompt.Contains($"acme/{r}", StringComparison.Ordinal));
                return AgentTestHelpers.StubResponse($$"""{"branch":"{{repo}}-fix","summary":"ok"}""");
            });

@@ -48,7 +48,7 @@ public sealed class ToolGatewayTests
         var tool = Substitute.For<ITool>();
         tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
         tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
-            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>().CallId, "happy")));
+            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>()!.CallId, "happy")));
         var log = new InMemoryToolInvocationLog();
         var gateway = new DefaultToolGateway(new AlwaysAllow(), log);
 
@@ -69,7 +69,7 @@ public sealed class ToolGatewayTests
         var tool = Substitute.For<ITool>();
         tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
         tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
-            .Returns(ci => Task.FromResult(ToolInvocationResult.Error(ci.Arg<ToolInvocationRequest>().CallId, "boom")));
+            .Returns(ci => Task.FromResult(ToolInvocationResult.Error(ci.Arg<ToolInvocationRequest>()!.CallId, "boom")));
         var log = new InMemoryToolInvocationLog();
         var gateway = new DefaultToolGateway(new AlwaysAllow(), log);
 
@@ -87,7 +87,7 @@ public sealed class ToolGatewayTests
         var tool = Substitute.For<ITool>();
         tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
         tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
-            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>().CallId, "plain")));
+            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>()!.CallId, "plain")));
         var gateway = new DefaultToolGateway();
 
         var result = await gateway.InvokeAsync(tool, Request("tenant-1"), CancellationToken.None);
@@ -102,7 +102,7 @@ public sealed class ToolGatewayTests
         var tool = Substitute.For<ITool>();
         tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
         tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
-            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>().CallId, "ok")));
+            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>()!.CallId, "ok")));
         var log = Substitute.For<IToolInvocationLog>();
         log.AppendAsync(Arg.Any<ToolInvocationEvidence>(), Arg.Any<CancellationToken>())
             .ThrowsAsyncForAnyArgs(new InvalidOperationException("db down"));
