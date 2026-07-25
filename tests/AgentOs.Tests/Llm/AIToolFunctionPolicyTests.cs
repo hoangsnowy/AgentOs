@@ -47,7 +47,7 @@ public sealed class AIToolFunctionPolicyTests
         var tool = Substitute.For<ITool>();
         tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
         tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
-            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>().CallId, "happy")));
+            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>()!.CallId, "happy")));
         var log = new InMemoryToolInvocationLog();
 
         var fn = new AIToolFunction(tool, "tenant-y", runId: null, policy: new AlwaysAllow(), log: log);
@@ -67,7 +67,7 @@ public sealed class AIToolFunctionPolicyTests
         var tool = Substitute.For<ITool>();
         tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
         tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
-            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>().CallId, "plain")));
+            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>()!.CallId, "plain")));
 
         var fn = new AIToolFunction(tool, "tenant-1", runId: null);
         var result = await fn.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?>()), CancellationToken.None);
@@ -81,7 +81,7 @@ public sealed class AIToolFunctionPolicyTests
         var tool = Substitute.For<ITool>();
         tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
         tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
-            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>().CallId, "ok")));
+            .Returns(ci => Task.FromResult(ToolInvocationResult.Success(ci.Arg<ToolInvocationRequest>()!.CallId, "ok")));
         var log = Substitute.For<IToolInvocationLog>();
         log.AppendAsync(Arg.Any<ToolInvocationEvidence>(), Arg.Any<CancellationToken>())
             .ThrowsAsyncForAnyArgs(new InvalidOperationException("db down"));

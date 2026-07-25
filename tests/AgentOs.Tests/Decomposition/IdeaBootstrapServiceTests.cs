@@ -32,10 +32,10 @@ public sealed class IdeaBootstrapServiceTests
         preview.Spec.ShouldBe(spec);
         preview.Tickets.ShouldBe(tickets);
         await requirement.Received(1).RunAsync(
-            Arg.Is<UserStory>(s => s.Description == "build a product catalog"), Arg.Any<CancellationToken>());
+            Arg.Is<UserStory>(s => s!.Description == "build a product catalog"), Arg.Any<CancellationToken>());
         // The decomposer is fed the deterministic seed (non-empty) built from the spec.
         await decomposer.Received(1).RunAsync(
-            spec, Arg.Is<IReadOnlyList<TicketDraft>>(seed => seed.Count > 0), Arg.Any<CancellationToken>());
+            spec, Arg.Is<IReadOnlyList<TicketDraft>>(seed => seed!.Count > 0), Arg.Any<CancellationToken>());
     }
 
     [Fact]

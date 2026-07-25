@@ -35,7 +35,7 @@ public sealed class AIToolFunctionTests
         tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
         tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(ToolInvocationResult.Success(
-                ci.Arg<ToolInvocationRequest>().CallId, "ok")));
+                ci.Arg<ToolInvocationRequest>()!.CallId, "ok")));
 
         var fn = new AIToolFunction(tool, "tenant-9", runId: "run-3");
         var result = await fn.InvokeAsync(
@@ -45,7 +45,7 @@ public sealed class AIToolFunctionTests
         result?.ToString().ShouldBe("ok");
         await tool.Received(1).InvokeAsync(
             Arg.Is<ToolInvocationRequest>(r =>
-                r.ToolName == "echo" &&
+                r!.ToolName == "echo" &&
                 r.TenantId == "tenant-9" &&
                 r.RunId == "run-3" &&
                 r.Input.Contains("\"x\":\"hello\"")),
@@ -59,7 +59,7 @@ public sealed class AIToolFunctionTests
         tool.Definition.Returns(new ToolDefinition("echo", "desc", """{"type":"object"}"""));
         tool.InvokeAsync(Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(ToolInvocationResult.Error(
-                ci.Arg<ToolInvocationRequest>().CallId, "boom")));
+                ci.Arg<ToolInvocationRequest>()!.CallId, "boom")));
 
         var fn = new AIToolFunction(tool, "tenant-1", runId: null);
         var result = await fn.InvokeAsync(

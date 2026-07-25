@@ -185,7 +185,7 @@ public class RemoteAgentTests
                 Arg.Any<RunnerTarget>(),
                 Arg.Do<TimeSpan>(t => capturedTimeout = t),
                 Arg.Any<CancellationToken>())
-            .Returns(ci => Task.FromResult(new RemoteExecResult(((RemoteExecRequest)ci[0]).Id, true, "ok", null)));
+            .Returns(ci => Task.FromResult(new RemoteExecResult(((RemoteExecRequest)ci[0]!).Id, true, "ok", null)));
         target = () => capturedTarget;
         timeout = () => capturedTimeout;
         return broker;
@@ -230,7 +230,7 @@ public class RemoteAgentTests
         broker.DispatchAsync(
                 Arg.Do<RemoteExecRequest>(r => captured = r),
                 Arg.Any<RunnerTarget>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
-            .Returns(ci => Task.FromResult(new RemoteExecResult(((RemoteExecRequest)ci[0]).Id, true, "ok", null)));
+            .Returns(ci => Task.FromResult(new RemoteExecResult(((RemoteExecRequest)ci[0]!).Id, true, "ok", null)));
         var client = new RemoteAgentLlmClient(broker, Tenant(), NullLogger<RemoteAgentLlmClient>.Instance);
 
         await client.SendAsync(new LlmRequest("s", "u", "m", Cli: "codex"));

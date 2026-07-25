@@ -203,7 +203,7 @@ public sealed class WorkspaceConnectorTests
         var sut = Sut();
         var boardId = Guid.NewGuid();
         _repo.GetForTenantAsync("tenant-1", boardId, Arg.Any<CancellationToken>())
-            .ReturnsNull();
+            .Returns((WorkspaceEntity?)null);
 
         var result = await sut.AddRepoAsync("tenant-1", boardId, "octo-org", "api", null);
 
@@ -230,7 +230,7 @@ public sealed class WorkspaceConnectorTests
         boards[0].Number.ShouldBe(5);
         boards[0].Title.ShouldBe("Roadmap");
         await _provider.Received(1).ListBoardsAsync(
-            Arg.Is<ConnectionCredentials>(c => c.Owner == "octo-org" && c.AccessToken == "ghp_x"),
+            Arg.Is<ConnectionCredentials>(c => c!.Owner == "octo-org" && c.AccessToken == "ghp_x"),
             Arg.Any<CancellationToken>());
     }
 

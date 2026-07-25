@@ -32,7 +32,7 @@ public sealed class EvidenceTests
         await gateway.InvokeAsync(tool, request);
 
         await log.Received(1).AppendAsync(
-            Arg.Is<ToolInvocationEvidence>(e => e.SessionId == "sess-9" && e.RunId == "run-7"),
+            Arg.Is<ToolInvocationEvidence>(e => e!.SessionId == "sess-9" && e.RunId == "run-7"),
             Arg.Any<CancellationToken>());
     }
 
