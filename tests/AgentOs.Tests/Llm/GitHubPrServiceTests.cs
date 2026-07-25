@@ -22,7 +22,7 @@ public sealed class GitHubPrServiceTests
     public async Task OpenPrAsync_MissingPat_ThrowsWithClearMessage()
     {
         var overrides = Substitute.For<IRuntimeOverrides>();
-        overrides.GitHubPat.Returns((string?)null);
+        overrides.GitHubPat.Returns(default(string));
         overrides.GitHubRepoOwner.Returns("hoangsnowy");
         overrides.GitHubRepoName.Returns("AgentOs");
 
@@ -38,7 +38,7 @@ public sealed class GitHubPrServiceTests
     {
         var overrides = Substitute.For<IRuntimeOverrides>();
         overrides.GitHubPat.Returns("ghp_x");
-        overrides.GitHubRepoOwner.Returns((string?)null);
+        overrides.GitHubRepoOwner.Returns(default(string));
         overrides.GitHubRepoName.Returns("   ");
 
         var svc = new GitHubPrService(overrides, NullLogger<GitHubPrService>.Instance);

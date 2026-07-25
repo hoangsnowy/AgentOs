@@ -203,7 +203,7 @@ public sealed class WorkspaceConnectorTests
         var sut = Sut();
         var boardId = Guid.NewGuid();
         _repo.GetForTenantAsync("tenant-1", boardId, Arg.Any<CancellationToken>())
-            .Returns((WorkspaceEntity?)null);
+            .Returns(default(WorkspaceEntity));
 
         var result = await sut.AddRepoAsync("tenant-1", boardId, "octo-org", "api", null);
 

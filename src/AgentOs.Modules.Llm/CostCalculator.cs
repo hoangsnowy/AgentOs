@@ -32,8 +32,8 @@ public static class CostCalculator
             x => model.StartsWith(x.ModelPrefix, System.StringComparison.OrdinalIgnoreCase));
         if (p is not null)
         {
-            var input = (decimal)inputTokens / 1_000_000m * p.InputPerMillion;
-            var output = (decimal)outputTokens / 1_000_000m * p.OutputPerMillion;
+            var input = inputTokens / 1_000_000m * p.InputPerMillion;
+            var output = outputTokens / 1_000_000m * p.OutputPerMillion;
             return System.Math.Round(input + output, 6, System.MidpointRounding.AwayFromZero);
         }
 
