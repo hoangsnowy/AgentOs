@@ -56,6 +56,15 @@ dotnet_diagnostic.CS8603.severity = warning
 # Async
 dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait is not required for ASP.NET Core
 
+# CodeQL parity — Roslyn equivalents of C# quality queries that CodeQL would otherwise only
+# report *after* a push, as a security-tab alert. Enforcing them here (EnforceCodeStyleInBuild
+# is on, and TreatWarningsAsErrors promotes these to build errors) fails the local build first,
+# so the alert never gets filed. Add a rule here whenever a CodeQL query has a compiler-side twin.
+dotnet_diagnostic.IDE0004.severity = warning   # unnecessary cast        -> cs/useless-upcast, cs/useless-cast-to-self
+dotnet_diagnostic.IDE0035.severity = warning   # unreachable code        -> cs/unreachable-code
+dotnet_diagnostic.IDE0059.severity = warning   # unused value assignment -> cs/useless-assignment-to-local
+dotnet_diagnostic.IDE0060.severity = warning   # unused parameter        -> cs/unused-parameter
+
 # EF Core migrations — auto-generated, exempt from style/analyzer enforcement (block-scoped namespace, etc.).
 [**/Migrations/*.cs]
 generated_code = true

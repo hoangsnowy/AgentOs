@@ -138,7 +138,7 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
             {
                 _logger.LogError(ex, "Iteration {N} failed.", iter);
                 await ReportFailedAsync(stage, iter, maxIterations, ex.Message, cancellationToken).ConfigureAwait(false);
-                return FailMidway(story, spec, code, tests, qaHistory, ex);
+                return FailMidway(story, spec, code, tests, qaHistory);
             }
 
             qaHistory.Add(lastQa);
@@ -225,9 +225,10 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
             Status: PipelineStatus.Failed,
             TotalMetrics: AgentMetrics.Empty);
 
+    // The exception is fully logged at the call site, so it is not carried into the result.
     private static PipelineResult FailMidway(
         UserStory story, RequirementSpec spec, CodeArtifact? code, TestArtifact? tests,
-        IReadOnlyList<QaReport> history, System.Exception ex)
+        IReadOnlyList<QaReport> history)
         => new(
             UserStory: story,
             Spec: spec,
@@ -235,10 +236,7 @@ public sealed class PipelineOrchestrator : IOrchestratorAgent
             Tests: tests ?? EmptyTests(),
             QaHistory: history,
             Status: PipelineStatus.Failed,
-            TotalMetrics: AgentMetrics.Empty)
-        {
-            // Hint for debugging — the exception is fully logged.
-        };
+            TotalMetrics: AgentMetrics.Empty);
 
     private static RequirementSpec ErrorSpec(System.Exception ex)
         => new("(failed)", ex.Message, [], [], [], [], [], [], AgentMetrics.Empty);
