@@ -17,9 +17,9 @@
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
 
     <!-- Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.15.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.15.0" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.16.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.16.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.16.0" />
 
     <!-- JSON schema validation. JsonSchema.Net 9 reworked the evaluation API: Evaluate runs on
          JsonElement (not JsonNode), EvaluationResults.HasErrors/HasDetails were removed, and
@@ -61,13 +61,13 @@
          AspNetCore.OpenApi 10.0.9 floors it at 2.0.0 (no upper bound), so an explicit direct reference
          here + in AgentOs.Api.csproj is enough to raise the resolved version. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.11.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.16" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.17" />
     <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.1.2" />
 
     <!-- Phase 8 — JWT bearer auth (API host) + OpenID Connect cookie/code flow (Web host) -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.10" />
-    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.21.0" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
 
     <!-- Web host: Blazor diagram editor -->
     <PackageVersion Include="Z.Blazor.Diagrams" Version="3.0.4.1" />
