@@ -82,7 +82,7 @@
     <!-- Model Context Protocol — official C# SDK. Used by AgentOs.Modules.Mcp to consume tools
          exposed by external MCP servers (GitHub MCP, filesystem MCP, ...) and to expose AgentOs
          pipeline agents as MCP tools to external hosts (Claude Desktop, VS Code). -->
-    <PackageVersion Include="ModelContextProtocol" Version="1.4.1" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.0.0" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
 
     <!-- Test stack -->
