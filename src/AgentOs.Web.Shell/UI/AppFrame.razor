@@ -5,7 +5,9 @@
 
 @inject WindowManagerService WM
 
-<div class="appwin @(IsFocused ? "focused" : "") @(W.Minimized ? "minimized" : "") @(_maximized ? "maximized" : "") @(_dragging ? "dragging" : "") @(_resizing ? "resizing" : "")"
+@* off-workspace hides a window that lives on another virtual workspace. It stays mounted so its app
+   keeps running (see WindowHost) — switching workspace must park work, not discard it. *@
+<div class="appwin @(IsFocused ? "focused" : "") @(W.Minimized ? "minimized" : "") @(W.Workspace != WM.ActiveWorkspace ? "off-workspace" : "") @(_maximized ? "maximized" : "") @(_dragging ? "dragging" : "") @(_resizing ? "resizing" : "")"
      style="@PositionStyle z-index:@(W.Z);"
      role="dialog"
      aria-labelledby="@TitleId"

@@ -6,8 +6,17 @@
 @inject WindowManagerService WM
 @inject IAppRegistry Registry
 
-@* Only the active workspace's windows render — GNOME virtual workspaces. *@
-@foreach (var w in WM.Open.Where(w => !w.Minimized && w.Workspace == WM.ActiveWorkspace))
+@* EVERY open window renders; minimized ones and those on another virtual workspace are hidden with
+   CSS (.appwin.minimized / .appwin.off-workspace, both display:none) rather than dropped from the
+   render tree.
+
+   Filtering them out here destroyed them: Blazor disposes a component the moment it leaves the tree,
+   so minimizing a window — or switching workspace — threw away everything it held. A pipeline run in
+   flight, the story typed into it, the artifacts it had already produced: gone, with the server-side
+   work still running and nowhere to land. On a desktop metaphor, minimize must hide a window, not
+   kill the app inside it. The stylesheet already assumed this (.appwin.minimized has existed all
+   along); only this filter disagreed. *@
+@foreach (var w in WM.Open)
 {
         <AppFrame W="@w" @key="w.Id">
             @if (Registry.ResolveComponent(w.AppKey) is { } appComponent)
