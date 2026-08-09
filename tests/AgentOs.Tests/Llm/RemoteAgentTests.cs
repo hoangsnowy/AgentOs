@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
 using AgentOs.Modules.RemoteAgent;
 using AgentOs.SharedKernel.Identity;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
@@ -26,12 +27,17 @@ public class RemoteAgentTests
     private static RunnerTarget Target(string tenant = "default", string member = "member-1") =>
         new(tenant, member);
 
-    private static ITenantContext Tenant(string tenant = "default", string? member = "member-1")
+    // RemoteAgentLlmClient takes the root IServiceProvider and resolves ITenantContext per call inside a
+    // fresh scope (so it can be resolved from the root provider — see LlmClientScopeValidationTests).
+    // Registering the context as SCOPED here exercises that same path rather than a shortcut.
+    private static IServiceProvider Tenant(string tenant = "default", string? member = "member-1")
     {
         var ctx = Substitute.For<ITenantContext>();
         ctx.TenantId.Returns(tenant);
         ctx.UserId.Returns(member);
-        return ctx;
+        var services = new ServiceCollection();
+        services.AddScoped(_ => ctx);
+        return services.BuildServiceProvider();
     }
 
     [Fact]

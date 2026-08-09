@@ -47,4 +47,25 @@ public sealed class LlmClientScopeValidationTests
         client.ShouldNotBeNull();
         client.Provider.ShouldBe(provider);
     }
+
+    [Fact]
+    public void ResolveKeyedRemoteAgentClient_WithScopedTenantContext_AndScopeValidation_DoesNotThrow()
+    {
+        // RemoteAgentLlmClient took ITenantContext by constructor injection, so resolving it from the
+        // root provider threw "Cannot resolve 'ILlmClient' from root provider because it requires scoped
+        // service 'ITenantContext'". Settings → Providers → Test connection hit it the moment
+        // RemoteAgent became selectable. It now resolves the tenant per call inside a fresh scope, like
+        // the pooled clients above.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped<ITenantContext, ScopedTenant>();
+        var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        new LlmModule().AddServices(services, config);
+        new AgentOs.Modules.RemoteAgent.RemoteAgentModule().AddServices(services, config);
+
+        using var sp = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        var client = Should.NotThrow(() => sp.GetRequiredKeyedService<ILlmClient>("RemoteAgent"));
+        client.Provider.ShouldBe("RemoteAgent");
+    }
 }

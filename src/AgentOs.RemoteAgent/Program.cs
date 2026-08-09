@@ -86,7 +86,7 @@ static async Task<RemoteExecResult> RunLlmAsync(RemoteExecRequest request)
 
     try
     {
-        var psi = new ProcessStartInfo(cmd)
+        var psi = new ProcessStartInfo(ResolveExecutable(cmd))
         {
             RedirectStandardInput = profile.PromptViaStdin,
             RedirectStandardOutput = true,
@@ -126,6 +126,41 @@ static async Task<RemoteExecResult> RunLlmAsync(RemoteExecRequest request)
     catch (System.IO.IOException ex) { return new RemoteExecResult(request.Id, false, string.Empty, ex.Message); }
     catch (InvalidOperationException ex) { return new RemoteExecResult(request.Id, false, string.Empty, ex.Message); }
     catch (TimeoutException ex) { return new RemoteExecResult(request.Id, false, string.Empty, ex.Message); }
+}
+
+// Resolve a bare command name to something CreateProcess can actually launch.
+//
+// Windows only: with UseShellExecute = false, .NET does NOT apply PATHEXT, so ProcessStartInfo("claude")
+// throws Win32Exception "The system cannot find the file specified" — npm installs the CLI as
+// claude.cmd / claude.ps1 (plus an extensionless shell script for Git Bash), never claude.exe. That made
+// the default profile unusable on Windows: the runner connected, received Execute, and failed on every
+// dispatch. Probing PATH with PATHEXT reproduces what a shell would have done. A rooted or already-
+// extensioned path is returned untouched, and an unresolved name is returned as-is so the original
+// Win32Exception still surfaces with its normal message.
+static string ResolveExecutable(string command)
+{
+    if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || Path.IsPathRooted(command))
+    {
+        return command;
+    }
+
+    var extensions = (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
+        .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+                 .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        foreach (var ext in extensions)
+        {
+            var candidate = Path.Join(dir, command + ext);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    return command;
 }
 
 // Built-in CLI-agent profiles. REMOTE_AGENT_CMD / REMOTE_AGENT_ARGS still override command + flags.
