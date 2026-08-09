@@ -76,7 +76,7 @@
                         <div class="label">Orchestrator <span class="badge info">Leader</span></div>
                         <div class="sub">Assigns the user story to specialists · drives the Quality Loop</div>
                     </div>
-                    <div class="meta"><span class="prov anthropic">Claude</span></div>
+                    <div class="meta"><span class="prov @ProvCss(LeaderProv)">@LeaderProv</span></div>
                 </div>
                 @foreach (var stage in _order)
                 {
@@ -86,7 +86,7 @@
                         <div>
                             <div class="label">
                                 @_title[stage]
-                                <span class="prov @_agentProv[stage]">@ProvName(stage)</span>
+                                <span class="prov @ProvCss(ProvName(stage))">@ProvName(stage)</span>
                                 @if ((stage == PipelineStage.Coding || stage == PipelineStage.Testing || stage == PipelineStage.Qa)
                                      && row.State != StageState.Idle && _currentIteration > 0)
                                 {
@@ -735,6 +735,20 @@
         }
         return _agentProv[s] == "azure" ? "Azure" : "Claude";
     }
+
+    // The Orchestrator's badge was the literal "Claude" in markup, so it kept naming Anthropic while the
+    // five rows under it correctly read RemoteAgent — the leader row is the first thing a viewer reads.
+    private string LeaderProv => string.IsNullOrWhiteSpace(_llm?.Force) ? "Claude" : _llm!.Force!;
+
+    // Colour class for a provider badge. Only .prov.anthropic and .prov.azure exist in app.css, so map
+    // onto those two rather than inventing a class name that no stylesheet defines (a phantom class
+    // renders unstyled — see design-system.md). Azure-family providers get the azure tint; everything
+    // else, including RemoteAgent (a Claude CLI underneath), gets the anthropic tint.
+    private static string ProvCss(string provider) =>
+        provider.Contains("azure", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("MAF", StringComparison.OrdinalIgnoreCase)
+            ? "azure"
+            : "anthropic";
 
     /// <summary>Letter grade for a QA score: A (≥.9), B (≥.8), C (≥.7), D (≥.6), else F.</summary>
     private static string QaGrade(double score) => score switch
