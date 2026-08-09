@@ -186,7 +186,25 @@
                             }
                             else
                             {
-                                <p class="muted">@_recentRuns recent runs (demo — history not persisted).</p>
+                                @if (_recent.Count == 0)
+                                {
+                                    <p class="muted">No runs yet. Click Run to start one.</p>
+                                }
+                                else
+                                {
+                                    <ul class="syn-runs">
+                                        @foreach (var r in _recent)
+                                        {
+                                            <li>
+                                                <span class="rr-dot @(r.Completed ? "ok" : "err")"></span>
+                                                <span class="rr-name">@r.GraphName</span>
+                                                <span class="rr-detail">@r.Detail</span>
+                                                <span class="rr-when">@r.At.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                    <p class="muted">Recent runs this session (in-memory — full history lives in the Pipeline run store).</p>
+                                }
                             }
                         </div>
                     </div>
@@ -318,13 +336,21 @@
         new("0", "State Schema"),
         new("1", "Guardrails"),
         new("2", "Run Log"),
-        new("3", "Recent Runs", _recentRuns.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        new("3", "Recent Runs", _recent.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
     ];
     private bool _bottomOpen;          // collapsed by default — gives canvas full height
     private string _runInput = string.Empty;
     private readonly List<string> _runLog = [];
     private bool _running;
-    private int _recentRuns;
+    // Recent runs for this tenant, read from the (session-scoped) store so the list survives closing and
+    // reopening the Workflow window — the old int counter reset on every dispose.
+    private IReadOnlyList<OrchestrationRunRecord> _recent = [];
+
+    private void RecordRunOutcome(bool completed, string detail)
+    {
+        Store.RecordRun(_tenantId, new OrchestrationRunRecord(_graph.Name, DateTimeOffset.Now, completed, detail));
+        _recent = Store.RecentRuns(_tenantId);
+    }
 
     // Toolbar overflow menu (Duplicate / panel toggle / Delete) + node-library search box.
     private bool _menuOpen;
@@ -425,6 +451,7 @@
         // fault must not crash the circuit on window open — fall back to appsettings (ActiveProvider handles null).
         _llm = CircuitSafe.OrDefault(() => LlmConfig.Resolve(_tenantId), null);
         _all = Store.All(_tenantId).ToList();
+        _recent = Store.RecentRuns(_tenantId);   // session-scoped list survives window reopen
         _graph = _all.FirstOrDefault() ?? Store.Create(_tenantId, "5-Agent SDLC Pipeline");
         if (_all.Count == 0)
         {
@@ -715,7 +742,7 @@
             }
             Log("■ Not runnable — need exactly one Start and every node on the path supported.");
             _running = false;
-            _recentRuns++;
+            RecordRunOutcome(false, "not runnable");
             await InvokeAsync(StateHasChanged);
             return;
         }
@@ -725,6 +752,10 @@
             .Where(n => n.Type == StepType.Evaluator || string.Equals(n.AgentRole, "Qa", StringComparison.OrdinalIgnoreCase))
             .Select(n => n.MaxIterations).FirstOrDefault();
         if (nMax <= 0) { nMax = 3; }
+
+        // Outcome captured by the closure below and recorded once the run settles (recent-runs list).
+        var completed = false;
+        var detail = "stopped";
 
         // The budget gate (DB read) + run persistence run outside the MAF per-node failure capture; any
         // throw (DbException/DbUpdateException/…) must log + reset state, never tear down the circuit.
@@ -754,16 +785,19 @@
                         StateHasChanged();
                     }), HumanPromptAsync, ct);
 
+                    completed = result.Completed;
+                    detail = result.Completed ? "completed" : (result.FailureMessage ?? "stopped");
                     Log(result.Completed ? "■ Workflow complete." : $"✖ Stopped: {result.FailureMessage}");
                 }
                 catch (OperationCanceledException)
                 {
+                    detail = "cancelled";
                     Log("⏹ Run cancelled.");
                 }
             },
-            ex => Log($"✖ Run failed: {ex.Message}"));
+            ex => { detail = ex.Message; Log($"✖ Run failed: {ex.Message}"); });
         _running = false;
-        _recentRuns++;
+        RecordRunOutcome(completed, detail);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -794,6 +828,9 @@
     private void ZoomFit()
     {
         _diagram.ZoomToFit(60);
+        // "Fit to view" should frame the whole graph, never zoom IN past 1:1 — the diagram lib's
+        // ZoomToFit can over-zoom onto a small/just-measured bounding box (e.g. right after adding a node).
+        if (_diagram.Zoom > 1.0) { _diagram.SetZoom(1.0); }
         _zoomPct = (int)Math.Round(_diagram.Zoom * 100);
     }
 

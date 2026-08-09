@@ -463,3 +463,13 @@ a.syn-nav-item { text-decoration: none; }
 .syn-runinput:focus { border-color: var(--syn-blue); }
 .syn-log { font-size: 11.5px; line-height: 1.6; }
 .syn-log .ln { color: var(--syn-text-soft); white-space: pre-wrap; }
+
+/* recent runs list (session-scoped) */
+.syn-runs { list-style: none; margin: 0 0 8px; padding: 0; }
+.syn-runs li { display: flex; align-items: center; gap: 9px; padding: 5px 0; border-bottom: 1px solid var(--syn-border); font-size: 12px; }
+.syn-runs .rr-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; background: var(--syn-muted); }
+.syn-runs .rr-dot.ok { background: var(--syn-green-border); }
+.syn-runs .rr-dot.err { background: var(--syn-human); }
+.syn-runs .rr-name { font-weight: 600; color: var(--syn-text-strong); }
+.syn-runs .rr-detail { color: var(--syn-muted); }
+.syn-runs .rr-when { margin-left: auto; color: var(--syn-faint); font-variant-numeric: tabular-nums; }

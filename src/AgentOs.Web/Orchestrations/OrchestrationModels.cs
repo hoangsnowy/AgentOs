@@ -185,3 +185,10 @@ public sealed class OrchestrationGraph
     /// <summary>Guardrails ("Guardrails" tab).</summary>
     public List<string> Guardrails { get; set; } = [];
 }
+
+/// <summary>One entry in a tenant's recent-workflow-runs list (session-scoped, in <see cref="OrchestrationStore"/>).</summary>
+/// <param name="GraphName">The workflow that was run.</param>
+/// <param name="At">When the run finished.</param>
+/// <param name="Completed">True if the run reached the end; false if it stopped/failed/was cancelled.</param>
+/// <param name="Detail">A short outcome line (e.g. "3 QA rounds" or the failure reason).</param>
+public sealed record OrchestrationRunRecord(string GraphName, System.DateTimeOffset At, bool Completed, string Detail);
