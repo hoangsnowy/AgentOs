@@ -7,9 +7,18 @@ window.agentosWorkflowKeys = {
     register: function (dotnetRef) {
         this.unregister();
         this._handler = function (e) {
-            if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+            var mod = e.ctrlKey || e.metaKey;
+            if (!mod) { return; }
+            var k = e.key.toLowerCase();
+            if (k === 'k') {
                 e.preventDefault();
                 dotnetRef.invokeMethodAsync('OnQuickAddKey');
+            } else if (k === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                dotnetRef.invokeMethodAsync('OnUndoKey');
+            } else if ((k === 'z' && e.shiftKey) || k === 'y') {
+                e.preventDefault();
+                dotnetRef.invokeMethodAsync('OnRedoKey');
             }
         };
         document.addEventListener('keydown', this._handler, true);

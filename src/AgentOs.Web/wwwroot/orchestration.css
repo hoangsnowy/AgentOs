@@ -185,6 +185,9 @@ a.syn-nav-item { text-decoration: none; }
 /* primary "+ Add" toolbar button + the little keycap */
 .syn-btn.primary { background: var(--syn-blue); border-color: transparent; color: #fff; }
 .syn-btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+/* icon-only toolbar buttons (undo / redo) */
+.syn-btn.icon { padding: 6px 9px; }
+.syn-btn:disabled { opacity: .4; cursor: default; }
 .syn-kbd {
     font: inherit; font-size: 10px; line-height: 1; padding: 2px 5px; border-radius: 4px;
     border: 1px solid var(--syn-border-2); background: var(--syn-panel-2); color: var(--syn-muted);

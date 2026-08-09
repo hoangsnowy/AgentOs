@@ -13,6 +13,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
+@using System.Text.Json
 @inject OrchestrationStore Store
 @inject GraphRunnerService GraphRunner
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
@@ -35,6 +36,8 @@
             </select>
             <button class="syn-btn" @onclick="NewGraph" title="New workflow">+ New</button>
             <button class="syn-btn primary" @onclick="OpenPalette" title="Add a node (⌘K)"><Icon Name="plus" Size="13" /> Add <kbd class="syn-kbd">⌘K</kbd></button>
+            <button class="syn-btn icon" @onclick="Undo" disabled="@(!CanUndo)" title="Undo (⌘Z)" aria-label="Undo"><Icon Name="arrow-uturn-left" Size="14" /></button>
+            <button class="syn-btn icon" @onclick="Redo" disabled="@(!CanRedo)" title="Redo (⌘⇧Z)" aria-label="Redo"><Icon Name="arrow-uturn-right" Size="14" /></button>
             <input class="syn-name" @bind="_graph.Name" @bind:event="oninput" aria-label="Workflow name" />
 
             <div class="syn-spacer"></div>
@@ -98,7 +101,7 @@
             <div class="syn-center">
                 <div class="syn-canvas">
                     <CascadingValue Value="_diagram" IsFixed="false">
-                        <DiagramCanvas @key="_graph.Id">
+                        <DiagramCanvas @key="@($"{_graph.Id}:{_diagramVersion}")">
                             <Widgets>
                                 @* BackgroundColor="transparent" lets .syn-canvas tokens win — auto-flip light/dark. *@
                                 <GridWidget Size="26" Mode="GridMode.Point" BackgroundColor="transparent" />
@@ -472,8 +475,14 @@
     // Theme + wallpaper now live in System -> Appearance; this studio no longer keeps a
     // local toggle so there is one canonical theme source.
 
+    // Bumped on every rebuild so the DiagramCanvas @key changes even when the graph id does not — otherwise
+    // an undo/redo that restores the SAME graph leaves the canvas bound to the previous BlazorDiagram
+    // instance and the change never renders.
+    private int _diagramVersion;
+
     private void BuildDiagram()
     {
+        _diagramVersion++;
         _nodeModels.Clear();
         var opts = new BlazorDiagramOptions
         {
@@ -544,6 +553,7 @@
 
     private void AddNode(StepType type)
     {
+        PushUndo();
         // Adding while a node is selected wires the new one AFTER it — the n8n "add the next step" gesture,
         // so building a chain is one click per step instead of add-then-drag-an-edge. Capture the anchor
         // before OpenInspector moves the selection to the new node.
@@ -639,6 +649,7 @@
         {
             return;
         }
+        PushUndo();
         var id = _selected.Data.Id;
         _graph.Nodes.RemoveAll(n => n.Id == id);
         _graph.Edges.RemoveAll(e => e.SourceId == id || e.TargetId == id);
@@ -833,6 +844,70 @@
         if (_diagram.Zoom > 1.0) { _diagram.SetZoom(1.0); }
         _zoomPct = (int)Math.Round(_diagram.Zoom * 100);
     }
+
+    // ---- undo / redo (snapshot-based) ----
+    // Each structural edit deep-copies the whole graph (nodes + edges + positions) via JSON and pushes it.
+    // Snapshot-of-model beats a command stack here: the graph IS the serializable source of truth, so undo
+    // is "restore this snapshot + rebuild the canvas" with no per-operation inverse to get wrong. Covers the
+    // operations that go through the app — add node, delete node, and the auto-connect that rides on add.
+    // A manual canvas edge-draw or a node drag is folded into the next snapshot rather than individually
+    // undoable; that keeps this free of re-entrant diagram-event coupling.
+    private static readonly JsonSerializerOptions SnapshotJson = new()
+    {
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+    };
+    private readonly Stack<string> _undo = new();
+    private readonly Stack<string> _redo = new();
+    private const int MaxUndo = 50;
+    private bool CanUndo => _undo.Count > 0;
+    private bool CanRedo => _redo.Count > 0;
+
+    private string Snapshot()
+    {
+        SyncFromCanvas();   // fold current node positions + drawn edges into the model before copying
+        return JsonSerializer.Serialize(_graph, SnapshotJson);
+    }
+
+    private void Restore(string json)
+    {
+        var g = JsonSerializer.Deserialize<OrchestrationGraph>(json, SnapshotJson);
+        if (g is null) { return; }
+        _graph = g;
+        _selected = null;
+        BuildDiagram();
+    }
+
+    // Call BEFORE mutating the graph, so the pre-edit state is what an undo returns to.
+    private void PushUndo()
+    {
+        _undo.Push(Snapshot());
+        _redo.Clear();
+        // Bound the history — drop the oldest by rebuilding without it (Stack has no bottom-trim).
+        if (_undo.Count > MaxUndo)
+        {
+            var kept = _undo.ToArray().Take(MaxUndo).Reverse().ToArray();
+            _undo.Clear();
+            foreach (var s in kept) { _undo.Push(s); }
+        }
+    }
+
+    private void Undo()
+    {
+        if (_undo.Count == 0) { return; }
+        _redo.Push(Snapshot());
+        Restore(_undo.Pop());
+    }
+
+    private void Redo()
+    {
+        if (_redo.Count == 0) { return; }
+        _undo.Push(Snapshot());
+        Restore(_redo.Pop());
+    }
+
+    // Global Ctrl/⌘+Z (undo) and Ctrl+Shift+Z / Ctrl+Y (redo), routed from workflow-keys.js.
+    [JSInvokable] public Task OnUndoKey() { Undo(); return InvokeAsync(StateHasChanged); }
+    [JSInvokable] public Task OnRedoKey() { Redo(); return InvokeAsync(StateHasChanged); }
 
     // ---- toolbar overflow menu ----
     private void ToggleMenu() => _menuOpen = !_menuOpen;
