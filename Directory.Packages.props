@@ -17,9 +17,9 @@
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
 
     <!-- Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.15.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.15.0" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.17.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.17.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.17.0" />
 
     <!-- JSON schema validation. JsonSchema.Net 9 reworked the evaluation API: Evaluate runs on
          JsonElement (not JsonNode), EvaluationResults.HasErrors/HasDetails were removed, and
@@ -61,13 +61,13 @@
          AspNetCore.OpenApi 10.0.9 floors it at 2.0.0 (no upper bound), so an explicit direct reference
          here + in AgentOs.Api.csproj is enough to raise the resolved version. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.11.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.16" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.18" />
     <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.1.2" />
 
     <!-- Phase 8 — JWT bearer auth (API host) + OpenID Connect cookie/code flow (Web host) -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.10" />
-    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.21.0" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
 
     <!-- Web host: Blazor diagram editor -->
     <PackageVersion Include="Z.Blazor.Diagrams" Version="3.0.4.1" />
@@ -81,9 +81,23 @@
 
     <!-- Model Context Protocol — official C# SDK. Used by AgentOs.Modules.Mcp to consume tools
          exposed by external MCP servers (GitHub MCP, filesystem MCP, ...) and to expose AgentOs
-         pipeline agents as MCP tools to external hosts (Claude Desktop, VS Code). -->
-    <PackageVersion Include="ModelContextProtocol" Version="1.4.1" />
-    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
+         pipeline agents as MCP tools to external hosts (Claude Desktop, VS Code).
+
+         v2.x aligns the SDK with the MCP 2026-07-28 spec. Two behaviour changes matter here, both
+         of which AgentOs WANTS (no source change needed — see McpClientHost / Api Program.cs):
+         (1) Server: HttpServerTransportOptions.Stateless now defaults to true, so MapMcp("/mcp")
+             serves sessionless Streamable HTTP. Our exposed tools (run_pipeline / list_runs /
+             get_run) are request-scoped, so statelessness is correct and cheaper; we never used
+             the standalone SSE GET/DELETE stream or unsolicited server->client requests.
+         (2) Client: McpClient.CreateAsync probes `server/discover` first and falls back to the
+             legacy `initialize` handshake for down-level servers. 2.1.0 (not 2.0.0) is the floor
+             because it fixes that fallback when discover fails at the HTTP layer and keeps the
+             AutoDetect channel open after a provisional SSE failure — i.e. the upstream servers
+             we connect to (GitHub MCP, filesystem MCP) are exactly the down-level case.
+         Deprecated Roots/Sampling/Logging (MCP9005) and stateful-only options (MCP9006) are unused
+         here — the Release build is warning-clean under TreatWarningsAsErrors. -->
+    <PackageVersion Include="ModelContextProtocol" Version="2.1.0" />
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.1.0" />
 
     <!-- Test stack -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
