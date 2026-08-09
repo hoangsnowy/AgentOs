@@ -22,6 +22,20 @@ public sealed class OfflineLlmClient : ILlmClient
     /// <summary>Canonical provider key this client registers under.</summary>
     public const string ProviderName = "Offline";
 
+    /// <summary>
+    /// True when <paramref name="answeredBy"/> is this canned client standing in for a DIFFERENT provider
+    /// the caller actually asked for — i.e. the real provider failed and the offline safety net answered.
+    /// <para>
+    /// Callers that report success to a human must consult this. The gateway appends Offline to the end of
+    /// every failover chain when <c>Llm:OfflineFallback</c> is on, so a call can "succeed" with canned text
+    /// while nothing reached a model. A connectivity probe that renders that as a green OK is telling the
+    /// operator the opposite of the truth — which is worse than the failure it hides.
+    /// </para>
+    /// </summary>
+    public static bool IsSubstituteFor(string? requestedProvider, string? answeredBy) =>
+        string.Equals(answeredBy, ProviderName, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(requestedProvider, ProviderName, StringComparison.OrdinalIgnoreCase);
+
     /// <inheritdoc />
     public string Provider => ProviderName;
 

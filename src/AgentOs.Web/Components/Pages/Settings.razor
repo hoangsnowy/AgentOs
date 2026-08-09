@@ -598,9 +598,17 @@ dotnet user-secrets set "Llm:AzureOpenAi:Endpoint" "https://your-resource.openai
                     var model = Config["Agents:Orchestrator:Model"] ?? "claude-haiku-4-5";
                     var probe = new LlmRequest("You are a connectivity probe.", "Reply with the single word: OK", model, 0.0, 5);
                     var resp = await LlmFactory.Create(provider).SendAsync(probe);
-                    _testOk = true;
-                    // Label with the provider that actually answered (correct even under 429 failover), not the request value.
-                    _testResult = $"{resp.Provider} · {model}";
+                    // Label with the provider that actually answered (correct even under 429 failover), not
+                    // the request value — and do NOT call it OK when the answer came from the canned Offline
+                    // safety net standing in for the provider being probed. The point of the probe is to
+                    // prove the configured provider is reachable; a green chip over canned text asserts the
+                    // opposite of what happened.
+                    var substituted = AgentOs.Modules.Llm.OfflineLlmClient.IsSubstituteFor(provider, resp.Provider);
+                    _testOk = !substituted;
+                    _testResult = substituted
+                        ? $"{provider} did not answer — canned {resp.Provider} output was served instead "
+                          + "(Llm:OfflineFallback is on). Nothing reached a real model."
+                        : $"{resp.Provider} · {model}";
                 }
             },
             ex => { _testOk = false; _testResult = ex.Message; });
