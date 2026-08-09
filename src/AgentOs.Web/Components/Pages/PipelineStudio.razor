@@ -1,5 +1,6 @@
 @using AgentOs.Modules.Pipeline.Pipeline
 @using AgentOs.Domain.Llm
+@using AgentOs.Modules.Llm
 @using AgentOs.Web.Services
 @inject IPipelineClient Pipeline
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
@@ -307,7 +308,17 @@
 <div class="app-statusbar">
     <span class="asb-item"><strong>@(_tokIn + _tokOut)</strong> tok <span class="asb-sub">(@_tokIn↑ / @_tokOut↓)</span></span>
     <span class="asb-sep"></span>
-    <span class="asb-item"><strong>$@_cost.ToString("0.0000")</strong> cost</span>
+    @* Actual server cost. On the RemoteAgent path it is genuinely $0 (the run spends the paired machine's
+       flat subscription), so when nothing was billed but tokens were used we also show what the SAME
+       tokens would have cost on a metered API — clearly labelled "≈ … API", never as billed spend. *@
+    @if (_cost == 0m && _estCost > 0m)
+    {
+        <span class="asb-item"><strong>$0.0000</strong> cost <span class="asb-sub" title="Estimated cost of the same tokens on a metered API — this run billed nothing">(≈ $@_estCost.ToString("0.0000") API)</span></span>
+    }
+    else
+    {
+        <span class="asb-item"><strong>$@_cost.ToString("0.0000")</strong> cost</span>
+    }
     <span class="asb-sep"></span>
     <span class="asb-item"><strong>@((_latencyMs / 1000.0).ToString("0.0"))s</strong> latency</span>
     <span class="asb-sep"></span>
@@ -382,6 +393,10 @@
     private long _tokIn;
     private long _tokOut;
     private decimal _cost;
+    // What the accumulated tokens WOULD have cost on a metered API, priced per call by the model each
+    // agent used. Equals _cost for real cloud providers; only diverges on the RemoteAgent path, where the
+    // billed cost is $0 but the tokens are real (estimated) — so the status bar can show the saving.
+    private decimal _estCost;
     private double _latencyMs;
 
     private readonly List<QaRound> _qaRounds = new();
@@ -688,6 +703,7 @@
                         _tokIn += e.Metrics.InputTokens;
                         _tokOut += e.Metrics.OutputTokens;
                         _cost += e.Metrics.CostUsd;
+                        _estCost += CostCalculator.Calculate(e.Metrics.Model, e.Metrics.InputTokens, e.Metrics.OutputTokens);
                         _latencyMs += e.Metrics.Latency.TotalMilliseconds;
                     }
                 }
@@ -713,6 +729,7 @@
         _tab = 0;
         _tokIn = _tokOut = 0;
         _cost = 0m;
+        _estCost = 0m;
         _latencyMs = 0;
         _qaRounds.Clear();
         foreach (var s in _order)

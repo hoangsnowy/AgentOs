@@ -160,7 +160,7 @@ public sealed class LlmTelemetryTests
     }
 
     [Fact]
-    public async Task RemoteAgent_SendAsync_EmitsSpanWithZeroTokens()
+    public async Task RemoteAgent_SendAsync_EmitsSpanWithZeroCostAndEstimatedTokens()
     {
         const string model = "probe-remote-model";
         var mine = new List<Activity>();
@@ -182,7 +182,10 @@ public sealed class LlmTelemetryTests
 
         mine.Count.ShouldBe(1);
         mine[0].GetTagItem("gen_ai.system").ShouldBe("agentos.remote_agent");
-        mine[0].GetTagItem("gen_ai.usage.input_tokens").ShouldBe(0);
+        // The span now carries an ESTIMATED token count (the CLI reports none), not a hard 0 — while the
+        // cost tag stays 0 because the run billed nothing. Assert the estimate is present and positive.
+        var inTok = mine[0].GetTagItem("gen_ai.usage.input_tokens").ShouldBeOfType<int>();
+        inTok.ShouldBeGreaterThan(0);
         mine[0].Status.ShouldBe(ActivityStatusCode.Ok);
     }
 }
