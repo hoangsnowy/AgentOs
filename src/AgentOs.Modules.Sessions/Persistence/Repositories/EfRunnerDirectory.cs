@@ -28,4 +28,26 @@ internal sealed class EfRunnerDirectory : IRunnerDirectory
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
     }
+
+    public async Task<bool> MarkPairedAsync(Guid runnerId, CancellationToken cancellationToken = default)
+    {
+        // Same tenant-filter bypass as the lookup: the handshake has no authenticated tenant, and the
+        // caller has already verified the presented token against this row's hash. Tracked load +
+        // SaveChanges rather than ExecuteUpdate — the connect path touches exactly one row, so the
+        // extra round-trip is irrelevant, and it keeps the provider surface small.
+        var row = await _db.Runners
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(r => r.Id == runnerId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (row is null || string.Equals(row.Status, "Revoked", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        row.Status = "Paired";
+        row.LastSeenUtc = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
 }

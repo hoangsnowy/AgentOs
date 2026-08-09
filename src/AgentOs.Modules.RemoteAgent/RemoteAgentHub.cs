@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Threading;
 using System.Threading.Tasks;
 using AgentOs.Domain.Sessions;
 using Microsoft.AspNetCore.SignalR;
@@ -63,6 +64,13 @@ public sealed class RemoteAgentHub : Hub
         Registrations[Context.ConnectionId] = _broker.RegisterRunner(
             Context.ConnectionId,
             new RunnerConnection(identity.RunnerId, identity.TenantId, identity.OwnerUserId));
+
+        // Promote Pending → Paired now that the token has been verified, so the Runners table reflects
+        // reality: before this, a machine that connected successfully still read "Pending" forever and
+        // the documented Pending → Paired transition existed only as a comment. Deliberately NOT
+        // Context.ConnectionAborted — the pairing fact has already happened, and a connection that drops
+        // in the next millisecond must not roll it back.
+        await _runners.MarkPairedAsync(identity.RunnerId, CancellationToken.None).ConfigureAwait(false);
 
         await base.OnConnectedAsync().ConfigureAwait(false);
     }
