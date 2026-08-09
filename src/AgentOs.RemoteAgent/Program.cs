@@ -48,7 +48,12 @@ connection.On<RemoteExecRequest>("Execute", async request =>
     Console.WriteLine($"[agent] Execute {request.Id} (model={request.Model})");
     var result = await RunLlmAsync(request).ConfigureAwait(false);
     await connection.SendAsync("CompleteRequest", result).ConfigureAwait(false);
-    Console.WriteLine($"[agent] -> {request.Id} ok={result.Ok}");
+    // Print WHY on failure. Logging only ok=False made every distinct failure — CLI not on PATH, CLI not
+    // logged in, non-zero exit — look identical from the runner console, which is the one place an
+    // operator watches while pairing a machine.
+    Console.WriteLine(result.Ok
+        ? $"[agent] -> {request.Id} ok=True"
+        : $"[agent] -> {request.Id} ok=False: {result.Error}");
 });
 
 // M4 — server-driven tool execution
@@ -118,9 +123,17 @@ static async Task<RemoteExecResult> RunLlmAsync(RemoteExecRequest request)
         var stderr = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
         await process.WaitForExitAsync().ConfigureAwait(false);
 
-        return process.ExitCode == 0
-            ? new RemoteExecResult(request.Id, true, stdout.Trim(), null)
-            : new RemoteExecResult(request.Id, false, string.Empty, $"exit {process.ExitCode}: {stderr.Trim()}");
+        if (process.ExitCode == 0)
+        {
+            return new RemoteExecResult(request.Id, true, stdout.Trim(), null);
+        }
+
+        // CLI agents routinely print the reason on STDOUT and exit non-zero (claude's
+        // "Not logged in · Please run /login" is the case that matters most here), so reporting only
+        // stderr produced a bare "exit 1: " and hid the one line that says what to do about it.
+        var detail = stderr.Trim();
+        if (detail.Length == 0) { detail = stdout.Trim(); }
+        return new RemoteExecResult(request.Id, false, string.Empty, $"exit {process.ExitCode}: {detail}");
     }
     catch (System.ComponentModel.Win32Exception ex) { return new RemoteExecResult(request.Id, false, string.Empty, ex.Message); }
     catch (System.IO.IOException ex) { return new RemoteExecResult(request.Id, false, string.Empty, ex.Message); }
