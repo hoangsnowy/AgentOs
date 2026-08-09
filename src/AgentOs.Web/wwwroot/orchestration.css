@@ -76,6 +76,7 @@
 html, body { margin: 0; height: 100%; }
 
 .syn-root {
+    position: relative;   /* containing block for the command-palette scrim (position:absolute; inset:0) */
     display: flex;
     height: 100%;
     min-height: 100%;
@@ -180,6 +181,51 @@ a.syn-nav-item { text-decoration: none; }
 .syn-menu-pop button.danger { color: var(--syn-danger-fg); }
 .syn-menu-pop button.danger:hover { background: var(--syn-danger-bg); }
 .syn-menu-pop .menu-sep { height: 1px; background: var(--syn-border); margin: 4px 2px; }
+
+/* primary "+ Add" toolbar button + the little keycap */
+.syn-btn.primary { background: var(--syn-blue); border-color: transparent; color: #fff; }
+.syn-btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.syn-kbd {
+    font: inherit; font-size: 10px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+    border: 1px solid var(--syn-border-2); background: var(--syn-panel-2); color: var(--syn-muted);
+}
+.syn-btn.primary .syn-kbd { border-color: rgba(255,255,255,.4); background: rgba(255,255,255,.15); color: #fff; }
+
+/* ---------- command palette (⌘K) ---------- */
+.syn-palette-scrim {
+    position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 12vh; background: rgba(0,0,0,.28); backdrop-filter: blur(1px);
+}
+.syn-palette {
+    width: min(560px, calc(100% - 48px)); max-height: 62vh; display: flex; flex-direction: column;
+    background: var(--syn-panel); border: 1px solid var(--syn-border-2); border-radius: 12px;
+    box-shadow: 0 24px 60px var(--syn-shadow-strong); overflow: hidden;
+}
+.syn-palette .pal-search { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border-bottom: 1px solid var(--syn-border); color: var(--syn-muted); }
+.syn-palette .pal-search input {
+    flex: 1; background: transparent; border: none; outline: none; color: var(--syn-text-strong);
+    font-family: inherit; font-size: 15px; min-width: 0;
+}
+.syn-palette .pal-list { overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.syn-palette .pal-item {
+    display: flex; align-items: center; gap: 11px; text-align: left; cursor: pointer;
+    background: transparent; border: 1px solid transparent; border-left: 3px solid transparent;
+    border-radius: 8px; padding: 9px 11px; font-family: inherit;
+}
+.syn-palette .pal-item:hover { background: var(--syn-panel-2); }
+.syn-palette .pal-item.active { background: var(--syn-panel-2); border-color: var(--syn-border); }
+.syn-palette .pal-item .pi-ic { font-size: 15px; width: 18px; text-align: center; flex: 0 0 18px; color: var(--syn-logic); }
+.syn-palette .pal-item .pi-tx { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.syn-palette .pal-item .pi-nm { font-size: 13.5px; font-weight: 600; color: var(--syn-text-strong); }
+.syn-palette .pal-item .pi-ds { font-size: 11px; color: var(--syn-muted); }
+.syn-palette .pal-item .syn-kbd { margin-left: auto; }
+.syn-palette .pal-item.cat-agent { border-left-color: var(--syn-agent); } .syn-palette .pal-item.cat-agent .pi-ic { color: var(--syn-agent); }
+.syn-palette .pal-item.cat-evaluator { border-left-color: var(--syn-eval); } .syn-palette .pal-item.cat-evaluator .pi-ic { color: var(--syn-eval); }
+.syn-palette .pal-item.cat-human { border-left-color: var(--syn-human); } .syn-palette .pal-item.cat-human .pi-ic { color: var(--syn-human); }
+.syn-palette .pal-item.cat-llm { border-left-color: var(--syn-llm); } .syn-palette .pal-item.cat-llm .pi-ic { color: var(--syn-llm); }
+.syn-palette .pal-item.cat-terminal { border-left-color: var(--syn-term); } .syn-palette .pal-item.cat-terminal .pi-ic { color: var(--syn-term); }
+.syn-palette .pal-item.cat-logic { border-left-color: var(--syn-logic); } .syn-palette .pal-item.cat-logic .pi-ic { color: var(--syn-logic); }
+.syn-palette .pal-none { color: var(--syn-muted); font-size: 13px; font-style: italic; padding: 16px; text-align: center; }
 
 /* ---------- three-region work area ---------- */
 .syn-workarea { flex: 1; display: flex; min-height: 0; min-width: 0; border-top: 1px solid var(--syn-border); }

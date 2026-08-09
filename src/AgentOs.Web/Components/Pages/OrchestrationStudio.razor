@@ -11,6 +11,8 @@
 @using AgentOs.Domain.Pipeline.Graph
 @using AgentOs.Web.Services
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
 @inject OrchestrationStore Store
 @inject GraphRunnerService GraphRunner
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
@@ -32,6 +34,7 @@
                 }
             </select>
             <button class="syn-btn" @onclick="NewGraph" title="New workflow">+ New</button>
+            <button class="syn-btn primary" @onclick="OpenPalette" title="Add a node (⌘K)"><Icon Name="plus" Size="13" /> Add <kbd class="syn-kbd">⌘K</kbd></button>
             <input class="syn-name" @bind="_graph.Name" @bind:event="oninput" aria-label="Workflow name" />
 
             <div class="syn-spacer"></div>
@@ -255,6 +258,44 @@
             </aside>
         </div>
     </div>
+
+    @* Command palette — centred quick-add over the whole app (⌘K or the toolbar "+ Add"). *@
+    @if (_paletteOpen)
+    {
+        <div class="syn-palette-scrim" @onclick="ClosePalette">
+            <div class="syn-palette" @onclick:stopPropagation="true">
+                <div class="pal-search">
+                    <Icon Name="search" Size="13" />
+                    <input @ref="_paletteInput" @bind="_paletteSearch" @bind:event="oninput" @bind:after="PaletteSearchChanged"
+                           @onkeydown="PaletteKey" placeholder="Add a node — type to filter…" aria-label="Add a node" />
+                    <kbd class="syn-kbd">Esc</kbd>
+                </div>
+                <div class="pal-list">
+                    @{ var pm = PaletteMatches; }
+                    @if (pm.Count == 0)
+                    {
+                        <p class="pal-none">No node matches “@_paletteSearch”.</p>
+                    }
+                    else
+                    {
+                        @for (var i = 0; i < pm.Count; i++)
+                        {
+                            var st = pm[i];
+                            var active = i == _paletteIndex;
+                            <button class="pal-item cat-@CategoryClass(st) @(active ? "active" : "")" @onclick="@(() => PaletteAdd(st))">
+                                <span class="pi-ic">@StepIcon(st)</span>
+                                <span class="pi-tx"><span class="pi-nm">@StepName(st)</span><span class="pi-ds">@NodeHint(st)</span></span>
+                                @if (active)
+                                {
+                                    <kbd class="syn-kbd">↵</kbd>
+                                }
+                            </button>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -288,6 +329,22 @@
     // Toolbar overflow menu (Duplicate / panel toggle / Delete) + node-library search box.
     private bool _menuOpen;
     private string _nodeSearch = string.Empty;
+
+    // Command palette (⌘K / "+ Add") — a centred quick-add over the canvas. Keyboard-first: type to
+    // filter, ↑/↓ to move, Enter to add the highlighted node, Esc to close.
+    private bool _paletteOpen;
+    private string _paletteSearch = string.Empty;
+    private int _paletteIndex;
+    private ElementReference _paletteInput;
+    private DotNetObjectReference<OrchestrationStudio>? _selfRef;
+
+    // The flat, search-filtered node list the palette shows (all groups, in library order).
+    private List<StepType> PaletteMatches => NodeLibrary
+        .SelectMany(g => g.Types)
+        .Where(t => string.IsNullOrWhiteSpace(_paletteSearch)
+            || StepName(t).Contains(_paletteSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+            || NodeHint(t).Contains(_paletteSearch.Trim(), StringComparison.OrdinalIgnoreCase))
+        .ToList();
 
     // Live zoom % for the canvas cluster. Kept in sync from the diagram on each zoom action so the readout
     // never drifts from the actual transform.
@@ -460,6 +517,10 @@
 
     private void AddNode(StepType type)
     {
+        // Adding while a node is selected wires the new one AFTER it — the n8n "add the next step" gesture,
+        // so building a chain is one click per step instead of add-then-drag-an-edge. Capture the anchor
+        // before OpenInspector moves the selection to the new node.
+        var from = _selected;
         var (x, y) = NextNodePosition();
         var node = new GraphNode
         {
@@ -476,7 +537,26 @@
         m.RequestEdit = () => OpenInspector(m);
         _diagram.Nodes.Add(m);
         _nodeModels[node.Id] = m;
+        if (from is not null)
+        {
+            ConnectNodes(from, m);
+        }
         OpenInspector(m);
+    }
+
+    // Draw an edge source→target on the canvas AND record it on the graph, mirroring how BuildDiagram
+    // materialises persisted edges, so an auto-wired connection survives Save/reload like a hand-drawn one.
+    private void ConnectNodes(StepNodeModel s, StepNodeModel t)
+    {
+        var (sp, tp) = PickPorts(s, t);
+        _diagram.Links.Add(new LinkModel(sp, tp));
+        _graph.Edges.Add(new GraphEdge
+        {
+            Id = OrchestrationStore.NewId(),
+            SourceId = s.Data.Id,
+            TargetId = t.Data.Id,
+            Label = string.Empty,
+        });
     }
 
     // Place a new node to the RIGHT of the current rightmost one, on the same row — so it reads as "the
@@ -726,6 +806,57 @@
         _menuOpen = false;
     }
 
+    // ---- command palette (⌘K / "+ Add") ----
+    private async Task OpenPalette()
+    {
+        _paletteOpen = true;
+        _paletteSearch = string.Empty;
+        _paletteIndex = 0;
+        _menuOpen = false;
+        await InvokeAsync(StateHasChanged);
+        // Focus the palette input so it is keyboard-ready the instant it opens.
+        await CircuitSafe.RunAsync(async () => await _paletteInput.FocusAsync(), _ => { });
+    }
+
+    private void ClosePalette() => _paletteOpen = false;
+
+    // Global ⌘K / Ctrl+K, routed from the document keydown listener (workflow-keys.js).
+    [JSInvokable]
+    public Task OnQuickAddKey() => OpenPalette();
+
+    private void PaletteSearchChanged()
+    {
+        // Keep the highlight in range as the filtered list shrinks/grows.
+        var count = PaletteMatches.Count;
+        if (_paletteIndex >= count) { _paletteIndex = Math.Max(0, count - 1); }
+    }
+
+    private void PaletteKey(KeyboardEventArgs e)
+    {
+        var matches = PaletteMatches;
+        switch (e.Key)
+        {
+            case "Escape":
+                ClosePalette();
+                break;
+            case "ArrowDown":
+                if (matches.Count > 0) { _paletteIndex = (_paletteIndex + 1) % matches.Count; }
+                break;
+            case "ArrowUp":
+                if (matches.Count > 0) { _paletteIndex = (_paletteIndex - 1 + matches.Count) % matches.Count; }
+                break;
+            case "Enter":
+                if (_paletteIndex >= 0 && _paletteIndex < matches.Count) { PaletteAdd(matches[_paletteIndex]); }
+                break;
+        }
+    }
+
+    private void PaletteAdd(StepType t)
+    {
+        _paletteOpen = false;
+        AddNode(t);   // honours the "auto-connect from the selected node" gesture like the rail does
+    }
+
     // ---- run-state labels for the inspector's Run section ----
     private static string RunClassOf(NodeRunState s) => s switch
     {
@@ -798,7 +929,27 @@
 
     private void Log(string line) => _runLog.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
 
-    public void Dispose() => _humanTcs?.TrySetResult(new GraphHumanReply(false, "Editor closed."));
+    // Register the document-level ⌘K listener once (workflow-keys.js routes it back to OnQuickAddKey).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) { return; }
+        _selfRef = DotNetObjectReference.Create(this);
+        await CircuitSafe.RunAsync(
+            async () => await JS.InvokeVoidAsync("agentosWorkflowKeys.register", _selfRef),
+            _ => { });   // a missing script must never crash the circuit — the "+ Add" button still works
+    }
+
+    public void Dispose()
+    {
+        _humanTcs?.TrySetResult(new GraphHumanReply(false, "Editor closed."));
+        // Best-effort: drop the global key listener and the .NET ref so a closed window stops receiving ⌘K.
+        if (_selfRef is not null)
+        {
+            _ = JS.InvokeVoidAsync("agentosWorkflowKeys.unregister");
+            _selfRef.Dispose();
+            _selfRef = null;
+        }
+    }
 
     // ---- palette helpers ----
     private static string StepName(StepType t) => t switch
