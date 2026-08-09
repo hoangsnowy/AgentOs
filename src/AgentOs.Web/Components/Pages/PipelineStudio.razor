@@ -721,7 +721,20 @@
         }
     }
 
-    private string ProvName(PipelineStage s) => _agentProv[s] == "azure" ? "Azure" : "Claude";
+    // The per-agent badge must name the provider the call ACTUALLY goes to. A Force provider overrides
+    // every agent's own setting (LlmClientFactory resolves the forced key, not Agents:<Stage>:Provider),
+    // so while one is active the map below is not merely stale — it contradicts the run. Forcing
+    // RemoteAgent and still rendering "Azure" told the operator their work went to a cloud endpoint when
+    // every token was produced by the CLI on their own machine.
+    private string ProvName(PipelineStage s)
+    {
+        var force = _llm?.Force;
+        if (!string.IsNullOrWhiteSpace(force))
+        {
+            return force;
+        }
+        return _agentProv[s] == "azure" ? "Azure" : "Claude";
+    }
 
     /// <summary>Letter grade for a QA score: A (≥.9), B (≥.8), C (≥.7), D (≥.6), else F.</summary>
     private static string QaGrade(double score) => score switch
