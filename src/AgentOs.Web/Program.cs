@@ -1,7 +1,7 @@
-// Composition root for the Blazor Server host. Loads the same modules as the API except RemoteAgent
-// (the SignalR hub lives on the API side); auth is host-specific — Web wires Cookie + OpenID Connect
-// against Keycloak realm "agentic", whereas the API uses JWT bearer. /account/login & /account/logout
-// drive the challenge / sign-out round-trips; the OIDC middleware handles /signin-oidc & callback.
+// Composition root for the Blazor Server host. Loads the same modules as the API; auth is
+// host-specific — Web wires Cookie + OpenID Connect against Keycloak realm "agentic", whereas the API
+// uses JWT bearer. /account/login & /account/logout drive the challenge / sign-out round-trips; the
+// OIDC middleware handles /signin-oidc & callback.
 
 using System.Security.Claims;
 using AgentOs.Modules.AppConfig;
@@ -12,6 +12,7 @@ using AgentOs.Modules.Integration;
 using AgentOs.Modules.Llm;
 using AgentOs.Modules.Mcp;
 using AgentOs.Modules.Pipeline;
+using AgentOs.Modules.RemoteAgent;
 using AgentOs.Modules.Sessions;
 using AgentOs.Modules.Tenants;
 using AgentOs.Modules.Tools;
@@ -192,7 +193,16 @@ builder.Services.AddModulesFromAssemblies(builder.Configuration,
     typeof(ToolsModule).Assembly,
     // MCP client: the in-process pipeline gets upstream MCP tools too (previously Api-only),
     // and the MCP admin app can read the connection statuses.
-    typeof(McpModule).Assembly);
+    typeof(McpModule).Assembly,
+    // RemoteAgent MUST be loaded here, not just on the Api. Board's "Run on my machine" toggle sets
+    // IssueWorkRequest.ProviderOverride = "RemoteAgent", and the session it belongs to executes in
+    // THIS process (BoardApp.RunSession → Task.Run → ScopeFactory.CreateScope). The keyed
+    // ILlmClient under "RemoteAgent" is registered by RemoteAgentModule alone, so without this the
+    // toggle threw "LLM provider 'RemoteAgent' … is not registered" — a shipped control the host
+    // rendering it could not honour. Loading the module here also maps /hubs/remote-agent on the Web
+    // origin: the broker is in-process with no backplane, so the runner must pair to the same host
+    // that dispatches to it.
+    typeof(RemoteAgentModule).Assembly);
 
 // Runtime plugins: discover IAgentOsPlugin assemblies dropped in the plugins folder (Plugins:Path,
 // default "plugins" under the content root). A missing folder is a no-op.
@@ -342,6 +352,15 @@ app.MapGet("/cost/export", async (HttpContext http, AgentOs.Modules.Pipeline.Per
 // exchange (/runner/pair/exchange). Mapped here on the Web — the extension and browser both target the
 // Web origin, and the approve step uses the browser session, not a Bearer token.
 AgentOs.Modules.Sessions.Endpoints.PairingEndpoints.MapPairingEndpoints(app);
+
+// The runner's SignalR hub, mapped explicitly rather than via MapModuleEndpoints — this host serves a
+// UI, not the API's REST surface, so it opts in one endpoint at a time (same reason PairingEndpoints
+// is mapped by hand above). The hub must exist on THIS origin because IRemoteAgentBroker is in-process
+// with no backplane: Board's "Run on my machine" dispatch runs in the Web, so a runner paired to the
+// Api's hub would be invisible to it. Anonymous by design — the hub authenticates the connection
+// itself against the runner's salted pairing-token hash (see RemoteAgentHub.OnConnectedAsync), so
+// there is no browser session to require here.
+app.MapHub<AgentOs.Modules.RemoteAgent.RemoteAgentHub>(AgentOs.Modules.RemoteAgent.RemoteAgentHub.Path);
 
 // OIDC challenge / sign-out — buttons in the UI hit these endpoints. /signin-oidc and
 // /signout-callback-oidc are owned by the OIDC middleware. In dev-auto-login mode there are no
