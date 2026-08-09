@@ -17,4 +17,9 @@ public interface IRunnerDirectory
 {
     /// <summary>Find a runner by id for pairing, or <c>null</c> if it does not exist.</summary>
     Task<RunnerIdentity?> FindForPairingAsync(Guid runnerId, CancellationToken cancellationToken = default);
+
+    /// <summary>Record that a runner completed the handshake: <c>Pending → Paired</c> plus a fresh
+    /// last-seen stamp. Called only after the presented token has been verified. A revoked runner is
+    /// left untouched. Returns <c>true</c> when a row was updated.</summary>
+    Task<bool> MarkPairedAsync(Guid runnerId, CancellationToken cancellationToken = default);
 }

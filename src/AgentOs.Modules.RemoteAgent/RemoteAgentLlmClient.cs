@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using AgentOs.Domain.Llm;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Telemetry;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AgentOs.Modules.RemoteAgent;
@@ -21,17 +22,31 @@ public sealed class RemoteAgentLlmClient : ILlmClient
     public static readonly TimeSpan DispatchTimeout = TimeSpan.FromSeconds(120);
 
     private readonly IRemoteAgentBroker _broker;
-    private readonly ITenantContext _tenant;
+    // Root provider for resolving the request-scoped ITenantContext PER CALL, never at construction.
+    // Capturing it in the constructor made resolving this client from the root provider throw
+    // "Cannot resolve 'ILlmClient' from root provider because it requires scoped service
+    // 'ITenantContext'" on hosts whose tenant context is scoped (Keycloak's HttpTenantContext) — the
+    // Settings "Test connection" probe hit exactly that. Same shape as PooledChatLlmClient.
+    private readonly IServiceProvider _services;
     private readonly ILogger<RemoteAgentLlmClient> _logger;
 
     /// <inheritdoc />
     public string Provider => "RemoteAgent";
 
-    public RemoteAgentLlmClient(IRemoteAgentBroker broker, ITenantContext tenant, ILogger<RemoteAgentLlmClient> logger)
+    public RemoteAgentLlmClient(IRemoteAgentBroker broker, IServiceProvider services, ILogger<RemoteAgentLlmClient> logger)
     {
         _broker = broker ?? throw new ArgumentNullException(nameof(broker));
-        _tenant = tenant ?? throw new ArgumentNullException(nameof(tenant));
+        _services = services ?? throw new ArgumentNullException(nameof(services));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    // The tenant + member to target when AmbientIdentity does not supply them. Resolved inside a fresh
+    // scope off the root provider, and read to plain strings before the scope is disposed.
+    private (string? TenantId, string? UserId) ResolveFallbackIdentity()
+    {
+        using var scope = _services.CreateScope();
+        var tenant = scope.ServiceProvider.GetService<ITenantContext>();
+        return (tenant?.TenantId, tenant?.UserId);
     }
 
     /// <inheritdoc />
@@ -43,7 +58,10 @@ public sealed class RemoteAgentLlmClient : ILlmClient
         // Background session work (a Blazor circuit's Task.Run) has no HttpContext, so ITenantContext is
         // blank there; the session seeds AmbientIdentity so the dispatch targets the member's own runner.
         var amb = AmbientIdentity.Current;
-        var target = new RunnerTarget(amb?.TenantId ?? _tenant.TenantId, amb?.UserId ?? _tenant.UserId ?? string.Empty);
+        var fallback = amb is null || amb.UserId is null ? ResolveFallbackIdentity() : default;
+        var target = new RunnerTarget(
+            amb?.TenantId ?? fallback.TenantId ?? ITenantContext.DefaultTenantId,
+            amb?.UserId ?? fallback.UserId ?? string.Empty);
 
         var genAiSystem = LlmTelemetry.SystemFor(Provider);
         using var activity = LlmTelemetry.StartChat(genAiSystem, request.Model, target.TenantId);

@@ -227,7 +227,21 @@ app.MapPost("/llm/test", async (ILlmClientFactory factory, IConfiguration cfg, C
         var client = factory.Create(provider);
         var probe = new LlmRequest("You are a connectivity probe.", "Reply with the single word: OK", model, 0.0, 5);
         var resp = await client.SendAsync(probe, ct).ConfigureAwait(false);
-        return Results.Ok(new { ok = true, provider = client.Provider, model, sample = resp.Content?.Trim() });
+        // Report the provider that ANSWERED (client.Provider is the chain's primary, which is wrong under
+        // failover), and refuse to call it ok when the canned Offline safety net stood in for the provider
+        // being probed — a probe that greenlights unreachable-but-faked is worse than one that fails.
+        if (AgentOs.Modules.Llm.OfflineLlmClient.IsSubstituteFor(provider, resp.Provider))
+        {
+            return Results.Ok(new
+            {
+                ok = false,
+                provider,
+                model,
+                error = $"{provider} did not answer — canned {resp.Provider} output was served instead "
+                    + "(Llm:OfflineFallback is on). Nothing reached a real model.",
+            });
+        }
+        return Results.Ok(new { ok = true, provider = resp.Provider, model, sample = resp.Content?.Trim() });
     }
     catch (System.Net.Http.HttpRequestException ex)
     {

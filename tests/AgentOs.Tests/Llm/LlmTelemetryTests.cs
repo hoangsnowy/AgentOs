@@ -20,6 +20,7 @@ using AgentOs.Modules.RemoteAgent;
 using AgentOs.SharedKernel.Identity;
 using AgentOs.SharedKernel.Telemetry;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -172,7 +173,10 @@ public sealed class LlmTelemetryTests
         var tenant = Substitute.For<ITenantContext>();
         tenant.TenantId.Returns("default");
         tenant.UserId.Returns("member-1");
-        var client = new RemoteAgentLlmClient(broker, tenant, NullLogger<RemoteAgentLlmClient>.Instance);
+        var tenantServices = new ServiceCollection();
+        tenantServices.AddScoped(_ => tenant);
+        var client = new RemoteAgentLlmClient(
+            broker, tenantServices.BuildServiceProvider(), NullLogger<RemoteAgentLlmClient>.Instance);
 
         await client.SendAsync(new LlmRequest("sys", "build X", model));
 

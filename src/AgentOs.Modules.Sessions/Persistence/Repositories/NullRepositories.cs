@@ -81,4 +81,7 @@ internal sealed class NullRunnerDirectory : IRunnerDirectory
 {
     public Task<RunnerIdentity?> FindForPairingAsync(Guid runnerId, CancellationToken cancellationToken = default) =>
         Task.FromResult<RunnerIdentity?>(null);
+
+    public Task<bool> MarkPairedAsync(Guid runnerId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(false);
 }
