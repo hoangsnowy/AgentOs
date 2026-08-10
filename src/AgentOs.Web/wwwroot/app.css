@@ -1470,6 +1470,9 @@ select {
 }
 .appwin.dragging { user-select: none; }
 .appwin.minimized { display: none; }
+/* A window parked on another virtual workspace. Hidden, never unmounted — WindowHost keeps every open
+   window in the render tree so minimizing or switching workspace cannot destroy the app's state. */
+.appwin.off-workspace { display: none; }
 /* GNOME CSD header bar — taller bar, centered title, circular Adwaita controls. */
 .appwin-titlebar {
     position: relative;

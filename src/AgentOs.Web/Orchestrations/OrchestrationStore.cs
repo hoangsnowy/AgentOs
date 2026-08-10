@@ -30,6 +30,12 @@ public sealed class OrchestrationStore
     // Loaded + seeded lazily per tenant on first access.
     private readonly Dictionary<(string Tenant, string Id), OrchestrationGraph> _graphs = new();
     private readonly HashSet<string> _loadedTenants = new(StringComparer.Ordinal);
+    // Recent workflow runs, newest-first, per tenant. Bounded and IN-MEMORY: this survives closing and
+    // reopening the Workflow window within a session (the count used to reset on every window dispose), but
+    // not a process restart — it is a session-scoped convenience, not a persisted audit trail. Full
+    // durable run history belongs to the Pipeline run store (a DB table), not here.
+    private readonly Dictionary<string, List<OrchestrationRunRecord>> _runs = new(StringComparer.Ordinal);
+    private const int MaxRunsPerTenant = 25;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<OrchestrationStore> _logger;
 
@@ -54,6 +60,37 @@ public sealed class OrchestrationStore
                 .Select(kv => kv.Value)
                 .OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+    }
+
+    /// <summary>Record a completed (or stopped) workflow run for the tenant's recent-runs list. Newest
+    /// first, bounded to <see cref="MaxRunsPerTenant"/>. In-memory + session-scoped (see the field note).</summary>
+    public void RecordRun(string tenantId, OrchestrationRunRecord run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        lock (_gate)
+        {
+            if (!_runs.TryGetValue(tenantId, out var list))
+            {
+                list = new List<OrchestrationRunRecord>();
+                _runs[tenantId] = list;
+            }
+            list.Insert(0, run);
+            if (list.Count > MaxRunsPerTenant)
+            {
+                list.RemoveRange(MaxRunsPerTenant, list.Count - MaxRunsPerTenant);
+            }
+        }
+    }
+
+    /// <summary>The tenant's recent workflow runs, newest first (session-scoped, in-memory).</summary>
+    public IReadOnlyList<OrchestrationRunRecord> RecentRuns(string tenantId)
+    {
+        lock (_gate)
+        {
+            return _runs.TryGetValue(tenantId, out var list)
+                ? list.ToList()
+                : [];
         }
     }
 

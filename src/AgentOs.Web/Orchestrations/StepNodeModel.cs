@@ -31,6 +31,10 @@ public sealed class StepNodeModel : NodeModel
     /// <summary>Metric line shown under the card while running/done (token/cost/latency).</summary>
     public string? RunMeta { get; set; }
 
+    /// <summary>Failure detail captured when a node ends <see cref="NodeRunState.Failed"/>. Surfaced in the
+    /// run drawer so "why did this node fail" is answerable without scrubbing the whole log.</summary>
+    public string? RunMessage { get; set; }
+
     /// <summary>Callback to open the inspector for this node (set by the page; invoked by the widget on the ✎ button).</summary>
     public Action? RequestEdit { get; set; }
 }

@@ -11,6 +11,12 @@
         {
             <span class="sn-start">START</span>
         }
+        @* Run status is read straight off the node — a ring/spinner/check/cross that tracks the live
+           execution, so progress is legible on the card itself, not only in the log. Hidden at idle. *@
+        @if (Node.RunState != NodeRunState.Idle)
+        {
+            <span class="sn-status stat-@RunClass" title="@StatusTitle" aria-label="@StatusTitle">@StatusGlyph</span>
+        }
         <button class="sn-edit" @onclick="@(() => Node.RequestEdit?.Invoke())" @onclick:stopPropagation="true" title="Edit">✎</button>
     </div>
 
@@ -71,6 +77,26 @@
         NodeRunState.Failed => "failed",
         NodeRunState.Skipped => "skipped",
         _ => "idle",
+    };
+
+    // A glyph, not an icon-font call, so the status dot renders identically inside the SVG-hosted canvas
+    // node (Z.Blazor.Diagrams) where the Icon component's sizing does not apply.
+    private string StatusGlyph => Node.RunState switch
+    {
+        NodeRunState.Running => "",          // the ring is animated in CSS; the glyph stays empty
+        NodeRunState.Done => "✓",       // ✓
+        NodeRunState.Failed => "✕",     // ✕
+        NodeRunState.Skipped => "–",    // –
+        _ => string.Empty,
+    };
+
+    private string StatusTitle => Node.RunState switch
+    {
+        NodeRunState.Running => "Running",
+        NodeRunState.Done => "Done",
+        NodeRunState.Failed => "Failed",
+        NodeRunState.Skipped => "Skipped",
+        _ => string.Empty,
     };
 
     private string Icon => Data.Category switch

@@ -11,6 +11,9 @@
 @using AgentOs.Domain.Pipeline.Graph
 @using AgentOs.Web.Services
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@using System.Text.Json
 @inject OrchestrationStore Store
 @inject GraphRunnerService GraphRunner
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
@@ -21,179 +24,299 @@
 <PageTitle>Workflow — AgentOS</PageTitle>
 
 <div class="syn-root">
-
-    <!-- ============ MAIN (chromeless workspace) ============ -->
     <div class="syn-main">
 
-        <!-- compact toolbar — replaces topbar + toolbar bands -->
+        @* ---- slim toolbar: workflow switch, name, live provider, Save, Run, overflow ---- *@
         <div class="syn-toolbar">
-            <select class="syn-select" value="@_graph.Id" @onchange="OnSelectGraph" title="Active graph">
+            <select class="syn-select" value="@_graph.Id" @onchange="OnSelectGraph" title="Active workflow" aria-label="Active workflow">
                 @foreach (var g in _all)
                 {
                     <option value="@g.Id">@g.Name</option>
                 }
             </select>
-            <button class="syn-btn" @onclick="NewGraph" title="New graph">+ New</button>
+            <button class="syn-btn" @onclick="NewGraph" title="New workflow">+ New</button>
+            <button class="syn-btn primary" @onclick="OpenPalette" title="Add a node (⌘K)"><Icon Name="plus" Size="13" /> Add <kbd class="syn-kbd">⌘K</kbd></button>
+            <button class="syn-btn icon" @onclick="Undo" disabled="@(!CanUndo)" title="Undo (⌘Z)" aria-label="Undo"><Icon Name="arrow-uturn-left" Size="14" /></button>
+            <button class="syn-btn icon" @onclick="Redo" disabled="@(!CanRedo)" title="Redo (⌘⇧Z)" aria-label="Redo"><Icon Name="arrow-uturn-right" Size="14" /></button>
+            <input class="syn-name" @bind="_graph.Name" @bind:event="oninput" aria-label="Workflow name" />
 
             <div class="syn-spacer"></div>
 
-            <button class="syn-btn" @onclick="Save" title="Save graph">
-                <Icon Name="floppy-disk" Size="13" /> Save
-            </button>
-            <span class="syn-live-tag" title="Active LLM provider">
-                <Icon Name="lightning" Size="11" /> Live · @ActiveProvider
-            </span>
-            <button class="syn-btn green" @onclick="Run" disabled="@_running" title="Run graph">
-                <Icon Name="play" Size="13" /> @(_running ? "Running…" : "Run")
-            </button>
-            <button class="syn-btn" @onclick="Duplicate" title="Duplicate graph">Duplicate</button>
-            <button class="syn-btn ghost" @onclick="DeleteGraph" title="Delete graph">
-                <Icon Name="trash" Size="13" /> Delete
-            </button>
-            <button class="syn-btn ghost" @onclick="@(() => _bottomOpen = !_bottomOpen)" title="@(_bottomOpen ? "Hide bottom panel" : "Show bottom panel")">
-                <Icon Name="@(_bottomOpen ? "minus" : "squares-stack")" Size="13" /> Panel
-            </button>
+            <span class="syn-live-tag" title="Active LLM provider"><Icon Name="lightning" Size="11" /> Live · @ActiveProvider</span>
+            <button class="syn-btn" @onclick="Save" title="Save workflow"><Icon Name="floppy-disk" Size="13" /> Save</button>
+            <button class="syn-btn green" @onclick="Run" disabled="@_running" title="Run workflow"><Icon Name="play" Size="13" /> @(_running ? "Running…" : "Run")</button>
+
+            <div class="syn-menu">
+                <button class="syn-btn ghost syn-menu-btn" @onclick="ToggleMenu" title="More actions" aria-label="More actions" aria-haspopup="true" aria-expanded="@_menuOpen">⋯</button>
+                @if (_menuOpen)
+                {
+                    <div class="syn-menu-pop">
+                        <button @onclick="Duplicate"><Icon Name="squares-stack" Size="13" /> Duplicate</button>
+                        <button @onclick="TogglePanelFromMenu"><Icon Name="terminal" Size="13" /> @(_bottomOpen ? "Hide run panel" : "Show run panel")</button>
+                        <div class="menu-sep"></div>
+                        <button class="danger" @onclick="DeleteGraph"><Icon Name="trash" Size="13" /> Delete workflow</button>
+                    </div>
+                }
+            </div>
         </div>
 
-        <!-- name + desc -->
-        <div class="syn-namerow">
-            <input class="syn-name" @bind="_graph.Name" @bind:event="oninput" />
-            <input class="syn-desc" @bind="_graph.Description" @bind:event="oninput" placeholder="Workflow description…" />
-        </div>
+        @* ---- three regions: node library · canvas + run drawer · inspector ---- *@
+        <div class="syn-workarea">
 
-        <!-- add step palette -->
-        <div class="syn-palette">
-            <span class="lbl">Add step:</span>
-            @foreach (var st in PaletteOrder)
-            {
-                <button class="syn-step" @onclick="@(() => AddNode(st))">@StepIcon(st) @StepName(st)</button>
-            }
-        </div>
+            @* LEFT — searchable node library (progressive disclosure; replaces the old always-on chip strip) *@
+            <aside class="syn-rail" aria-label="Node library">
+                <div class="rail-search">
+                    <Icon Name="search" Size="12" />
+                    <input @bind="_nodeSearch" @bind:event="oninput" placeholder="Search nodes…" aria-label="Search nodes" />
+                </div>
+                <div class="rail-list">
+                    @foreach (var grp in NodeLibrary)
+                    {
+                        var items = grp.Types.Where(MatchesSearch).ToList();
+                        @if (items.Count > 0)
+                        {
+                            <div class="rail-group">
+                                <div class="rail-group-h">@grp.Label</div>
+                                @foreach (var st in items)
+                                {
+                                    <button class="rail-node cat-@CategoryClass(st)" @onclick="@(() => AddNode(st))" title="@NodeHint(st)">
+                                        <span class="rn-ic">@StepIcon(st)</span>
+                                        <span class="rn-tx">
+                                            <span class="rn-nm">@StepName(st)</span>
+                                            <span class="rn-ds">@NodeHint(st)</span>
+                                        </span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    }
+                    @if (NodeLibrary.SelectMany(g => g.Types).Any(MatchesSearch) == false)
+                    {
+                        <p class="rail-none">No node matches “@_nodeSearch”.</p>
+                    }
+                </div>
+            </aside>
 
-        <!-- canvas -->
-        <div class="syn-canvas">
-            <CascadingValue Value="_diagram" IsFixed="false">
-                <DiagramCanvas @key="_graph.Id">
-                    <Widgets>
-                        @* BackgroundColor="transparent" lets .syn-canvas tokens win — auto-flip light/dark. *@
-                        <GridWidget Size="26" Mode="GridMode.Point" BackgroundColor="transparent" />
-                        <SelectionBoxWidget />
-                        <NavigatorWidget Width="190" Height="120"
-                                         Class="syn-navigator" Style="position:absolute; bottom:14px; right:14px;" />
-                    </Widgets>
-                </DiagramCanvas>
-            </CascadingValue>
+            @* CENTER — canvas + collapsible run drawer *@
+            <div class="syn-center">
+                <div class="syn-canvas">
+                    <CascadingValue Value="_diagram" IsFixed="false">
+                        <DiagramCanvas @key="@($"{_graph.Id}:{_diagramVersion}")">
+                            <Widgets>
+                                @* BackgroundColor="transparent" lets .syn-canvas tokens win — auto-flip light/dark. *@
+                                <GridWidget Size="26" Mode="GridMode.Point" BackgroundColor="transparent" />
+                                <SelectionBoxWidget />
+                                <NavigatorWidget Width="180" Height="112"
+                                                 Class="syn-navigator" Style="position:absolute; bottom:14px; right:14px;" />
+                            </Widgets>
+                        </DiagramCanvas>
+                    </CascadingValue>
 
-            <div class="syn-zoom">
-                <button @onclick="@(() => _diagram.SetZoom(Math.Min(2.0, _diagram.Zoom * 1.2)))">+</button>
-                <button @onclick="@(() => _diagram.SetZoom(Math.Max(0.2, _diagram.Zoom * 0.83)))">−</button>
-                <button @onclick="@(() => _diagram.ZoomToFit(60))" title="Fit"><Icon Name="square" Size="13" /></button>
+                    @if (_graph.Nodes.Count == 0)
+                    {
+                        <div class="syn-empty">
+                            <div class="se-ic"><Icon Name="graph" Size="26" /></div>
+                            <div class="se-t">Empty workflow</div>
+                            <div class="se-s">Pick a node from the library to start building.</div>
+                        </div>
+                    }
+
+                    <div class="syn-zoom">
+                        <button @onclick="ZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+                        <span class="zoom-pct" title="Zoom level">@ZoomPct%</span>
+                        <button @onclick="ZoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+                        <button @onclick="ZoomFit" title="Fit to view" aria-label="Fit to view"><Icon Name="square" Size="12" /></button>
+                    </div>
+
+                    @if (_humanRequest is not null)
+                    {
+                        <div class="syn-human">
+                            <div class="hm-head"><Icon Name="user" Size="12" /> Human checkpoint · @_humanRequest.Title</div>
+                            <div class="hm-q">@_humanRequest.Question</div>
+                            @if (!string.IsNullOrWhiteSpace(_humanRequest.Context))
+                            {
+                                <div class="hm-ctx">@_humanRequest.Context</div>
+                            }
+                            <input class="hm-note" @bind="_humanNote" @bind:event="oninput" placeholder="Optional note / answer…" />
+                            <div class="hm-actions">
+                                <button class="syn-btn ghost" @onclick="RejectHuman"><Icon Name="x" Size="13" /> Reject</button>
+                                <button class="syn-btn green" @onclick="ApproveHuman"><Icon Name="check" Size="13" /> Approve</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (_bottomOpen)
+                {
+                    <div class="syn-bottom">
+                        <TabStrip Tabs="BottomTabs"
+                                  Active="@_bottomTab.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                  ActiveChanged="key => _bottomTab = int.Parse(key, System.Globalization.CultureInfo.InvariantCulture)"
+                                  AriaLabel="Workflow details"
+                                  ContainerClass="syn-tabs"
+                                  TabClass="syn-tab" />
+                        <div class="syn-bottom-body">
+                            @if (_bottomTab == 0)
+                            {
+                                <p class="muted">Design note — describes the shared state; saved with the graph, not enforced during Run.</p>
+                                <textarea class="syn-code" @bind="_graph.StateSchemaJson" spellcheck="false"></textarea>
+                            }
+                            else if (_bottomTab == 1)
+                            {
+                                @if (_graph.Guardrails.Count == 0)
+                                {
+                                    <p class="muted">No guardrails yet.</p>
+                                }
+                                else
+                                {
+                                    <p class="muted">Reference list — saved with the graph, not yet enforced during Run.</p>
+                                }
+                                <ul class="syn-guard">@foreach (var g in _graph.Guardrails){<li><Icon Name="lock" Size="12" /> @g</li>}</ul>
+                            }
+                            else if (_bottomTab == 2)
+                            {
+                                <div class="syn-runrow">
+                                    <input class="syn-runinput" @bind="_runInput" placeholder="Initial input for the orchestration…" />
+                                </div>
+                                @if (_runLog.Count == 0)
+                                {
+                                    <p class="muted">No run output yet. Click Run to start.</p>
+                                }
+                                else
+                                {
+                                    <div class="syn-log">@foreach (var l in _runLog){<div class="ln">@l</div>}</div>
+                                }
+                            }
+                            else
+                            {
+                                @if (_recent.Count == 0)
+                                {
+                                    <p class="muted">No runs yet. Click Run to start one.</p>
+                                }
+                                else
+                                {
+                                    <ul class="syn-runs">
+                                        @foreach (var r in _recent)
+                                        {
+                                            <li>
+                                                <span class="rr-dot @(r.Completed ? "ok" : "err")"></span>
+                                                <span class="rr-name">@r.GraphName</span>
+                                                <span class="rr-detail">@r.Detail</span>
+                                                <span class="rr-when">@r.At.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                    <p class="muted">Recent runs this session (in-memory — full history lives in the Pipeline run store).</p>
+                                }
+                            }
+                        </div>
+                    </div>
+                }
             </div>
 
-            @if (_selected is not null)
-            {
-                <div class="syn-inspector">
-                    <div class="ins-head">
-                        <span>@StepName(_selected.Data.Type) · node</span>
-                        <button class="ins-x" @onclick="CloseInspector" aria-label="Close inspector"><Icon Name="x" Size="12" /></button>
+            @* RIGHT — docked inspector (persistent; empty-state when nothing is selected) *@
+            <aside class="@DockClass" aria-label="Node inspector">
+                @if (_selected is not null)
+                {
+                    <div class="dock-head">
+                        <span class="dh-cat cat-@CategoryClass(_selected.Data.Type)">@StepName(_selected.Data.Type)</span>
+                        <span class="dh-t">node</span>
+                        <button class="dh-x" @onclick="CloseInspector" aria-label="Deselect node"><Icon Name="x" Size="12" /></button>
                     </div>
-                    <label>Title
-                        <input @bind="_selected.Data.Title" @bind:event="oninput" @bind:after="InspectorChanged" />
-                    </label>
-                    @if (_selected.Data.Type == StepType.Agent)
-                    {
-                        <label>Role (Requirement / Coding / Testing / Qa)
-                            <input @bind="_selected.Data.AgentRole" @bind:event="oninput" @bind:after="InspectorChanged" />
+                    <div class="dock-body">
+                        <label class="dock-f">Title
+                            <input @bind="_selected.Data.Title" @bind:event="oninput" @bind:after="InspectorChanged" />
                         </label>
-                    }
-                    <label>Description
-                        <textarea @bind="_selected.Data.Description" @bind:event="oninput" @bind:after="InspectorChanged"></textarea>
-                    </label>
-                    <div class="ins-row">
-                        <label>in:<input @bind="_selected.Data.Input" @bind:event="oninput" @bind:after="InspectorChanged" /></label>
-                        <label>out:<input @bind="_selected.Data.Output" @bind:event="oninput" @bind:after="InspectorChanged" /></label>
-                    </div>
-                    <div class="ins-row">
-                        <label>max iterations<input type="number" min="0" max="10" @bind="_selected.Data.MaxIterations" @bind:after="InspectorChanged" /></label>
-                    </div>
-                    @if (_selected.Data.Category == StepCategory.Evaluator)
-                    {
-                        <label>routes (comma-separated)
-                            <input @bind="RoutesText" @bind:event="oninput" @bind:after="InspectorChanged" />
+                        @if (_selected.Data.Type == StepType.Agent)
+                        {
+                            <label class="dock-f">Role (Requirement / Coding / Testing / Qa)
+                                <input @bind="_selected.Data.AgentRole" @bind:event="oninput" @bind:after="InspectorChanged" />
+                            </label>
+                        }
+                        <label class="dock-f">Description
+                            <textarea @bind="_selected.Data.Description" @bind:event="oninput" @bind:after="InspectorChanged"></textarea>
                         </label>
-                    }
-                    <button class="ins-del" @onclick="DeleteSelectedNode"><Icon Name="trash" Size="13" /> Delete node</button>
-                </div>
-            }
+                        <div class="dock-row">
+                            <label class="dock-f">in<input @bind="_selected.Data.Input" @bind:event="oninput" @bind:after="InspectorChanged" /></label>
+                            <label class="dock-f">out<input @bind="_selected.Data.Output" @bind:event="oninput" @bind:after="InspectorChanged" /></label>
+                        </div>
+                        <div class="dock-row">
+                            <label class="dock-f">max iterations<input type="number" min="0" max="10" @bind="_selected.Data.MaxIterations" @bind:after="InspectorChanged" /></label>
+                        </div>
+                        @if (_selected.Data.Category == StepCategory.Evaluator)
+                        {
+                            <label class="dock-f">routes (comma-separated)
+                                <input @bind="RoutesText" @bind:event="oninput" @bind:after="InspectorChanged" />
+                            </label>
+                        }
 
-            @if (_humanRequest is not null)
-            {
-                <div class="syn-human">
-                    <div class="hm-head"><Icon Name="user" Size="12" /> Human checkpoint · @_humanRequest.Title</div>
-                    <div class="hm-q">@_humanRequest.Question</div>
-                    @if (!string.IsNullOrWhiteSpace(_humanRequest.Context))
-                    {
-                        <div class="hm-ctx">@_humanRequest.Context</div>
-                    }
-                    <input class="hm-note" @bind="_humanNote" @bind:event="oninput" placeholder="Optional note / answer…" />
-                    <div class="hm-actions">
-                        <button class="syn-btn ghost" @onclick="RejectHuman"><Icon Name="x" Size="13" /> Reject</button>
-                        <button class="syn-btn green" @onclick="ApproveHuman"><Icon Name="check" Size="13" /> Approve</button>
-                    </div>
-                </div>
-            }
-        </div>
+                        @if (_selected.RunState != NodeRunState.Idle)
+                        {
+                            <div class="dock-run run-@RunClassOf(_selected.RunState)">
+                                <div class="dr-h"><span class="dr-dot"></span> Run · @RunLabel(_selected.RunState)</div>
+                                @if (!string.IsNullOrWhiteSpace(_selected.RunMeta))
+                                {
+                                    <div class="dr-meta">@_selected.RunMeta</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(_selected.RunMessage))
+                                {
+                                    <div class="dr-msg">@_selected.RunMessage</div>
+                                }
+                            </div>
+                        }
 
-        <!-- bottom panel — collapsible -->
-        @if (_bottomOpen)
-        {
-        <div class="syn-bottom">
-            <TabStrip Tabs="BottomTabs"
-                      Active="@_bottomTab.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                      ActiveChanged="key => _bottomTab = int.Parse(key, System.Globalization.CultureInfo.InvariantCulture)"
-                      AriaLabel="Workflow details"
-                      ContainerClass="syn-tabs"
-                      TabClass="syn-tab" />
-            <div class="syn-bottom-body">
-                @if (_bottomTab == 0)
-                {
-                    <p class="muted">Design note — describes the shared state; saved with the graph, not enforced during Run.</p>
-                    <textarea class="syn-code" @bind="_graph.StateSchemaJson" spellcheck="false"></textarea>
-                }
-                else if (_bottomTab == 1)
-                {
-                    @if (_graph.Guardrails.Count == 0)
-                    {
-                        <p class="muted">No guardrails yet.</p>
-                    }
-                    else
-                    {
-                        <p class="muted">Reference list — saved with the graph, not yet enforced during Run.</p>
-                    }
-                    <ul class="syn-guard">@foreach (var g in _graph.Guardrails){<li><Icon Name="lock" Size="12" /> @g</li>}</ul>
-                }
-                else if (_bottomTab == 2)
-                {
-                    <div class="syn-runrow">
-                        <input class="syn-runinput" @bind="_runInput" placeholder="Initial input for the orchestration…" />
+                        <button class="dock-del" @onclick="DeleteSelectedNode"><Icon Name="trash" Size="13" /> Delete node</button>
                     </div>
-                    @if (_runLog.Count == 0)
-                    {
-                        <p class="muted">No run output yet. Click Run to start.</p>
-                    }
-                    else
-                    {
-                        <div class="syn-log">@foreach (var l in _runLog){<div class="ln">@l</div>}</div>
-                    }
                 }
                 else
                 {
-                    <p class="muted">@_recentRuns recent runs (demo — history not persisted).</p>
+                    <div class="dock-empty">
+                        <div class="de-ic"><Icon Name="gear" Size="20" /></div>
+                        <div class="de-t">No node selected</div>
+                        <div class="de-s">Click a node to edit it, or add one from the library.</div>
+                    </div>
                 }
+            </aside>
+        </div>
+    </div>
+
+    @* Command palette — centred quick-add over the whole app (⌘K or the toolbar "+ Add"). *@
+    @if (_paletteOpen)
+    {
+        <div class="syn-palette-scrim" @onclick="ClosePalette">
+            <div class="syn-palette" @onclick:stopPropagation="true">
+                <div class="pal-search">
+                    <Icon Name="search" Size="13" />
+                    <input @ref="_paletteInput" @bind="_paletteSearch" @bind:event="oninput" @bind:after="PaletteSearchChanged"
+                           @onkeydown="PaletteKey" placeholder="Add a node — type to filter…" aria-label="Add a node" />
+                    <kbd class="syn-kbd">Esc</kbd>
+                </div>
+                <div class="pal-list">
+                    @{ var pm = PaletteMatches; }
+                    @if (pm.Count == 0)
+                    {
+                        <p class="pal-none">No node matches “@_paletteSearch”.</p>
+                    }
+                    else
+                    {
+                        @for (var i = 0; i < pm.Count; i++)
+                        {
+                            var st = pm[i];
+                            var active = i == _paletteIndex;
+                            <button class="pal-item cat-@CategoryClass(st) @(active ? "active" : "")" @onclick="@(() => PaletteAdd(st))">
+                                <span class="pi-ic">@StepIcon(st)</span>
+                                <span class="pi-tx"><span class="pi-nm">@StepName(st)</span><span class="pi-ds">@NodeHint(st)</span></span>
+                                @if (active)
+                                {
+                                    <kbd class="syn-kbd">↵</kbd>
+                                }
+                            </button>
+                        }
+                    }
+                </div>
             </div>
         </div>
-        }
-    </div>
+    }
 </div>
 
 @code {
@@ -216,13 +339,50 @@
         new("0", "State Schema"),
         new("1", "Guardrails"),
         new("2", "Run Log"),
-        new("3", "Recent Runs", _recentRuns.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        new("3", "Recent Runs", _recent.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
     ];
     private bool _bottomOpen;          // collapsed by default — gives canvas full height
     private string _runInput = string.Empty;
     private readonly List<string> _runLog = [];
     private bool _running;
-    private int _recentRuns;
+    // Recent runs for this tenant, read from the (session-scoped) store so the list survives closing and
+    // reopening the Workflow window — the old int counter reset on every dispose.
+    private IReadOnlyList<OrchestrationRunRecord> _recent = [];
+
+    private void RecordRunOutcome(bool completed, string detail)
+    {
+        Store.RecordRun(_tenantId, new OrchestrationRunRecord(_graph.Name, DateTimeOffset.Now, completed, detail));
+        _recent = Store.RecentRuns(_tenantId);
+    }
+
+    // Toolbar overflow menu (Duplicate / panel toggle / Delete) + node-library search box.
+    private bool _menuOpen;
+    private string _nodeSearch = string.Empty;
+
+    // Command palette (⌘K / "+ Add") — a centred quick-add over the canvas. Keyboard-first: type to
+    // filter, ↑/↓ to move, Enter to add the highlighted node, Esc to close.
+    private bool _paletteOpen;
+    private string _paletteSearch = string.Empty;
+    private int _paletteIndex;
+    private ElementReference _paletteInput;
+    private DotNetObjectReference<OrchestrationStudio>? _selfRef;
+
+    // The flat, search-filtered node list the palette shows (all groups, in library order).
+    private List<StepType> PaletteMatches => NodeLibrary
+        .SelectMany(g => g.Types)
+        .Where(t => string.IsNullOrWhiteSpace(_paletteSearch)
+            || StepName(t).Contains(_paletteSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+            || NodeHint(t).Contains(_paletteSearch.Trim(), StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    // Live zoom % for the canvas cluster. Kept in sync from the diagram on each zoom action so the readout
+    // never drifts from the actual transform.
+    private int _zoomPct = 100;
+    private int ZoomPct => _zoomPct;
+
+    // Computed so the class attribute is a single expression — an inline `@(_selected is null ? …)` in a
+    // class="" is misread by the phantom-CSS scanner (it tokenises `is`/`null` as class names).
+    private string DockClass => _selected is null ? "syn-dock empty" : "syn-dock";
 
     // Human-in-the-loop: a Human node pauses the run here until the operator Approves/Rejects. The executor
     // awaits the TCS; the buttons complete it. Per-circuit state (the studio service is scoped).
@@ -235,12 +395,57 @@
     private LlmEffectiveConfig? _llm;
     private string ActiveProvider => _llm?.ChipLabel ?? LlmOpts.Value.Provider;
 
-    private static readonly StepType[] PaletteOrder =
+    // The node library, grouped the way a builder reads it (Agents / Flow / Data / Control) rather than a
+    // flat 14-chip strip. Drives the left rail; search filters within groups.
+    private sealed record NodeGroup(string Label, StepType[] Types);
+    private static readonly NodeGroup[] NodeLibrary =
     [
-        StepType.Llm, StepType.Agent, StepType.Tool, StepType.Evaluator, StepType.Parallel,
-        StepType.Merge, StepType.Loop, StepType.Human, StepType.Transform, StepType.ExtractJson,
-        StepType.IfElse, StepType.Switch, StepType.Print, StepType.End,
+        new("Agents", [StepType.Agent, StepType.Llm]),
+        new("Flow",   [StepType.IfElse, StepType.Switch, StepType.Evaluator, StepType.Loop, StepType.Parallel, StepType.Merge]),
+        new("Data",   [StepType.Tool, StepType.Transform, StepType.ExtractJson]),
+        new("Control",[StepType.Human, StepType.Print, StepType.End]),
     ];
+
+    // Matches the search box against a node's name + one-line hint (case-insensitive; empty = show all).
+    private bool MatchesSearch(StepType t)
+    {
+        if (string.IsNullOrWhiteSpace(_nodeSearch)) { return true; }
+        var q = _nodeSearch.Trim();
+        return StepName(t).Contains(q, StringComparison.OrdinalIgnoreCase)
+            || NodeHint(t).Contains(q, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // One-line description shown under each library node — enough to pick without opening docs.
+    private static string NodeHint(StepType t) => t switch
+    {
+        StepType.Agent => "A specialist agent (Requirement / Coding / Testing / QA).",
+        StepType.Llm => "A raw LLM call with your own prompt.",
+        StepType.Tool => "Invoke a governed tool (build, GitHub, MCP).",
+        StepType.Evaluator => "Score the state and branch on the result.",
+        StepType.Parallel => "Fan out into several paths at once.",
+        StepType.Merge => "Join parallel paths back together.",
+        StepType.Loop => "Repeat a section until a condition holds.",
+        StepType.Human => "Pause for an operator to approve or reject.",
+        StepType.Transform => "Reshape the state between steps.",
+        StepType.ExtractJson => "Pull structured JSON out of text.",
+        StepType.IfElse => "Binary branch on a condition.",
+        StepType.Switch => "Branch into many paths by value.",
+        StepType.Print => "Log a value to the run output.",
+        StepType.End => "Terminate the workflow.",
+        _ => string.Empty,
+    };
+
+    // The category class the rail node + inspector chip share with the canvas card CSS (cat-agent, …).
+    // Mirrors GraphNode.Category so a library node is tinted the same colour it will be on the canvas.
+    private static string CategoryClass(StepType t) => t switch
+    {
+        StepType.Agent => "agent",
+        StepType.Evaluator or StepType.IfElse or StepType.Switch => "evaluator",
+        StepType.Human => "human",
+        StepType.Llm => "llm",
+        StepType.End => "terminal",
+        _ => "logic",
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -249,6 +454,7 @@
         // fault must not crash the circuit on window open — fall back to appsettings (ActiveProvider handles null).
         _llm = CircuitSafe.OrDefault(() => LlmConfig.Resolve(_tenantId), null);
         _all = Store.All(_tenantId).ToList();
+        _recent = Store.RecentRuns(_tenantId);   // session-scoped list survives window reopen
         _graph = _all.FirstOrDefault() ?? Store.Create(_tenantId, "5-Agent SDLC Pipeline");
         if (_all.Count == 0)
         {
@@ -269,8 +475,14 @@
     // Theme + wallpaper now live in System -> Appearance; this studio no longer keeps a
     // local toggle so there is one canonical theme source.
 
+    // Bumped on every rebuild so the DiagramCanvas @key changes even when the graph id does not — otherwise
+    // an undo/redo that restores the SAME graph leaves the canvas bound to the previous BlazorDiagram
+    // instance and the change never renders.
+    private int _diagramVersion;
+
     private void BuildDiagram()
     {
+        _diagramVersion++;
         _nodeModels.Clear();
         var opts = new BlazorDiagramOptions
         {
@@ -341,13 +553,19 @@
 
     private void AddNode(StepType type)
     {
+        PushUndo();
+        // Adding while a node is selected wires the new one AFTER it — the n8n "add the next step" gesture,
+        // so building a chain is one click per step instead of add-then-drag-an-edge. Capture the anchor
+        // before OpenInspector moves the selection to the new node.
+        var from = _selected;
+        var (x, y) = NextNodePosition();
         var node = new GraphNode
         {
             Id = OrchestrationStore.NewId(),
             Type = type,
             Title = StepName(type),
-            X = 120 + _graph.Nodes.Count * 18 % 360,
-            Y = 120 + _graph.Nodes.Count * 36 % 280,
+            X = x,
+            Y = y,
             MaxIterations = type is StepType.Loop or StepType.Agent or StepType.Evaluator ? 3 : 0,
             Routes = type is StepType.Evaluator or StepType.IfElse ? ["yes", "no"] : [],
         };
@@ -356,7 +574,45 @@
         m.RequestEdit = () => OpenInspector(m);
         _diagram.Nodes.Add(m);
         _nodeModels[node.Id] = m;
+        if (from is not null)
+        {
+            ConnectNodes(from, m);
+        }
         OpenInspector(m);
+    }
+
+    // Draw an edge source→target on the canvas AND record it on the graph, mirroring how BuildDiagram
+    // materialises persisted edges, so an auto-wired connection survives Save/reload like a hand-drawn one.
+    private void ConnectNodes(StepNodeModel s, StepNodeModel t)
+    {
+        var (sp, tp) = PickPorts(s, t);
+        _diagram.Links.Add(new LinkModel(sp, tp));
+        _graph.Edges.Add(new GraphEdge
+        {
+            Id = OrchestrationStore.NewId(),
+            SourceId = s.Data.Id,
+            TargetId = t.Data.Id,
+            Label = string.Empty,
+        });
+    }
+
+    // Place a new node to the RIGHT of the current rightmost one, on the same row — so it reads as "the
+    // next step" and never lands on top of an existing card. The old `X = 120 + count*18 % 360` wrapped
+    // every ~20 nodes and stacked them into an unreadable pile. When a node is selected we anchor to it so
+    // "add after this" lands where the eye is.
+    private (double X, double Y) NextNodePosition()
+    {
+        const double stepX = 224;   // node width (188) + gutter
+        if (_selected is not null)
+        {
+            return (_selected.Data.X + stepX, _selected.Data.Y);
+        }
+        if (_graph.Nodes.Count == 0)
+        {
+            return (140, 150);
+        }
+        var rightmost = _graph.Nodes.OrderByDescending(n => n.X).First();
+        return (rightmost.X + stepX, rightmost.Y);
     }
 
     private void OpenInspector(StepNodeModel m)
@@ -393,6 +649,7 @@
         {
             return;
         }
+        PushUndo();
         var id = _selected.Data.Id;
         _graph.Nodes.RemoveAll(n => n.Id == id);
         _graph.Edges.RemoveAll(e => e.SourceId == id || e.TargetId == id);
@@ -496,7 +753,7 @@
             }
             Log("■ Not runnable — need exactly one Start and every node on the path supported.");
             _running = false;
-            _recentRuns++;
+            RecordRunOutcome(false, "not runnable");
             await InvokeAsync(StateHasChanged);
             return;
         }
@@ -506,6 +763,10 @@
             .Where(n => n.Type == StepType.Evaluator || string.Equals(n.AgentRole, "Qa", StringComparison.OrdinalIgnoreCase))
             .Select(n => n.MaxIterations).FirstOrDefault();
         if (nMax <= 0) { nMax = 3; }
+
+        // Outcome captured by the closure below and recorded once the run settles (recent-runs list).
+        var completed = false;
+        var detail = "stopped";
 
         // The budget gate (DB read) + run persistence run outside the MAF per-node failure capture; any
         // throw (DbException/DbUpdateException/…) must log + reset state, never tear down the circuit.
@@ -527,7 +788,7 @@
                                 GraphNodePhase.Skipped => NodeRunState.Skipped,
                                 _ => NodeRunState.Idle,
                             };
-                            SetNode(node, state, ev.Meta);
+                            SetNode(node, state, ev.Meta, ev.Message);
                         }
                         if (ev.Phase == GraphNodePhase.Running) { Log($"▷ {NodeTitle(ev.NodeId)}…"); }
                         else if (ev.Phase == GraphNodePhase.Done) { Log($"✓ {NodeTitle(ev.NodeId)}{(string.IsNullOrEmpty(ev.Meta) ? "" : "  ·  " + ev.Meta)}"); }
@@ -535,30 +796,196 @@
                         StateHasChanged();
                     }), HumanPromptAsync, ct);
 
+                    completed = result.Completed;
+                    detail = result.Completed ? "completed" : (result.FailureMessage ?? "stopped");
                     Log(result.Completed ? "■ Workflow complete." : $"✖ Stopped: {result.FailureMessage}");
                 }
                 catch (OperationCanceledException)
                 {
+                    detail = "cancelled";
                     Log("⏹ Run cancelled.");
                 }
             },
-            ex => Log($"✖ Run failed: {ex.Message}"));
+            ex => { detail = ex.Message; Log($"✖ Run failed: {ex.Message}"); });
         _running = false;
-        _recentRuns++;
+        RecordRunOutcome(completed, detail);
         await InvokeAsync(StateHasChanged);
     }
 
     private string NodeTitle(string id) => _graph.Nodes.FirstOrDefault(n => n.Id == id)?.Title ?? id;
 
-    private void SetNode(GraphNode node, NodeRunState state, string? meta)
+    private void SetNode(GraphNode node, NodeRunState state, string? meta, string? message = null)
     {
         if (_nodeModels.TryGetValue(node.Id, out var m))
         {
             m.RunState = state;
             m.RunMeta = meta;
+            // Only overwrite the failure detail when we actually have one — a later Running/Done event for
+            // the same node (e.g. a QA loop re-entry) must not wipe a message we still want to show.
+            if (!string.IsNullOrWhiteSpace(message)) { m.RunMessage = message; }
+            else if (state is NodeRunState.Running or NodeRunState.Idle) { m.RunMessage = null; }
             m.Refresh();
         }
     }
+
+    // ---- zoom cluster ----
+    private void ZoomIn() => ApplyZoom(Math.Min(2.0, _diagram.Zoom * 1.2));
+    private void ZoomOut() => ApplyZoom(Math.Max(0.2, _diagram.Zoom * 0.83));
+    private void ApplyZoom(double z)
+    {
+        _diagram.SetZoom(z);
+        _zoomPct = (int)Math.Round(_diagram.Zoom * 100);
+    }
+    private void ZoomFit()
+    {
+        _diagram.ZoomToFit(60);
+        // "Fit to view" should frame the whole graph, never zoom IN past 1:1 — the diagram lib's
+        // ZoomToFit can over-zoom onto a small/just-measured bounding box (e.g. right after adding a node).
+        if (_diagram.Zoom > 1.0) { _diagram.SetZoom(1.0); }
+        _zoomPct = (int)Math.Round(_diagram.Zoom * 100);
+    }
+
+    // ---- undo / redo (snapshot-based) ----
+    // Each structural edit deep-copies the whole graph (nodes + edges + positions) via JSON and pushes it.
+    // Snapshot-of-model beats a command stack here: the graph IS the serializable source of truth, so undo
+    // is "restore this snapshot + rebuild the canvas" with no per-operation inverse to get wrong. Covers the
+    // operations that go through the app — add node, delete node, and the auto-connect that rides on add.
+    // A manual canvas edge-draw or a node drag is folded into the next snapshot rather than individually
+    // undoable; that keeps this free of re-entrant diagram-event coupling.
+    private static readonly JsonSerializerOptions SnapshotJson = new()
+    {
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+    };
+    private readonly Stack<string> _undo = new();
+    private readonly Stack<string> _redo = new();
+    private const int MaxUndo = 50;
+    private bool CanUndo => _undo.Count > 0;
+    private bool CanRedo => _redo.Count > 0;
+
+    private string Snapshot()
+    {
+        SyncFromCanvas();   // fold current node positions + drawn edges into the model before copying
+        return JsonSerializer.Serialize(_graph, SnapshotJson);
+    }
+
+    private void Restore(string json)
+    {
+        var g = JsonSerializer.Deserialize<OrchestrationGraph>(json, SnapshotJson);
+        if (g is null) { return; }
+        _graph = g;
+        _selected = null;
+        BuildDiagram();
+    }
+
+    // Call BEFORE mutating the graph, so the pre-edit state is what an undo returns to.
+    private void PushUndo()
+    {
+        _undo.Push(Snapshot());
+        _redo.Clear();
+        // Bound the history — drop the oldest by rebuilding without it (Stack has no bottom-trim).
+        if (_undo.Count > MaxUndo)
+        {
+            var kept = _undo.ToArray().Take(MaxUndo).Reverse().ToArray();
+            _undo.Clear();
+            foreach (var s in kept) { _undo.Push(s); }
+        }
+    }
+
+    private void Undo()
+    {
+        if (_undo.Count == 0) { return; }
+        _redo.Push(Snapshot());
+        Restore(_undo.Pop());
+    }
+
+    private void Redo()
+    {
+        if (_redo.Count == 0) { return; }
+        _undo.Push(Snapshot());
+        Restore(_redo.Pop());
+    }
+
+    // Global Ctrl/⌘+Z (undo) and Ctrl+Shift+Z / Ctrl+Y (redo), routed from workflow-keys.js.
+    [JSInvokable] public Task OnUndoKey() { Undo(); return InvokeAsync(StateHasChanged); }
+    [JSInvokable] public Task OnRedoKey() { Redo(); return InvokeAsync(StateHasChanged); }
+
+    // ---- toolbar overflow menu ----
+    private void ToggleMenu() => _menuOpen = !_menuOpen;
+    private void CloseMenu() => _menuOpen = false;
+    private void TogglePanelFromMenu()
+    {
+        _bottomOpen = !_bottomOpen;
+        _menuOpen = false;
+    }
+
+    // ---- command palette (⌘K / "+ Add") ----
+    private async Task OpenPalette()
+    {
+        _paletteOpen = true;
+        _paletteSearch = string.Empty;
+        _paletteIndex = 0;
+        _menuOpen = false;
+        await InvokeAsync(StateHasChanged);
+        // Focus the palette input so it is keyboard-ready the instant it opens.
+        await CircuitSafe.RunAsync(async () => await _paletteInput.FocusAsync(), _ => { });
+    }
+
+    private void ClosePalette() => _paletteOpen = false;
+
+    // Global ⌘K / Ctrl+K, routed from the document keydown listener (workflow-keys.js).
+    [JSInvokable]
+    public Task OnQuickAddKey() => OpenPalette();
+
+    private void PaletteSearchChanged()
+    {
+        // Keep the highlight in range as the filtered list shrinks/grows.
+        var count = PaletteMatches.Count;
+        if (_paletteIndex >= count) { _paletteIndex = Math.Max(0, count - 1); }
+    }
+
+    private void PaletteKey(KeyboardEventArgs e)
+    {
+        var matches = PaletteMatches;
+        switch (e.Key)
+        {
+            case "Escape":
+                ClosePalette();
+                break;
+            case "ArrowDown":
+                if (matches.Count > 0) { _paletteIndex = (_paletteIndex + 1) % matches.Count; }
+                break;
+            case "ArrowUp":
+                if (matches.Count > 0) { _paletteIndex = (_paletteIndex - 1 + matches.Count) % matches.Count; }
+                break;
+            case "Enter":
+                if (_paletteIndex >= 0 && _paletteIndex < matches.Count) { PaletteAdd(matches[_paletteIndex]); }
+                break;
+        }
+    }
+
+    private void PaletteAdd(StepType t)
+    {
+        _paletteOpen = false;
+        AddNode(t);   // honours the "auto-connect from the selected node" gesture like the rail does
+    }
+
+    // ---- run-state labels for the inspector's Run section ----
+    private static string RunClassOf(NodeRunState s) => s switch
+    {
+        NodeRunState.Running => "running",
+        NodeRunState.Done => "done",
+        NodeRunState.Failed => "failed",
+        NodeRunState.Skipped => "skipped",
+        _ => "idle",
+    };
+    private static string RunLabel(NodeRunState s) => s switch
+    {
+        NodeRunState.Running => "running…",
+        NodeRunState.Done => "done",
+        NodeRunState.Failed => "failed",
+        NodeRunState.Skipped => "skipped (unsupported node)",
+        _ => "idle",
+    };
 
     private void ResetRunState()
     {
@@ -614,7 +1041,27 @@
 
     private void Log(string line) => _runLog.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
 
-    public void Dispose() => _humanTcs?.TrySetResult(new GraphHumanReply(false, "Editor closed."));
+    // Register the document-level ⌘K listener once (workflow-keys.js routes it back to OnQuickAddKey).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) { return; }
+        _selfRef = DotNetObjectReference.Create(this);
+        await CircuitSafe.RunAsync(
+            async () => await JS.InvokeVoidAsync("agentosWorkflowKeys.register", _selfRef),
+            _ => { });   // a missing script must never crash the circuit — the "+ Add" button still works
+    }
+
+    public void Dispose()
+    {
+        _humanTcs?.TrySetResult(new GraphHumanReply(false, "Editor closed."));
+        // Best-effort: drop the global key listener and the .NET ref so a closed window stops receiving ⌘K.
+        if (_selfRef is not null)
+        {
+            _ = JS.InvokeVoidAsync("agentosWorkflowKeys.unregister");
+            _selfRef.Dispose();
+            _selfRef = null;
+        }
+    }
 
     // ---- palette helpers ----
     private static string StepName(StepType t) => t switch

@@ -106,19 +106,30 @@ public sealed class RemoteAgentLlmClient : ILlmClient
             throw new LlmException(result.Error ?? "Remote agent reported a failure.", Provider);
         }
 
-        // Zero token usage / cost (the runner spends the member's own quota); still emit a span + the
-        // call/duration metrics so remote latency is observable alongside the cloud providers.
-        LlmTelemetry.RecordSuccess(activity, genAiSystem, request.Model, request.Model, 0, 0, 0m, stopwatch.Elapsed.TotalSeconds);
-        _logger.LogInformation("[RemoteAgent] request {Id} handled by a remote agent ({Count} connected); 0 API tokens spent.",
-            id, _broker.AgentCount);
+        // The runner spends the member's own flat subscription, so the SERVER cost is genuinely $0 — that
+        // is the whole point of this provider and CostUsd stays 0m. But "0 tokens" is unhelpful on screen:
+        // the CLI reports no usage, so estimate it from the text we DID send and receive (~4 chars/token,
+        // the standard rough heuristic). These counts are honest estimates — they let the UI show a real
+        // token figure and derive a "what this would have cost on a metered API" number, without ever
+        // claiming a billed spend. The estimate is deliberately NOT folded into CostUsd.
+        var inTok = EstimateTokens(request.SystemPrompt) + EstimateTokens(request.UserPrompt);
+        var outTok = EstimateTokens(result.Content);
+        LlmTelemetry.RecordSuccess(activity, genAiSystem, request.Model, request.Model, inTok, outTok, 0m, stopwatch.Elapsed.TotalSeconds);
+        _logger.LogInformation("[RemoteAgent] request {Id} handled by a remote agent ({Count} connected); ~{In}->{Out} est. tokens, 0 API cost.",
+            id, _broker.AgentCount, inTok, outTok);
 
         return new LlmResponse(
             Content: result.Content,
-            InputTokens: 0,
-            OutputTokens: 0,
+            InputTokens: inTok,
+            OutputTokens: outTok,
             CostUsd: 0m,
             Latency: stopwatch.Elapsed,
             Model: request.Model,
             Provider: Provider);
     }
+
+    // Rough token estimate for text the CLI produced no usage numbers for: ~4 characters per token, the
+    // standard English heuristic. Only ever used for RemoteAgent, whose actual server cost is $0.
+    private static int EstimateTokens(string? text) =>
+        string.IsNullOrEmpty(text) ? 0 : (int)System.Math.Ceiling(text.Length / 4.0);
 }
