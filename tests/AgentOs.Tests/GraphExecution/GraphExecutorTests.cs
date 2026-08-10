@@ -29,8 +29,9 @@ namespace AgentOs.Tests.GraphExecution;
 
 public sealed class GraphExecutorTests
 {
-    private static PlanNode N(string id, string type, string? role = null, bool start = false, int maxIter = 0)
-        => new(id, type, role, id, maxIter, start);
+    private static PlanNode N(string id, string type, string? role = null, bool start = false, int maxIter = 0,
+        string desc = "", string input = "", string output = "")
+        => new(id, type, role, id, maxIter, start, desc, input, output);
 
     private static PlanEdge E(string src, string tgt, string label = "")
         => new($"{src}->{tgt}", src, tgt, label);
@@ -329,6 +330,107 @@ public sealed class GraphExecutorTests
         events.ShouldNotContain(e => e.NodeId == "end" && e.Phase == GraphNodePhase.Done);
     }
 
+    // ---- leaf-node coverage: Tool / Switch / Transform / ExtractJson (the audit's untested execution paths) ----
+
+    [Fact]
+    public async Task RunAsync_ToolNode_InvokesToolThroughGatewayAndReportsOk()
+    {
+        // A Tool node parses its {"tool","input"} spec, resolves the tool from the registry, and invokes it
+        // THROUGH the governed gateway (policy + evidence) — never the tool directly. Proves that whole seam.
+        var tool = Substitute.For<ITool>();
+        var registry = Substitute.For<IToolRegistry>();
+        registry.Resolve("echo").Returns(tool);
+        ToolInvocationRequest? seen = null;
+        var gateway = Substitute.For<IToolGateway>();
+        gateway.InvokeAsync(Arg.Any<ITool>(), Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>())
+               .Returns(ci => { seen = ci.Arg<ToolInvocationRequest>(); return Task.FromResult(new ToolGatewayResult("echoed: hi", IsError: false)); });
+        var (exec, _) = Build(toolRegistry: registry, toolGateway: gateway);
+
+        var graph = new PlanGraph("g", "tool",
+            [
+                N("t", "Tool", start: true, desc: """{"tool":"echo","input":{"msg":"hi"}}""", output: "r"),
+                N("end", "End"),
+            ],
+            [E("t", "end")]);
+
+        var done = new List<GraphNodeEvent>();
+        var result = await exec.RunAsync(graph, "go", 3, "acme", null,
+            e => { if (e.Phase == GraphNodePhase.Done) { done.Add(e); } return Task.CompletedTask; });
+
+        result.Completed.ShouldBeTrue();
+        registry.Received(1).Resolve("echo");
+        await gateway.Received(1).InvokeAsync(tool, Arg.Any<ToolInvocationRequest>(), Arg.Any<CancellationToken>());
+        // The parsed tool name + the run's explicit tenant reach the gateway request.
+        seen.ShouldNotBeNull();
+        seen.ToolName.ShouldBe("echo");
+        seen.TenantId.ShouldBe("acme");
+        // A non-denied, non-error invocation reports "ok" on the node.
+        done.ShouldContain(e => e.NodeId == "t" && e.Meta == "ok");
+    }
+
+    [Fact]
+    public async Task RunAsync_Switch_RoutesToTheBranchMatchingTheChosenValue()
+    {
+        // Switch shares WireRouter/RunDecision with IfElse: the (stubbed) router LLM answers "beta" → only the
+        // beta-labelled branch runs. Direct coverage of the Switch step type (previously only IfElse was tested).
+        var (exec, _) = Build(llmReply: "beta");
+        var graph = new PlanGraph("g", "switch",
+            [N("sw", "Switch", start: true), N("na", "Llm"), N("nb", "Llm")],
+            [E("sw", "na", "alpha"), E("sw", "nb", "beta")]);
+
+        var running = new List<string>();
+        var result = await exec.RunAsync(graph, "pick", 3, "t", null,
+            e => { if (e.Phase == GraphNodePhase.Running) { running.Add(e.NodeId); } return Task.CompletedTask; });
+
+        result.Completed.ShouldBeTrue();
+        running.ShouldContain("nb");
+        running.ShouldNotContain("na");
+    }
+
+    [Fact]
+    public async Task RunAsync_TransformNode_InterpolatesRunStateIntoOutput()
+    {
+        // A Transform node interpolates ${…} refs against run state — here ${userstory} → the run's story text.
+        // No LLM / agent runs; the node's meta carries the interpolated result.
+        var (exec, _) = Build();
+        var graph = new PlanGraph("g", "xform",
+            [N("t", "Transform", start: true, desc: "hello ${userstory}", output: "greeting"), N("end", "End")],
+            [E("t", "end")]);
+
+        var done = new List<GraphNodeEvent>();
+        var result = await exec.RunAsync(graph, "world", 3, "t", null,
+            e => { if (e.Phase == GraphNodePhase.Done) { done.Add(e); } return Task.CompletedTask; });
+
+        result.Completed.ShouldBeTrue();
+        done.ShouldContain(e => e.NodeId == "t" && e.Meta == "hello world");
+    }
+
+    [Fact]
+    public async Task RunAsync_ExtractJsonNode_StripsProseAndEmitsTheJsonObject()
+    {
+        // ExtractJson pulls the JSON object out of surrounding prose and writes it to state; the downstream
+        // Print node echoes that cleaned value — proving the extract wrote the object, not the raw text.
+        var (exec, _) = Build();
+        var graph = new PlanGraph("g", "xjson",
+            [
+                N("x", "ExtractJson", start: true, input: "userstory", output: "j"),
+                N("p", "Print", input: "j"),
+                N("end", "End"),
+            ],
+            [E("x", "p"), E("p", "end")]);
+
+        var done = new List<GraphNodeEvent>();
+        var result = await exec.RunAsync(graph, """noise {"ok":true} tail""", 3, "t", null,
+            e => { if (e.Phase == GraphNodePhase.Done) { done.Add(e); } return Task.CompletedTask; });
+
+        result.Completed.ShouldBeTrue();
+        var printMeta = done.Find(e => e.NodeId == "p")?.Meta;
+        printMeta.ShouldNotBeNull();
+        printMeta.ShouldContain("ok");
+        printMeta.ShouldContain("true");
+        printMeta.ShouldNotContain("noise");
+    }
+
     // ---- spend metering (follow-up to PR #98: the graph must persist its own spend so the gate works) ----
 
     [Fact]
@@ -439,7 +541,8 @@ public sealed class GraphExecutorTests
     private static (GraphExecutor Exec, Agents Agents) Build(
         bool qaConsistent = true, string? llmReply = null, bool yieldLlm = false,
         AgentOs.Domain.Cost.IBudgetGuard? budget = null,
-        IPipelineRunRepository? repo = null, TimeProvider? clock = null, decimal llmCost = 0m)
+        IPipelineRunRepository? repo = null, TimeProvider? clock = null, decimal llmCost = 0m,
+        IToolRegistry? toolRegistry = null, IToolGateway? toolGateway = null)
     {
         var req = Substitute.For<IRequirementAgent>();
         req.RunAsync(Arg.Any<UserStory>(), Arg.Any<CancellationToken>()).Returns(StubSpec());
@@ -479,8 +582,8 @@ public sealed class GraphExecutorTests
         var exec = new GraphExecutor(
             req, coding, testing, qa,
             factory,
-            Substitute.For<IToolRegistry>(),
-            Substitute.For<IToolGateway>(),
+            toolRegistry ?? Substitute.For<IToolRegistry>(),
+            toolGateway ?? Substitute.For<IToolGateway>(),
             Options.Create(new AgentsOptions()),
             NullLogger<GraphExecutor>.Instance,
             budget,
