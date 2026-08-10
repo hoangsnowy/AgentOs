@@ -58,7 +58,7 @@ public sealed class BudgetGateRealAuthTests : IClassFixture<AgentOsRealAuthFixtu
     }
 
     [Fact]
-    public async Task Budget_SpendOverEnforcedCap_CostApp_ReportsOverBudget()
+    public async Task Budget_SpendOverEnforcedCap_Insights_ReportsOverBudget()
     {
         if (!AgentOsRealAuthFixture.IsEnabled) { Assert.Skip(AgentOsRealAuthFixture.SkipReason); }
         var conn = Environment.GetEnvironmentVariable("AGENTOS_PG_CONN");

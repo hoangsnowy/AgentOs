@@ -39,7 +39,7 @@ public sealed class RoleIsolationRealAuthTests : IClassFixture<AgentOsRealAuthFi
         var settings = _fx.Page.Locator(".appwin.focused");
         await Assertions.Expect(settings.Locator(".prefs-cat", new() { HasTextString = "System" })).ToBeVisibleAsync();
 
-        foreach (var adminCat in new[] { "Users", "Evidence", "Cost", "LLM & providers", "Prompts", "Tool policy", "MCP servers" })
+        foreach (var adminCat in new[] { "Users", "Evidence", "LLM & providers", "Prompts", "Tool policy", "MCP servers" })
         {
             await Assertions.Expect(settings.Locator(".prefs-cat", new() { HasTextString = adminCat })).ToHaveCountAsync(0);
         }

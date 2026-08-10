@@ -33,16 +33,16 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
 
         await _fx.GotoDesktopAsync();
 
-        // Open Agents + Settings.
-        await LaunchFromDockAsync("Agents");
+        // Open Insights + Settings.
+        await LaunchFromDockAsync("Insights");
         await LaunchFromDockAsync("Settings");
 
-        var pipeline = AppWindow("Agents");
+        var pipeline = AppWindow("Insights");
         var settings = AppWindow("Settings");
         await Assertions.Expect(pipeline).ToBeVisibleAsync();
         await Assertions.Expect(settings).ToBeVisibleAsync();
 
-        // Focus Agents (click its titlebar) — its z-index should now be highest.
+        // Focus Insights (click its titlebar) — its z-index should now be highest.
         await pipeline.Locator(".appwin-titlebar").ClickAsync();
 
         // Focus bumps Z on the server, which re-renders over SignalR; the front-most window gains
@@ -53,17 +53,17 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
 
         var pipelineZ = int.Parse(await GetZ(pipeline), System.Globalization.CultureInfo.InvariantCulture);
         var settingsZ = int.Parse(await GetZ(settings), System.Globalization.CultureInfo.InvariantCulture);
-        Assert.True(pipelineZ > settingsZ, $"Agents z ({pipelineZ}) should be above Settings ({settingsZ}) after focus.");
+        Assert.True(pipelineZ > settingsZ, $"Insights z ({pipelineZ}) should be above Settings ({settingsZ}) after focus.");
 
-        // Minimize Agents — the window vanishes from view but the dock indicator stays.
+        // Minimize Insights — the window vanishes from view but the dock indicator stays.
         await pipeline.Locator(".appwin-btn[title=\"Minimize\"]").ClickAsync();
         await Assertions.Expect(pipeline).ToBeHiddenAsync();
 
-        var dockDot = _fx.Page.Locator(".dock-item[title=\"Agents\"] .di-dot");
+        var dockDot = _fx.Page.Locator(".dock-item[title=\"Insights\"] .di-dot");
         await Assertions.Expect(dockDot).ToBeVisibleAsync();
 
         // Restore by clicking the dock icon again (OpenApp focuses an existing entry).
-        await _fx.Page.Locator(".dock-item[title=\"Agents\"]").ClickAsync();
+        await _fx.Page.Locator(".dock-item[title=\"Insights\"]").ClickAsync();
         await Assertions.Expect(pipeline).ToBeVisibleAsync();
 
         // Maximize toggle (□ → ❐).
@@ -141,15 +141,15 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
         var center = _fx.Page.Locator(".topbar .tb-appname");
         await Assertions.Expect(center).ToContainTextAsync("AgentOS — Desktop");
 
-        await LaunchFromDockAsync("Agents");
-        await Assertions.Expect(center).ToContainTextAsync("Agents");
+        await LaunchFromDockAsync("Insights");
+        await Assertions.Expect(center).ToContainTextAsync("Insights");
 
         await LaunchFromDockAsync("Settings");
         await Assertions.Expect(center).ToContainTextAsync("Settings");
 
-        // Click Agents titlebar → it becomes top-most → topbar updates.
-        await AppWindow("Agents").Locator(".appwin-titlebar").ClickAsync();
-        await Assertions.Expect(center).ToContainTextAsync("Agents");
+        // Click Insights titlebar → it becomes top-most → topbar updates.
+        await AppWindow("Insights").Locator(".appwin-titlebar").ClickAsync();
+        await Assertions.Expect(center).ToContainTextAsync("Insights");
     }
 
     // Scenario 10: toast container is anchored top-right (top: 42px) + each toast has × dismiss.
