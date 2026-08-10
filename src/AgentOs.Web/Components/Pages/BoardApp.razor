@@ -357,9 +357,9 @@ else if (_tab == Tab.Boards)
                                 <td>@if (ticket.Status is not null) { <Badge>@ticket.Status</Badge> } else { <span class="muted">—</span> }</td>
                                 <td class="muted">@(ticket.AssigneeLogin ?? "—")</td>
                                 <td class="actions">
-                                    <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => OpenInPipeline(ticket))"
-                                         title="Open this ticket as a story in the Pipeline app (sandbox run)">
-                                        <Icon Name="play" Size="13" /> Pipeline
+                                    <Btn Size="Btn.ButtonSize.Sm" OnClick="@(() => OpenInWorkflow(ticket))"
+                                         title="Open this ticket as a story in the Workflow app">
+                                        <Icon Name="graph" Size="13" /> Workflow
                                     </Btn>
                                     <Btn Size="Btn.ButtonSize.Sm" Variant="Btn.ButtonVariant.Primary"
                                          OnClick="@(() => OpenWorkDialog(ticket))"
@@ -1411,14 +1411,14 @@ else if (_tab == Tab.Sessions)
         _workTicket = null;
     }
 
-    // Cross-link — open the ticket as a story in the Pipeline app (a sandbox run), prefilling the story
-    // editor via a one-shot launch payload so the three surfaces read as one engine.
-    private void OpenInPipeline(BoardTicket ticket)
+    // Cross-link — open the ticket as a story in the Workflow app (the run surface), prefilling the story
+    // via a one-shot launch payload so the ticket → run handoff reads as one engine.
+    private void OpenInWorkflow(BoardTicket ticket)
     {
-        var app = AgentOs.Web.Services.AppCatalog.Find("pipeline");
+        var app = AgentOs.Web.Services.AppCatalog.Find("workflow");
         if (app is null) { return; }
         var story = ticket.Number is { } n ? $"#{n} {ticket.Title}".Trim() : ticket.Title.Trim();
-        WM.RequestLaunchPayload("pipeline", story);
+        WM.RequestLaunchPayload("workflow", story);
         WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
     }
 

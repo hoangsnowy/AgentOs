@@ -47,6 +47,13 @@ public interface IPipelineRunRepository
     /// blank-ITenantContext Blazor circuit).</summary>
     Task<decimal> GetSpendForTenantAsync(
         string tenantId, DateTimeOffset? since = null, CancellationToken ct = default);
+
+    /// <summary>Dashboard-only aggregates the cost summary doesn't carry: average wall-clock latency per
+    /// agent, the QA-loop iteration distribution (the shape behind the "average N.N rounds" number), and
+    /// pipeline runs started per UTC day. Tenant-explicit + since-scoped exactly like
+    /// <see cref="GetCostSummaryForTenantAsync"/>, so it is safe from a blank-ITenantContext Blazor circuit.</summary>
+    Task<InsightsExtra> GetInsightsExtraForTenantAsync(
+        string tenantId, DateTimeOffset? since = null, CancellationToken ct = default);
 }
 
 /// <summary>A single full run to store / read back.</summary>
@@ -90,3 +97,23 @@ public sealed record CostBucket(
     int TokensIn,
     int TokensOut,
     int Calls);
+
+/// <summary>Extra aggregates for the Insights dashboard that the cost summary doesn't compute: per-agent
+/// average latency, the QA-iteration distribution, and pipeline runs per day.</summary>
+public sealed record InsightsExtra(
+    IReadOnlyList<AgentLatencyBucket> ByAgentLatency,
+    IReadOnlyList<IterationBucket> ByIteration,
+    IReadOnlyList<DayRunsBucket> RunsByDay)
+{
+    /// <summary>The zero result — no metrics recorded (or no database wired).</summary>
+    public static InsightsExtra Empty { get; } = new([], [], []);
+}
+
+/// <summary>Average wall-clock latency (ms) for one agent across its LLM calls.</summary>
+public sealed record AgentLatencyBucket(string Agent, double AvgLatencyMs, int Calls);
+
+/// <summary>How many distinct runs (and LLM calls) reached a given QA-loop iteration.</summary>
+public sealed record IterationBucket(int Iteration, int Runs, int Calls);
+
+/// <summary>Number of pipeline runs started on one UTC calendar day.</summary>
+public sealed record DayRunsBucket(string Day, int Runs);

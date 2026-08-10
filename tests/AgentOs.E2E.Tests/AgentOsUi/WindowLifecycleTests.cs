@@ -114,8 +114,8 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
 
         await _fx.GotoDesktopAsync();
 
-        // 7 pinned apps in the Dash (GNOME Dash — no Start button).
-        foreach (var t in new[] { "Overview", "Agents", "Workflow", "Board", "Settings", "Terminal", "Files" })
+        // 6 pinned apps in the Dash (GNOME Dash — no Start button).
+        foreach (var t in new[] { "Insights", "Workflow", "Board", "Settings", "Terminal", "Files" })
         {
             await Assertions.Expect(_fx.Page.Locator($".dock-item[title=\"{t}\"]")).ToBeVisibleAsync();
         }
@@ -123,9 +123,9 @@ public sealed class WindowLifecycleTests : IClassFixture<AgentOsPageFixture>
         // Nothing running yet — no .di-dot.
         Assert.Equal(0, await _fx.Page.Locator(".dock-item .di-dot").CountAsync());
 
-        // Launch Agents; dot appears on its dock item.
-        await LaunchFromDockAsync("Agents");
-        var dot = _fx.Page.Locator(".dock-item[title=\"Agents\"] .di-dot");
+        // Launch Insights; dot appears on its dock item.
+        await LaunchFromDockAsync("Insights");
+        var dot = _fx.Page.Locator(".dock-item[title=\"Insights\"] .di-dot");
         await Assertions.Expect(dot).ToBeVisibleAsync();
     }
 

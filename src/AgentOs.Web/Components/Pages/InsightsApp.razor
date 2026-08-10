@@ -1,0 +1,435 @@
+@* InsightsApp — the AgentOS observability dashboard. One screen to MANAGE the pipeline: how many runs,
+   which agent ran how often, what it cost (billed + the "≈ API" would-be estimate on the $0 RemoteAgent
+   path), plus latency and QA-loop shape — as headline KPIs and token-styled bar charts. Replaces the old
+   Overview + Cost apps (folded here). Running the pipeline lives in the Workflow app; this is read-only
+   analytics + the budget cap control.
+   A Blazor circuit has no HttpContext, so ITenantContext is blank — the tenant is read from
+   AuthenticationState and passed to the tenant-explicit repo overloads (cost summary + extras + runs). *@
+
+@using System.Globalization
+@using System.Linq
+@using Microsoft.AspNetCore.Components.Authorization
+@using AgentOs.Modules.Pipeline.Persistence
+@using AgentOs.Modules.Pipeline.Cost
+@using AgentOs.Domain.Cost
+@using AgentOs.Modules.Llm
+@using AgentOs.Web.Services
+@inject IPipelineRunRepository Runs
+@inject IBudgetService Budgets
+@inject AgentOs.Web.Shell.Services.ToastService Toasts
+@inject AgentOs.Web.Shell.Services.WindowManagerService WM
+
+<header class="page-head">
+    <div>
+        <h1 class="page-title">Insights</h1>
+        <p class="page-sub">Runs, agent utilisation and LLM cost at a glance — the control plane for the pipeline.</p>
+    </div>
+    <div class="ins-head-actions">
+        <div class="seg" role="group" aria-label="Time range">
+            <button class="seg-btn @(_days == 7 ? "on" : "")" @onclick="@(() => SetRange(7))">7d</button>
+            <button class="seg-btn @(_days == 30 ? "on" : "")" @onclick="@(() => SetRange(30))">30d</button>
+            <button class="seg-btn @(_days == 0 ? "on" : "")" @onclick="@(() => SetRange(0))">All</button>
+        </div>
+        <Btn Variant="Btn.ButtonVariant.Ghost" OnClick="Reload" Disabled="_loading">
+            <Icon Name="arrow-clockwise" Size="14" /> Refresh
+        </Btn>
+    </div>
+</header>
+
+@* ── Headline KPI tiles ───────────────────────────────────────────────────────────────────── *@
+<div class="metrics">
+    <div class="metric">
+        <div class="v">@(_summary is null ? "—" : Num(_summary.RunCount))</div>
+        <div class="k">Pipeline runs</div>
+    </div>
+    <div class="metric">
+        <div class="v">@SuccessLabel()</div>
+        <div class="k">Success rate (last 50)</div>
+    </div>
+    <div class="metric">
+        <div class="v">@RoundsLabel()</div>
+        <div class="k">Avg QA rounds</div>
+    </div>
+    <div class="metric">
+        <div class="v">@(_summary is null ? "—" : Money(_summary.TotalCostUsd))</div>
+        <div class="k">LLM cost (billed)</div>
+        @if (_estApiCost > 0m && _summary is { TotalCostUsd: 0m })
+        {
+            <div class="metric-sub" title="What the same tokens would have cost on a metered API — this ran on the $0 paired-agent path, so nothing was billed.">≈ $@_estApiCost.ToString("0.0000") API</div>
+        }
+    </div>
+</div>
+
+@if (_loading && _summary is null)
+{
+    <Panel Title="Loading"><Spinner /></Panel>
+}
+else if (_summary is null || _summary.CallCount == 0)
+{
+    <Panel Title="No activity yet">
+        <EmptyState Icon="graph"
+                    Title="No runs recorded"
+                    Hint="Open the Workflow app and run the pipeline — this dashboard fills in with charts as runs complete." />
+        <div class="ins-empty-cta">
+            <Btn Variant="Btn.ButtonVariant.Primary" OnClick="@(() => Open("workflow"))">
+                <Icon Name="graph" Size="14" /> Open Workflow
+            </Btn>
+        </div>
+    </Panel>
+}
+else
+{
+    @* ── Budget (admin only) ──────────────────────────────────────────────────────────────── *@
+    @if (_isAdmin)
+    {
+        <Panel Title="Budget">
+            <div class="budget-row">
+                <Field Label="Monthly cap (USD)" Hint="0 = no cap (unconstrained spend)">
+                    <input class="prefs-input" type="number" min="0" step="1" @bind="_cap" />
+                </Field>
+                <Toggle Label="Enforce" Checked="_enforce" CheckedChanged="(v) => _enforce = v"
+                        Title="When on, a run is blocked once month-to-date spend reaches the cap." />
+                <Btn OnClick="SaveBudget" Disabled="_savingBudget" Variant="Btn.ButtonVariant.Primary">Save</Btn>
+                @if (_budget is not null)
+                {
+                    <Badge Variant="@BudgetBadge()">@BudgetStateLabel()</Badge>
+                }
+            </div>
+            @if (_budget is { CapUsd: > 0m })
+            {
+                <div class="ins-progress" title="@Money(_budget.SpentUsd) of @Money(_budget.CapUsd) this month">
+                    <div class="ins-progress-fill @BudgetBarClass()" style="width:@((int)Clamp(_budget.Percent * 100))%"></div>
+                </div>
+                <p class="muted ins-note">@Money(_budget.SpentUsd) of @Money(_budget.CapUsd) spent this month (@((_budget.Percent * 100).ToString("0", CultureInfo.InvariantCulture))%).</p>
+            }
+        </Panel>
+    }
+
+    <div class="ins-grid">
+        @* ── Chart: runs over time ───────────────────────────────────────────────────────── *@
+        <Panel Title="Runs over time">
+            @if (_extra is null || _extra.RunsByDay.Count == 0)
+            {
+                <p class="muted ins-note">No dated runs in this range.</p>
+            }
+            else
+            {
+                var days = _extra.RunsByDay.TakeLast(14).ToList();
+                var maxRuns = days.Max(d => d.Runs);
+                <div class="ins-cols">
+                    @foreach (var d in days)
+                    {
+                        <div class="ins-col-wrap" title="@d.Day: @d.Runs run@(d.Runs == 1 ? "" : "s")">
+                            <div class="ins-col" style="height:@(Pct(d.Runs, maxRuns))%"></div>
+                            <div class="ins-col-x">@ShortDay(d.Day)</div>
+                        </div>
+                    }
+                </div>
+                <div class="ins-legend"><span class="ins-legend-dot" style="background:var(--accent)"></span> Pipeline runs / day</div>
+            }
+        </Panel>
+
+        @* ── Chart: per-agent (calls + cost) ─────────────────────────────────────────────── *@
+        <Panel Title="By agent">
+            @{ var agents = _summary!.ByAgent; var maxAgent = agents.Count == 0 ? 1 : agents.Max(a => a.Calls); }
+            @if (agents.Count == 0)
+            {
+                <p class="muted ins-note">No agent calls in this range.</p>
+            }
+            else
+            {
+                <div class="ins-bars">
+                    @foreach (var a in agents)
+                    {
+                        <div class="ins-bar-row">
+                            <div class="ins-bar-label">@AgentShort(a.Key)</div>
+                            <div class="ins-bar-track"><div class="ins-bar-fill" style="width:@(Pct(a.Calls, maxAgent))%"></div></div>
+                            <div class="ins-bar-val">@Num(a.Calls) · @Money(a.CostUsd)</div>
+                        </div>
+                    }
+                </div>
+                <div class="ins-legend"><span class="ins-legend-dot" style="background:var(--accent)"></span> LLM calls · billed cost</div>
+            }
+        </Panel>
+
+        @* ── Chart: spend by model (would-be ≈ API) ──────────────────────────────────────── *@
+        <Panel Title="Spend by model">
+            @{
+                var models = _summary!.ByModel
+                    .Select(m => (m.Key, m.Calls, Billed: m.CostUsd, Est: WouldBe(m.Key, m.TokensIn, m.TokensOut)))
+                    .OrderByDescending(m => m.Est).ToList();
+                var maxEst = models.Count == 0 ? 0m : models.Max(m => m.Est);
+            }
+            @if (models.Count == 0)
+            {
+                <p class="muted ins-note">No model usage in this range.</p>
+            }
+            else
+            {
+                <div class="ins-bars">
+                    @foreach (var m in models)
+                    {
+                        <div class="ins-bar-row">
+                            <div class="ins-bar-label" title="@m.Key">@m.Key</div>
+                            <div class="ins-bar-track"><div class="ins-bar-fill" style="width:@(Pct(m.Est, maxEst))%"></div></div>
+                            <div class="ins-bar-val">$@m.Est.ToString("0.0000", CultureInfo.InvariantCulture)</div>
+                        </div>
+                    }
+                </div>
+                <div class="ins-legend"><span class="ins-legend-dot" style="background:var(--accent)"></span> ≈ metered-API cost of the tokens each model produced</div>
+                <div class="ins-chips">
+                    @foreach (var p in _summary!.ByProvider)
+                    {
+                        <span class="ins-chip">@p.Key <strong>@Num(p.Calls)</strong></span>
+                    }
+                </div>
+            }
+        </Panel>
+
+        @* ── Chart: latency + QA rounds ──────────────────────────────────────────────────── *@
+        <Panel Title="Latency & QA rounds">
+            @{ var lat = _extra?.ByAgentLatency ?? []; var maxLat = lat.Count == 0 ? 0.0 : lat.Max(l => l.AvgLatencyMs); }
+            @if (lat.Count == 0)
+            {
+                <p class="muted ins-note">No latency data in this range.</p>
+            }
+            else
+            {
+                <div class="ins-bars">
+                    @foreach (var l in lat)
+                    {
+                        <div class="ins-bar-row">
+                            <div class="ins-bar-label">@AgentShort(l.Agent)</div>
+                            <div class="ins-bar-track"><div class="ins-bar-fill alt" style="width:@(Pct((decimal)l.AvgLatencyMs, (decimal)maxLat))%"></div></div>
+                            <div class="ins-bar-val">@Ms(l.AvgLatencyMs)</div>
+                        </div>
+                    }
+                </div>
+                <div class="ins-legend"><span class="ins-legend-dot" style="background:var(--ok)"></span> Avg latency per agent</div>
+            }
+            @{ var iters = (_extra?.ByIteration ?? []).Where(i => i.Iteration > 0).ToList(); var maxIter = iters.Count == 0 ? 0 : iters.Max(i => i.Runs); }
+            @if (iters.Count > 0)
+            {
+                <div class="ins-round-strip">
+                    @foreach (var it in iters)
+                    {
+                        <div class="ins-col-wrap" title="Round @it.Iteration reached by @it.Runs run@(it.Runs == 1 ? "" : "s")">
+                            <div class="ins-col ok" style="height:@(Pct(it.Runs, maxIter))%"></div>
+                            <div class="ins-col-x">r@(it.Iteration)</div>
+                        </div>
+                    }
+                </div>
+                <div class="ins-legend"><span class="ins-legend-dot" style="background:var(--ok)"></span> Runs reaching each QA round (NMax caps the loop)</div>
+            }
+        </Panel>
+    </div>
+
+    @* ── Recent runs ─────────────────────────────────────────────────────────────────────── *@
+    <Panel Title="Recent runs">
+        @if (_runs is null || _runs.Count == 0)
+        {
+            <EmptyState Icon="play" Title="No runs yet" Hint="Run the pipeline in the Workflow app." />
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Story</th>
+                        <th>Status</th>
+                        <th class="num">QA rounds</th>
+                        @if (_isAdmin) { <th class="num">Cost</th> }
+                        <th>When</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _runs.Take(8))
+                    {
+                        <tr>
+                            <td>@(string.IsNullOrWhiteSpace(r.UserStoryPreview) ? "—" : r.UserStoryPreview)</td>
+                            <td><Badge Variant="@StatusVariant(r.Status)">@StatusLabel(r.Status)</Badge></td>
+                            <td class="num">@r.IterationCount</td>
+                            @if (_isAdmin) { <td class="num">@Money(r.TotalCostUsd)</td> }
+                            <td class="muted">@r.CreatedAtUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </Panel>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _isAdmin;
+    private string _tenantId = "";
+    private bool _loading;
+    private int _days = 30;
+
+    private CostSummary? _summary;
+    private InsightsExtra? _extra;
+    private IReadOnlyList<PipelineRunSummary>? _runs;
+    private decimal _estApiCost;
+
+    // Budget (admin)
+    private decimal _cap;
+    private bool _enforce;
+    private bool _savingBudget;
+    private BudgetStatus? _budget;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            _isAdmin = state.User.IsAdmin();
+            _tenantId = state.User.GetTenantId() ?? string.Empty;
+        }
+        if (_tenantId.Length > 0)
+        {
+            await LoadAsync();
+            if (_isAdmin) { await LoadBudgetAsync(); }
+        }
+    }
+
+    private DateTimeOffset? Since => _days > 0 ? DateTimeOffset.UtcNow.AddDays(-_days) : null;
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            // Tenant-explicit reads — a circuit's ITenantContext is blank, so pass the tenant in.
+            _summary = await Runs.GetCostSummaryForTenantAsync(_tenantId, Since);
+            _extra = await Runs.GetInsightsExtraForTenantAsync(_tenantId, Since);
+            _runs = await Runs.ListForTenantAsync(_tenantId, limit: 50);
+            _estApiCost = _summary.ByModel.Sum(m => WouldBe(m.Key, m.TokensIn, m.TokensOut));
+        }
+        // Degrade to empty tiles on any transient read failure — the dashboard must never crash the circuit.
+        catch (System.InvalidOperationException ex) { _ = ex.Message; }
+        catch (System.Net.Http.HttpRequestException ex) { _ = ex.Message; }
+        catch (System.Text.Json.JsonException ex) { _ = ex.Message; }
+        catch (System.TimeoutException ex) { _ = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadBudgetAsync()
+    {
+        try
+        {
+            _budget = await Budgets.GetAsync(_tenantId);
+            _cap = _budget.CapUsd;
+            _enforce = _budget.EnforceOn;
+        }
+        catch (System.InvalidOperationException ex) { _ = ex.Message; }
+        catch (System.TimeoutException ex) { _ = ex.Message; }
+    }
+
+    private async Task SaveBudget()
+    {
+        _savingBudget = true;
+        try
+        {
+            await Budgets.SetCapAsync(_tenantId, _cap);
+            await Budgets.SetEnforceAsync(_tenantId, _enforce);
+            await LoadBudgetAsync();
+            Toasts.Show("Budget", "Budget saved.", ToastKind.Ok);
+        }
+        catch (System.InvalidOperationException ex) { Toasts.Show("Budget", $"Could not save budget: {ex.Message}", ToastKind.Err); }
+        catch (System.TimeoutException) { Toasts.Show("Budget", "Could not save budget: timed out.", ToastKind.Err); }
+        finally { _savingBudget = false; }
+    }
+
+    private async Task SetRange(int days)
+    {
+        if (_days == days) { return; }
+        _days = days;
+        await LoadAsync();
+    }
+
+    private async Task Reload()
+    {
+        await LoadAsync();
+        if (_isAdmin) { await LoadBudgetAsync(); }
+    }
+
+    private void Open(string key)
+    {
+        var app = AppCatalog.Find(key);
+        if (app is null) { return; }
+        WM.OpenApp(app.Key, app.Title, app.Icon, app.W, app.H);
+    }
+
+    // ── would-be metered-API cost of tokens a model produced (the "≈ API" figure; $0-path honest estimate) ──
+    private static decimal WouldBe(string model, int tokensIn, int tokensOut)
+        => CostCalculator.Calculate(model, tokensIn, tokensOut);
+
+    private string SuccessLabel()
+    {
+        if (_runs is null || _runs.Count == 0) { return "—"; }
+        var done = _runs.Count(r => r.Status == "Done");
+        return (int)System.Math.Round(100.0 * done / _runs.Count) + "%";
+    }
+
+    private string RoundsLabel()
+    {
+        if (_runs is null || _runs.Count == 0) { return "—"; }
+        var rounds = _runs.Where(r => r.IterationCount > 0).Select(r => r.IterationCount).ToList();
+        return rounds.Count == 0 ? "—" : rounds.Average().ToString("0.0", CultureInfo.InvariantCulture);
+    }
+
+    private static int Pct(int value, int max) => max <= 0 ? 0 : (int)System.Math.Round(100.0 * value / max);
+    private static int Pct(decimal value, decimal max) => max <= 0m ? 0 : (int)System.Math.Round(100.0 * (double)value / (double)max);
+    private static double Clamp(double v) => System.Math.Clamp(v, 0, 100);
+
+    private static string Ms(double ms) => ms >= 1000 ? (ms / 1000).ToString("0.0", CultureInfo.InvariantCulture) + "s"
+        : ms.ToString("0", CultureInfo.InvariantCulture) + "ms";
+
+    private static string ShortDay(string isoDay)
+        => DateTime.TryParse(isoDay, CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d)
+            ? d.ToString("dd/MM", CultureInfo.InvariantCulture) : isoDay;
+
+    private static string AgentShort(string agent) => agent
+        .Replace("Agent", "", StringComparison.Ordinal).Trim() is { Length: > 0 } s ? s : agent;
+
+    private Badge.BadgeVariant BudgetBadge() => _budget?.State switch
+    {
+        BudgetState.Exceeded => Badge.BadgeVariant.Err,
+        BudgetState.Warn => Badge.BadgeVariant.Warn,
+        _ => Badge.BadgeVariant.Ok,
+    };
+
+    private string BudgetStateLabel() => _budget?.State switch
+    {
+        BudgetState.Exceeded => "Over budget",
+        BudgetState.Warn => "Near cap",
+        _ => _budget is { CapUsd: > 0m } ? "Within cap" : "No cap set",
+    };
+
+    private string BudgetBarClass() => _budget?.State switch
+    {
+        BudgetState.Exceeded => "err",
+        BudgetState.Warn => "warn",
+        _ => "",
+    };
+
+    private static Badge.BadgeVariant StatusVariant(string status) => status switch
+    {
+        "Done" => Badge.BadgeVariant.Ok,
+        "MaxIterationReached" => Badge.BadgeVariant.Warn,
+        "Failed" => Badge.BadgeVariant.Err,
+        _ => Badge.BadgeVariant.Default,
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "Done" => "Complete",
+        "MaxIterationReached" => "Iteration limit",
+        "Failed" => "Failed",
+        _ => status,
+    };
+
+    private static string Money(decimal v) => "$" + v.ToString("0.0000", CultureInfo.InvariantCulture);
+    private static string Num(int v) => v.ToString("N0", CultureInfo.InvariantCulture);
+}

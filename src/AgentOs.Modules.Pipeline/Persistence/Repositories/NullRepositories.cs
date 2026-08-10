@@ -26,6 +26,10 @@ internal sealed class NullPipelineRunRepository : IPipelineRunRepository
     public Task<decimal> GetSpendForTenantAsync(
         string tenantId, DateTimeOffset? since = null, CancellationToken ct = default) =>
         Task.FromResult(0m);
+
+    public Task<InsightsExtra> GetInsightsExtraForTenantAsync(
+        string tenantId, DateTimeOffset? since = null, CancellationToken ct = default) =>
+        Task.FromResult(InsightsExtra.Empty);
 }
 
 internal sealed class NullOrchestrationRepository : IOrchestrationRepository
