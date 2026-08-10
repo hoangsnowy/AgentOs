@@ -150,6 +150,14 @@ builder.Services
         options.ClientSecret = keycloakClientSecret ?? string.Empty;
         options.ResponseType = "code";
         options.UsePkce = true;
+        // Disable Pushed Authorization Requests. .NET's OIDC handler auto-enables PAR whenever the IdP
+        // advertises a pushed_authorization_request_endpoint (Keycloak does), so the browser is redirected
+        // to /auth?request_uri=urn:… and Keycloak must resolve that reference from its in-memory PAR store.
+        // Restarting Keycloak (or a stale browser session cookie) drops that reference → Keycloak can't
+        // recover the pushed params → "Missing parameter: response_type" and login dead-ends. The realm
+        // does not require PAR, so the classic code flow (response_type carried in the URL) is both valid
+        // and robust — no server-side reference to lose, so a Keycloak restart or stale cookie can't break it.
+        options.PushedAuthorizationBehavior = Microsoft.AspNetCore.Authentication.OpenIdConnect.PushedAuthorizationBehavior.Disable;
         options.SaveTokens = true;
         options.GetClaimsFromUserInfoEndpoint = true;
         options.RequireHttpsMetadata = requireHttps;
