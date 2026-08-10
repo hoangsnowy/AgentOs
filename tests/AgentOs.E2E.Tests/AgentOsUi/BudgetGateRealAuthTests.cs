@@ -58,7 +58,7 @@ public sealed class BudgetGateRealAuthTests : IClassFixture<AgentOsRealAuthFixtu
     }
 
     [Fact]
-    public async Task Budget_SpendOverEnforcedCap_CostApp_ReportsOverBudget()
+    public async Task Budget_SpendOverEnforcedCap_Insights_ReportsOverBudget()
     {
         if (!AgentOsRealAuthFixture.IsEnabled) { Assert.Skip(AgentOsRealAuthFixture.SkipReason); }
         var conn = Environment.GetEnvironmentVariable("AGENTOS_PG_CONN");
@@ -72,30 +72,30 @@ public sealed class BudgetGateRealAuthTests : IClassFixture<AgentOsRealAuthFixtu
 
         await _fx.LoginAsync();
 
-        // Open the Cost surface (now a tab in the Settings hub) from the dock.
-        await _fx.Page.Locator(".dock-item[title=\"Settings\"]").First.ClickAsync();
-        var cost = _fx.Page.Locator(".appwin.focused");
-        await Assertions.Expect(cost).ToBeVisibleAsync(
+        // Open the Insights dashboard from the dock — the budget cap control lives there now (the old
+        // standalone Cost window was folded into Insights).
+        await _fx.Page.Locator(".dock-item[title=\"Insights\"]").First.ClickAsync();
+        var ins = _fx.Page.Locator(".appwin.focused");
+        await Assertions.Expect(ins).ToBeVisibleAsync(
             new LocatorAssertionsToBeVisibleOptions { Timeout = 15_000 });
-        await cost.Locator(".prefs-cat", new() { HasTextString = "Cost" }).ClickAsync();
 
         // Set an enforced $5 cap.
-        var capInput = cost.Locator(".budget-row input.prefs-input");
+        var capInput = ins.Locator(".budget-row input.prefs-input");
         await capInput.FillAsync("5");
         await capInput.PressAsync("Tab");   // blur → commit the @bind (onchange) so _cap = 5 before Save
         // The toggle's native checkbox is CSS-hidden behind the styled switch, so click the visible label
         // (which toggles it). Only when not already on — a prior run may have persisted enforce=on.
-        var enforce = cost.Locator("label.toggle", new() { HasTextString = "Enforce" });
+        var enforce = ins.Locator("label.toggle", new() { HasTextString = "Enforce" });
         if (!await enforce.Locator("input[type=checkbox]").IsCheckedAsync())
         {
             await enforce.ClickAsync();
         }
-        await cost.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+        await ins.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
 
         // BudgetGuard, reading run_metrics tenant-explicitly on real Postgres, now reports the tenant over
         // its enforced cap ($10 of $5) — the exact State=Exceeded&&EnforceOn condition both pre-run gates use.
-        await Assertions.Expect(cost).ToContainTextAsync("Over budget",
+        await Assertions.Expect(ins).ToContainTextAsync("Over budget",
             new LocatorAssertionsToContainTextOptions { Timeout = 15_000 });
-        await Assertions.Expect(cost).ToContainTextAsync("of $5.0000 spent");
+        await Assertions.Expect(ins).ToContainTextAsync("of $5.0000 spent");
     }
 }

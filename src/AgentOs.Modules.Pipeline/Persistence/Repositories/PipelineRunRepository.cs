@@ -294,6 +294,70 @@ internal sealed class PipelineRunRepository(
         return await q.SumAsync(m => m.CostUsd, ct).ConfigureAwait(false);
     }
 
+    public async Task<InsightsExtra> GetInsightsExtraForTenantAsync(
+        string tenantId, DateTimeOffset? since = null, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+
+        // Fast path: three server-side GROUP BYs — latency-by-agent + iteration distribution over
+        // run_metrics, runs-per-day over pipeline_runs — each index-covered. One round-trip each.
+        if (connectionFactory is not null)
+        {
+            return await GetInsightsExtraViaDapperAsync(tenantId, since, ct).ConfigureAwait(false);
+        }
+
+        // Tenant-explicit EF fallback (in-memory test provider / no-DB): fold the filtered rows once,
+        // bypassing the blank-in-a-Blazor-circuit global query filter. Memory is O(distinct keys).
+        var metrics = db.RunMetrics.IgnoreQueryFilters().AsNoTracking().Where(m => m.TenantId == tenantId);
+        if (since is { } cutoff)
+        {
+            metrics = metrics.Where(m => m.TimestampUtc >= cutoff);
+        }
+
+        var latSum = new Dictionary<string, double>(StringComparer.Ordinal);
+        var latCalls = new Dictionary<string, int>(StringComparer.Ordinal);
+        var iterCalls = new Dictionary<int, int>();
+        var iterRuns = new Dictionary<int, HashSet<Guid>>();
+
+        await foreach (var m in metrics
+            .Select(m => new { m.RunId, m.AgentName, m.LatencyMs, m.Iteration })
+            .AsAsyncEnumerable().WithCancellation(ct).ConfigureAwait(false))
+        {
+            latSum[m.AgentName] = latSum.GetValueOrDefault(m.AgentName) + m.LatencyMs;
+            latCalls[m.AgentName] = latCalls.GetValueOrDefault(m.AgentName) + 1;
+            iterCalls[m.Iteration] = iterCalls.GetValueOrDefault(m.Iteration) + 1;
+            if (!iterRuns.TryGetValue(m.Iteration, out var set))
+            {
+                set = [];
+                iterRuns[m.Iteration] = set;
+            }
+            set.Add(m.RunId);
+        }
+
+        var runsQ = db.PipelineRuns.IgnoreQueryFilters().AsNoTracking().Where(r => r.TenantId == tenantId);
+        if (since is { } cut2)
+        {
+            runsQ = runsQ.Where(r => r.CreatedAtUtc >= cut2);
+        }
+        var runsByDay = new Dictionary<string, int>(StringComparer.Ordinal);
+        await foreach (var created in runsQ.Select(r => r.CreatedAtUtc)
+            .AsAsyncEnumerable().WithCancellation(ct).ConfigureAwait(false))
+        {
+            var day = created.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            runsByDay[day] = runsByDay.GetValueOrDefault(day) + 1;
+        }
+
+        return new InsightsExtra(
+            [.. latCalls.Select(kv => new AgentLatencyBucket(
+                    kv.Key, kv.Value == 0 ? 0 : latSum[kv.Key] / kv.Value, kv.Value))
+                .OrderByDescending(b => b.Calls)],
+            [.. iterCalls.Select(kv => new IterationBucket(
+                    kv.Key, iterRuns.TryGetValue(kv.Key, out var s) ? s.Count : 0, kv.Value))
+                .OrderBy(b => b.Iteration)],
+            [.. runsByDay.Select(kv => new DayRunsBucket(kv.Key, kv.Value))
+                .OrderBy(b => b.Day, StringComparer.Ordinal)]);
+    }
+
     private static void Bump(Dictionary<string, Acc> map, string key, decimal cost, int tokensIn, int tokensOut)
     {
         // CollectionsMarshal would avoid the double lookup, but a plain get/set keeps it simple; the
@@ -441,5 +505,71 @@ internal sealed class PipelineRunRepository(
         public DateTimeOffset CreatedAtUtc { get; init; }
         public DateTimeOffset? CompletedAtUtc { get; init; }
         public string UserStoryPreview { get; init; } = string.Empty;
+    }
+
+    // ---- Insights extras (Dapper fast-path) ----
+
+    private async Task<InsightsExtra> GetInsightsExtraViaDapperAsync(
+        string tenantId, DateTimeOffset? since, CancellationToken ct)
+    {
+        var parms = new { tenantId, since };
+        await using var conn = connectionFactory!.Create();
+        await conn.OpenAsync(ct).ConfigureAwait(false);
+
+        var latencySql = $"""
+            SELECT "AgentName" AS Agent, AVG("LatencyMs") AS AvgLatencyMs, COUNT(*)::int AS Calls
+            FROM pipeline.run_metrics
+            {CostWhere}
+            GROUP BY "AgentName"
+            ORDER BY COUNT(*) DESC, "AgentName"
+            """;
+        var latency = (await conn.QueryAsync<AgentLatencyRow>(
+                new CommandDefinition(latencySql, parms, cancellationToken: ct)).ConfigureAwait(false))
+            .Select(r => new AgentLatencyBucket(r.Agent, r.AvgLatencyMs, r.Calls)).ToList();
+
+        var iterSql = $"""
+            SELECT "Iteration" AS Iteration, COUNT(DISTINCT "RunId")::int AS Runs, COUNT(*)::int AS Calls
+            FROM pipeline.run_metrics
+            {CostWhere}
+            GROUP BY "Iteration"
+            ORDER BY "Iteration"
+            """;
+        var iterations = (await conn.QueryAsync<IterationRow>(
+                new CommandDefinition(iterSql, parms, cancellationToken: ct)).ConfigureAwait(false))
+            .Select(r => new IterationBucket(r.Iteration, r.Runs, r.Calls)).ToList();
+
+        // Runs-per-day is over pipeline_runs (distinct runs, not metric rows), keyed on CreatedAtUtc.
+        const string runsSql = """
+            SELECT to_char("CreatedAtUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS Day, COUNT(*)::int AS Runs
+            FROM pipeline.pipeline_runs
+            WHERE "TenantId" = @tenantId AND (@since::timestamptz IS NULL OR "CreatedAtUtc" >= @since::timestamptz)
+            GROUP BY to_char("CreatedAtUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+            ORDER BY Day
+            """;
+        var runsByDay = (await conn.QueryAsync<DayRunsRow>(
+                new CommandDefinition(runsSql, parms, cancellationToken: ct)).ConfigureAwait(false))
+            .Select(r => new DayRunsBucket(r.Day, r.Runs)).ToList();
+
+        return new InsightsExtra(latency, iterations, runsByDay);
+    }
+
+    private sealed class AgentLatencyRow
+    {
+        public string Agent { get; init; } = string.Empty;
+        public double AvgLatencyMs { get; init; }
+        public int Calls { get; init; }
+    }
+
+    private sealed class IterationRow
+    {
+        public int Iteration { get; init; }
+        public int Runs { get; init; }
+        public int Calls { get; init; }
+    }
+
+    private sealed class DayRunsRow
+    {
+        public string Day { get; init; } = string.Empty;
+        public int Runs { get; init; }
     }
 }

@@ -56,8 +56,7 @@ public sealed class LoginAndDesktopTests : IClassFixture<AgentOsPageFixture>
 
     // Scenario 3: clicking a Desktop icon opens an AppFrame for the corresponding app key.
     [Theory]
-    [InlineData("Overview")]
-    [InlineData("Agents")]
+    [InlineData("Insights")]
     [InlineData("Workflow")]
     [InlineData("Board")]
     [InlineData("Settings")]

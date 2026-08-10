@@ -13,7 +13,7 @@
 <p align="center">
   <img src="docs/images/hero-light.png" alt="The AgentOS desktop — an authentic GNOME/Adwaita shell: empty wallpaper, top panel, and the Dash of six pinned apps" width="100%">
   <br>
-  <sub><em>The <strong>AgentOS</strong> desktop — a Blazor Server window manager rendering an authentic GNOME shell (empty wallpaper, Activities overview, virtual workspaces, Dash) that launches the agent pipeline, the visual workflow editor, Board, and per-tenant governance as windows.</em></sub>
+  <sub><em>The <strong>AgentOS</strong> desktop — a Blazor Server window manager rendering an authentic GNOME shell (empty wallpaper, Activities overview, virtual workspaces, Dash) that launches the Insights dashboard, the visual Workflow editor (where a run starts), Board, and per-tenant governance as windows.</em></sub>
 </p>
 
 AgentOS turns a plain-English user story into reviewed, test-backed C# scaffolding. Five agents
@@ -72,25 +72,20 @@ Postgres schema, so any one of them can later ship as a standalone NuGet package
 A GNOME/Adwaita desktop in the browser — every capability ships as a window, not a wall of
 config. All shots are the standalone Web (`dotnet run --project src/AgentOs.Web`).
 
-| Overview — the control plane | Terminal — runner session feed |
+| Insights — the control plane | Terminal — runner session feed |
 |:---:|:---:|
-| [![Overview — idea→PR at a glance: KPIs, the 5-agent pipeline, recent runs](docs/images/app-overview.png)](docs/images/app-overview.png) | [![Terminal — a read-only live tail of the paired runner's session feed](docs/images/app-terminal.png)](docs/images/app-terminal.png) |
-| Start from an idea; headline KPIs (runs, success rate, cost), the 5-agent pipeline at a glance, and recent runs. | A read-only live tail of the paired runner's session feed (`ISessionRunFeed`) — what the remote agent is doing, streamed. |
+| **Insights** is the landing dashboard: headline KPIs — runs, success rate, avg QA rounds, LLM cost (billed **plus** the *“≈ API”* would-be estimate on the $0 dev-runner path) — then token-styled charts (runs over time, by agent, spend by model, latency + QA-round shape) and the monthly budget cap. *(Consolidates the former Overview + Cost windows; promo screenshot refresh pending.)* | [![Terminal — a read-only live tail of the paired runner's session feed](docs/images/app-terminal.png)](docs/images/app-terminal.png) |
+| One screen to manage the pipeline: how many runs, which agent ran how often, what it cost. | A read-only live tail of the paired runner's session feed (`ISessionRunFeed`) — what the remote agent is doing, streamed. |
 
-| Realtime pipeline | Visual workflow editor |
+| Visual workflow editor — the run surface | Boards → Tickets → Sessions |
 |:---:|:---:|
-| [![Agents — the five agents running the Leader-Specialists-Quality Loop](docs/images/app-pipeline.png)](docs/images/app-pipeline.png) | [![Workflow — the same agents as an editable Microsoft Agent Framework graph](docs/images/app-workflow.png)](docs/images/app-workflow.png) |
-| The five agents (Orchestrator → Requirement → Coding → Testing → QA) with live token/cost/QA-round metrics. | The same pipeline as an editable MAF Workflow graph — drag LLM / Tool / Evaluator / Loop / Human nodes. |
+| [![Workflow — the five agents as an editable Microsoft Agent Framework graph](docs/images/app-workflow.png)](docs/images/app-workflow.png) | [![Board — connect a GitHub/ADO board and drive remote repo execution](docs/images/app-board.png)](docs/images/app-board.png) |
+| Build & **run** the five agents (Orchestrator → Requirement → Coding → Testing → QA) as an editable MAF Workflow graph — drag LLM / Tool / Evaluator / Loop / Human nodes. This is where a run starts. | Connect a GitHub/ADO board, decompose an idea into tickets, drive remote repo-execution sessions. |
 
-| Boards → Tickets → Sessions | Tool-call evidence |
+| Tool-call evidence | Runtime settings |
 |:---:|:---:|
-| [![Board — connect a GitHub/ADO board and drive remote repo execution](docs/images/app-board.png)](docs/images/app-board.png) | [![Evidence — every governed tool invocation recorded](docs/images/app-evidence.png)](docs/images/app-evidence.png) |
-| Connect a GitHub/ADO board, decompose an idea into tickets, drive remote repo-execution sessions. | Every tool an agent calls passes the policy gate and is recorded as auditable evidence. |
-
-| Cost & budget gate | Runtime settings |
-|:---:|:---:|
-| [![Cost — per-tenant spend with a monthly budget cap and enforce toggle](docs/images/app-cost.png)](docs/images/app-cost.png) | [![Settings — provider, API keys, and persistence status](docs/images/app-settings.png)](docs/images/app-settings.png) |
-| Per-tenant LLM spend, a monthly cap with an enforce toggle, CSV export. | Rotate provider keys and switch providers at runtime — no redeploy. |
+| [![Evidence — every governed tool invocation recorded](docs/images/app-evidence.png)](docs/images/app-evidence.png) | [![Settings — provider, API keys, and persistence status](docs/images/app-settings.png)](docs/images/app-settings.png) |
+| Every tool an agent calls passes the policy gate and is recorded as auditable evidence. | Rotate provider keys and switch providers at runtime — no redeploy. |
 
 Light and dark are first-class (system menu → toggle):
 
