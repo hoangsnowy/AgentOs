@@ -90,7 +90,7 @@
                             </div>
                         }
                     }
-                    @if (NodeLibrary.SelectMany(g => g.Types).Any(MatchesSearch) == false)
+                    @if (!NodeLibrary.SelectMany(g => g.Types).Any(MatchesSearch))
                     {
                         <p class="rail-none">No node matches “@_nodeSearch”.</p>
                     }
