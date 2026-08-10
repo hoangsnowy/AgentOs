@@ -82,6 +82,8 @@ if (!isPublish)
     // KC scans /opt/keycloak/themes/<name>/ for themes; bind-mount our source dir so CSS edits
     // hot-reload without rebuilding the container. Dev cookie-jar pollution on localhost can exceed
     // the Quarkus default max header size → HTTP 431; QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE fixes it.
+    // 512K matches Kestrel's MaxRequestHeadersTotalSize (ServiceDefaults) — 128K wasn't enough on a
+    // heavy dev box, so the whole OIDC round-trip survives without clearing cookies / incognito.
     keycloak
         .WithDataVolume()
         .WithRealmImport("../../infra/keycloak")
@@ -90,7 +92,7 @@ if (!isPublish)
         .WithEnvironment("KC_SPI_THEME_STATIC_MAX_AGE", "-1")
         .WithEnvironment("KC_SPI_THEME_CACHE_THEMES", "false")
         .WithEnvironment("KC_SPI_THEME_CACHE_TEMPLATES", "false")
-        .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE", "128K");
+        .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_SIZE", "512K");
 }
 else
 {
