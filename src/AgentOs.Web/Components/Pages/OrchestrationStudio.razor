@@ -19,6 +19,7 @@
 @inject Microsoft.Extensions.Options.IOptions<LlmOptions> LlmOpts
 @inject AgentOs.Web.Services.LlmConfigView LlmConfig
 @inject Microsoft.JSInterop.IJSRuntime JS
+@inject AgentOs.Web.Shell.Services.WindowManagerService WM
 @implements IDisposable
 
 <PageTitle>Workflow — AgentOS</PageTitle>
@@ -459,6 +460,13 @@
         if (_all.Count == 0)
         {
             _all = Store.All(_tenantId).ToList();
+        }
+        // Cross-link: Board's ticket "Workflow" action prefills the run input via a one-shot launch
+        // payload (the same handoff the old Pipeline window consumed before it was folded away).
+        var prefill = WM.ConsumeLaunchPayload("workflow");
+        if (!string.IsNullOrWhiteSpace(prefill))
+        {
+            _runInput = prefill;
         }
         BuildDiagram();
     }
