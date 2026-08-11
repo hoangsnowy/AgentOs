@@ -74,8 +74,8 @@ config. All shots are the standalone Web (`dotnet run --project src/AgentOs.Web`
 
 | Insights — the control plane | Terminal — runner session feed |
 |:---:|:---:|
-| **Insights** is the landing dashboard: headline KPIs — runs, success rate, avg QA rounds, LLM cost (billed **plus** the *“≈ API”* would-be estimate on the $0 dev-runner path) — then token-styled charts (runs over time, by agent, spend by model, latency + QA-round shape) and the monthly budget cap. *(Consolidates the former Overview + Cost windows; promo screenshot refresh pending.)* | [![Terminal — a read-only live tail of the paired runner's session feed](docs/images/app-terminal.png)](docs/images/app-terminal.png) |
-| One screen to manage the pipeline: how many runs, which agent ran how often, what it cost. | A read-only live tail of the paired runner's session feed (`ISessionRunFeed`) — what the remote agent is doing, streamed. |
+| [![Insights — runs, agent utilisation and LLM cost: KPIs, charts, budget cap](docs/images/app-insights.png)](docs/images/app-insights.png) | [![Terminal — a read-only live tail of the paired runner's session feed](docs/images/app-terminal.png)](docs/images/app-terminal.png) |
+| One screen to manage the pipeline: runs, success rate, avg QA rounds, and LLM cost — billed **plus** the *“≈ API”* would-be estimate on the $0 dev-runner path — with charts for runs over time, per-agent load, spend by model, latency + QA-round shape, and the monthly budget cap. | A read-only live tail of the paired runner's session feed (`ISessionRunFeed`) — what the remote agent is doing, streamed. |
 
 | Visual workflow editor — the run surface | Boards → Tickets → Sessions |
 |:---:|:---:|
