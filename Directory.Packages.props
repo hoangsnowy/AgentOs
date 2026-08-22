@@ -103,14 +103,17 @@
 
     <!-- Test stack -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
-    <!-- xunit.v3 held at 3.2.2: 4.0.0 drops the VSTest bridge (Microsoft.Testing.Platform only),
-         which the current CI `dotnet test` invocation + cobertura coverage gate rely on. The v4
-         bump is tracked separately as a dedicated MTP-migration change (dependabot #150). -->
-    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <!-- xunit.v3 4.0.0 is Microsoft.Testing.Platform (MTP)-native — it drops the legacy VSTest
+         bridge, so `dotnet test` runs in MTP mode (opted in via global.json `test.runner`). Code
+         coverage + trx reporting come from MTP extensions instead of the VSTest data collectors:
+         Microsoft.Testing.Extensions.CodeCoverage (cobertura) replaces coverlet.collector, and
+         Microsoft.Testing.Extensions.TrxReport replaces the trx logger. -->
+    <PackageVersion Include="xunit.v3" Version="4.0.0" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
-    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.10.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
 
     <!-- Aspire orchestration + service defaults (.NET 10). Stable 13.3.3 for the core stack; the
          Keycloak integration ships preview-only on the 13.3.x line, so it stays on the matching
