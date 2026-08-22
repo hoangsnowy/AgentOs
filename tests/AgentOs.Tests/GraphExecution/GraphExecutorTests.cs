@@ -424,8 +424,9 @@ public sealed class GraphExecutorTests
             e => { if (e.Phase == GraphNodePhase.Done) { done.Add(e); } return Task.CompletedTask; });
 
         result.Completed.ShouldBeTrue();
-        var printMeta = done.Find(e => e.NodeId == "p")?.Meta;
-        printMeta.ShouldNotBeNull();
+        // ShouldNotBeNull returns the non-null value, so printMeta is a non-nullable string —
+        // this also clears CodeQL cs/dereferenced-value-may-be-null on the following asserts.
+        var printMeta = done.Find(e => e.NodeId == "p").ShouldNotBeNull().Meta.ShouldNotBeNull();
         printMeta.ShouldContain("ok");
         printMeta.ShouldContain("true");
         printMeta.ShouldNotContain("noise");
