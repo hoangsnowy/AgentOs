@@ -22,7 +22,8 @@ From the `D:\LuanVan\prototype\` folder:
 ```bash
 dotnet restore AgentOs.slnx
 dotnet build  AgentOs.slnx --configuration Release
-dotnet test   AgentOs.slnx --configuration Release
+# xunit.v3 4.0.0 runs on Microsoft.Testing.Platform; `dotnet test` takes the solution via --solution.
+dotnet test   --solution AgentOs.slnx --configuration Release
 ```
 
 The suite is ~790+ tests; all should pass.

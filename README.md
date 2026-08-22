@@ -177,7 +177,8 @@ cd AgentOs
 
 dotnet restore AgentOs.slnx
 dotnet build   AgentOs.slnx -c Release
-dotnet test    AgentOs.slnx -c Release
+# xunit.v3 4.0.0 runs on Microsoft.Testing.Platform; `dotnet test` takes the solution via --solution.
+dotnet test    --solution AgentOs.slnx -c Release
 ```
 
 Run the API on its own (Scalar UI at `https://localhost:5080/scalar/v1`):
@@ -409,7 +410,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full deployment guide and
 Issues and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and
 [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
 
-- Build + test: `dotnet test AgentOs.slnx -c Release`. CI runs the same on every push and PR, then
+- Build + test: `dotnet test --solution AgentOs.slnx -c Release`. CI runs the same on every push and PR, then
   a **coverage gate** (fails under a line-rate floor) and a **dev-auth UI E2E** that opens every
   desktop app to catch circuit-crash regressions. The heavy **real-auth full-stack E2E** (real
   Keycloak + Postgres) is a **local/manual** suite — bring up the Aspire stack

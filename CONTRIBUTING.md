@@ -10,7 +10,8 @@ git clone https://github.com/hoangsnowy/AgentOs.git
 cd AgentOs
 dotnet restore AgentOs.slnx
 dotnet build   AgentOs.slnx -c Release
-dotnet test    AgentOs.slnx -c Release
+# xunit.v3 4.0.0 runs on Microsoft.Testing.Platform; `dotnet test` takes the solution via --solution.
+dotnet test    --solution AgentOs.slnx -c Release
 ```
 
 Prerequisites: the **.NET 10 SDK** (pinned via `global.json`). No API keys are required —
@@ -22,7 +23,7 @@ unit tests rely on NSubstitute; no live API keys required. See
 1. Branch from `main` (`feat/…`, `fix/…`, `chore/…`).
 2. Make your change with tests. Keep `dotnet build -c Release` warning-free —
    `TreatWarningsAsErrors` and `Nullable` are enabled solution-wide.
-3. `dotnet test -c Release` must pass.
+3. `dotnet test --solution AgentOs.slnx -c Release` must pass.
 4. Open a PR and fill in [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)
    (summary + test plan). CI runs restore → build → test on every PR.
 

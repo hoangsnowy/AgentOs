@@ -30,9 +30,11 @@ export KC_LIVE_MODE="$MODE"
 export KC_LIVE_N="$N"
 export KC_LIVE_MAX_USD="$MAX_USD"
 
-dotnet test tests/AgentOs.Tests/AgentOs.Tests.csproj \
+# MTP mode (xunit.v3 4.0.0): --project instead of a positional path, and xunit's --filter-class
+# instead of the VSTest --filter "FullyQualifiedName~..." syntax.
+dotnet test --project tests/AgentOs.Tests/AgentOs.Tests.csproj \
   -c Release \
-  --filter "FullyQualifiedName~KcLiveBenchTests"
+  --filter-class "*KcLiveBenchTests"
 
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 DEST="docs/transcripts/kc_live/${MODE}-${TS}"

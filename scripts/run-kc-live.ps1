@@ -24,9 +24,11 @@ $env:KC_LIVE_MODE = $Mode
 $env:KC_LIVE_N = $N.ToString([System.Globalization.CultureInfo]::InvariantCulture)
 $env:KC_LIVE_MAX_USD = $MaxUsd.ToString([System.Globalization.CultureInfo]::InvariantCulture)
 
-dotnet test tests/AgentOs.Tests/AgentOs.Tests.csproj `
+# MTP mode (xunit.v3 4.0.0): --project instead of a positional path, and xunit's --filter-class
+# instead of the VSTest --filter "FullyQualifiedName~..." syntax.
+dotnet test --project tests/AgentOs.Tests/AgentOs.Tests.csproj `
     -c Release `
-    --filter "FullyQualifiedName~KcLiveBenchTests"
+    --filter-class "*KcLiveBenchTests"
 
 $ts = (Get-Date -Format "yyyyMMddTHHmmssZ") -replace ':', ''
 $dest = "docs/transcripts/kc_live/$Mode-$ts"

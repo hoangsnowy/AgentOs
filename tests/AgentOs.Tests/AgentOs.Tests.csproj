@@ -37,10 +37,11 @@
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
-    <PackageReference Include="coverlet.collector">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <!-- MTP reporting/coverage extensions (xunit.v3 4.0.0 runs on Microsoft.Testing.Platform).
+         Every test project in a solution-wide run must understand the coverage / trx-report args,
+         so both extensions are referenced here and in AgentOs.E2E.Tests. -->
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
   </ItemGroup>
 
 </Project>

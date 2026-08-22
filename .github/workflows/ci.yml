@@ -34,13 +34,19 @@ jobs:
       - name: Build (Release)
         run: dotnet build AgentOs.slnx --configuration Release --no-restore
 
+      # xunit.v3 4.0.0 is Microsoft.Testing.Platform-native, so `dotnet test` runs in MTP mode
+      # (opted in via global.json `test.runner`). MTP replaces the VSTest flags: --report-trx
+      # (Microsoft.Testing.Extensions.TrxReport) for the trx logger, and --coverage (Microsoft.
+      # Testing.Extensions.CodeCoverage) for the XPlat data collector. Scoped to the unit project
+      # so a single, deterministic cobertura file lands for the gate below — the E2E project runs
+      # (for real) in its own dedicated step further down.
       - name: Test
         run: |
-          dotnet test AgentOs.slnx \
+          dotnet test --project tests/AgentOs.Tests \
             --configuration Release \
             --no-build \
-            --logger "trx;LogFileName=test_results.trx" \
-            --collect:"XPlat Code Coverage" \
+            --report-trx --report-trx-filename test_results.trx \
+            --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml \
             --results-directory ./TestResults
 
       # ---- Coverage gate -------------------------------------------------------------------------
@@ -53,8 +59,9 @@ jobs:
         env:
           MIN_LINE_RATE: "25"
         run: |
-          report=$(find ./TestResults -name 'coverage.cobertura.xml' | head -n1)
-          if [ -z "$report" ]; then echo "No cobertura report found."; exit 1; fi
+          report="./TestResults/coverage.cobertura.xml"
+          if [ ! -f "$report" ]; then report=$(find ./TestResults -name 'coverage.cobertura.xml' | head -n1); fi
+          if [ -z "$report" ] || [ ! -f "$report" ]; then echo "No cobertura report found."; exit 1; fi
           python3 - "$report" "$MIN_LINE_RATE" <<'PY'
           import sys, xml.etree.ElementTree as ET
           report, floor = sys.argv[1], float(sys.argv[2])
@@ -95,10 +102,10 @@ jobs:
           RUN_AGENTOS_E2E: "true"
           AGENTOS_URL: "http://localhost:5199"
         run: |
-          dotnet test tests/AgentOs.E2E.Tests \
+          dotnet test --project tests/AgentOs.E2E.Tests \
             --configuration Release \
             --no-build \
-            --logger "trx;LogFileName=ui_e2e_results.trx" \
+            --report-trx --report-trx-filename ui_e2e_results.trx \
             --results-directory ./TestResults
 
       - name: Stop the Web

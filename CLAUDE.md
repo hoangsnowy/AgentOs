@@ -14,11 +14,14 @@ The platform is a **modular monolith**: each feature is a self-contained `IModul
 # Build / test (slnx-rooted, from D:\LuanVan\prototype)
 dotnet restore AgentOs.slnx
 dotnet build   AgentOs.slnx --configuration Release
-dotnet test    AgentOs.slnx --configuration Release
+# xunit.v3 4.0.0 is Microsoft.Testing.Platform-native — `dotnet test` runs in MTP mode
+# (opted in via global.json "test.runner"): pass the solution with --solution, and use xunit's
+# --filter-class / --filter-method instead of the VSTest --filter "FullyQualifiedName~..." syntax.
+dotnet test    --solution AgentOs.slnx --configuration Release
 
-# Single test class / method
-dotnet test AgentOs.slnx --filter "FullyQualifiedName~ToolGatewayTests"
-dotnet test AgentOs.slnx --filter "FullyQualifiedName=AgentOs.Tests.Tools.ToolInvocationTests.Request_Validate_AllFieldsValid_DoesNotThrow"
+# Single test class / method (MTP filter flags)
+dotnet test --project tests/AgentOs.Tests --filter-class "*ToolGatewayTests"
+dotnet test --project tests/AgentOs.Tests --filter-method "*ToolInvocationTests.Request_Validate_AllFieldsValid_DoesNotThrow"
 
 # Run the API locally — Scalar UI at https://localhost:5080/scalar/v1
 dotnet run --project src/AgentOs.Api
