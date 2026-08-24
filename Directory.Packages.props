@@ -17,9 +17,9 @@
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.11" />
 
     <!-- Microsoft Agent Framework (MAF) + Microsoft.Extensions.AI -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.17.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.17.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.17.0" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.19.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.19.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.19.0" />
 
     <!-- JSON schema validation. JsonSchema.Net 9 reworked the evaluation API: Evaluate runs on
          JsonElement (not JsonNode), EvaluationResults.HasErrors/HasDetails were removed, and
@@ -60,8 +60,8 @@
          2026-06-30): circular schema refs can stack-overflow the OpenAPI reader below 2.7.5. Microsoft.
          AspNetCore.OpenApi 10.0.9 floors it at 2.0.0 (no upper bound), so an explicit direct reference
          here + in AgentOs.Api.csproj is enough to raise the resolved version. -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.18" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.1" />
     <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.1.2" />
 
     <!-- Phase 8 — JWT bearer auth (API host) + OpenID Connect cookie/code flow (Web host) -->
@@ -118,23 +118,23 @@
     <!-- Aspire orchestration + service defaults (.NET 10). Stable 13.3.3 for the core stack; the
          Keycloak integration ships preview-only on the 13.3.x line, so it stays on the matching
          preview tag (its >=13.3.3 floor is satisfied by the stable 13.3.3 above). -->
-    <PackageVersion Include="Aspire.Hosting" Version="13.4.6" />
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.6" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
-    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Hosting" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.5.2" />
     <PackageVersion Include="Aspire.Hosting.Keycloak" Version="13.3.5-preview.1.26270.6" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.5.2" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.9.0" />
     <!-- Transitive of Aspire.Hosting — its default 2.5.192 carries GHSA-hv8m-jj95-wg3x (NU1903).
          Promoted to a direct reference in AppHost + E2E.Tests to force the patched version. -->
     <PackageVersion Include="MessagePack" Version="3.1.8" />
 
     <!-- OpenTelemetry (instrumentation pinned to 1.15.x line) -->
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
 
     <!-- E2E (browser) -->
     <PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
